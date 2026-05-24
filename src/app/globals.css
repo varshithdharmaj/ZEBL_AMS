@@ -1,0 +1,181 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-muted: var(--primary-muted);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-success: var(--success);
+  --color-success-muted: var(--success-muted);
+  --color-warning: var(--warning);
+  --color-warning-muted: var(--warning-muted);
+  --color-danger: var(--danger);
+  --color-danger-muted: var(--danger-muted);
+  --color-sky: var(--sky);
+  --color-sky-muted: var(--sky-muted);
+  --color-emerald: var(--emerald);
+  --color-emerald-muted: var(--emerald-muted);
+  --color-violet: var(--violet);
+  --color-violet-muted: var(--violet-muted);
+  --color-amber: var(--amber);
+  --color-amber-muted: var(--amber-muted);
+  --color-rose: var(--rose);
+  --color-rose-muted: var(--rose-muted);
+  --color-teal: var(--teal);
+  --color-teal-muted: var(--teal-muted);
+}
+
+:root {
+  --background: #f4f6fb;
+  --foreground: #1e293b;
+  --card: #ffffff;
+  --muted: #eef1f7;
+  --muted-foreground: #64748b;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #a5b4fc;
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-muted: #eef2ff;
+  --primary-foreground: #ffffff;
+  --accent: #f1f5f9;
+  --success: #059669;
+  --success-muted: #ecfdf5;
+  --warning: #d97706;
+  --warning-muted: #fffbeb;
+  --danger: #dc2626;
+  --danger-muted: #fef2f2;
+  --sky: #0284c7;
+  --sky-muted: #e0f2fe;
+  --emerald: #059669;
+  --emerald-muted: #ecfdf5;
+  --violet: #7c3aed;
+  --violet-muted: #f5f3ff;
+  --amber: #d97706;
+  --amber-muted: #fffbeb;
+  --rose: #e11d48;
+  --rose-muted: #fff1f2;
+  --teal: #0d9488;
+  --teal-muted: #f0fdfa;
+  --sidebar-width: 15.5rem;
+  --page-max: 72rem;
+  --page-max-wide: 100rem;
+  --dashboard-gap: 1.5rem;
+  --dashboard-gap-lg: 2rem;
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--background);
+  color: var(--foreground);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ring);
+}
+
+@utility shadow-subtle {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+@utility shadow-elevated {
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.05),
+    0 8px 24px rgba(79, 70, 229, 0.06);
+}
+
+/* Employee dashboard grid */
+.employee-dashboard {
+  --dash-gap: var(--dashboard-gap);
+  display: grid;
+  width: 100%;
+  gap: var(--dash-gap);
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "hero"
+    "kpi"
+    "overview"
+    "history";
+}
+
+@media (min-width: 1024px) {
+  .employee-dashboard {
+    --dash-gap: var(--dashboard-gap-lg);
+  }
+}
+
+.employee-dashboard__hero {
+  grid-area: hero;
+}
+.employee-dashboard__kpi {
+  grid-area: kpi;
+}
+.employee-dashboard__overview {
+  grid-area: overview;
+}
+.employee-dashboard__history {
+  grid-area: history;
+}
+
+.employee-dashboard-kpi {
+  display: grid;
+  gap: var(--dash-gap);
+  grid-template-columns: repeat(auto-fit, minmax(11.5rem, 1fr));
+}
+
+@media (min-width: 1280px) {
+  .employee-dashboard-kpi {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+.employee-dashboard-overview {
+  display: grid;
+  gap: var(--dash-gap);
+  align-items: stretch;
+}
+
+@media (min-width: 1024px) {
+  .employee-dashboard-overview {
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 1536px) {
+  .employee-dashboard-overview {
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  }
+}
