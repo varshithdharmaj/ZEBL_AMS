@@ -1,3 +1,4 @@
+//here 480 is the threshold for present status
 const PRESENT_THRESHOLD_MINUTES = 480;
 
 export type AttendanceStatus = "Present" | "Short Hours" | "Absent";
