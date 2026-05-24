@@ -1,11 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { AppTabs, type TabDef } from "@/components/ui/app-tabs";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Button } from "@/components/ui/button";
+import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { BasicInfoTab } from "@/components/admin/employee-profile/basic-info-tab";
 import { AttendanceTab } from "@/components/admin/employee-profile/attendance-tab";
 import { LeaveBalancesTab } from "@/components/admin/employee-profile/leave-balances-tab";
@@ -28,8 +26,9 @@ export type ProfileEmployee = {
 };
 
 type AttendanceSummary = {
-  monthLabel: string;
-  selectedMonth: string;
+  rangeLabel: string;
+  selectedStart: string;
+  selectedEnd: string;
   presentDays: number;
   shortHoursCount: number;
   overtimeMinutes: number;
@@ -68,44 +67,40 @@ export function EmployeeProfileShell({
   attendance,
   balances,
   history,
-  defaultMonth,
+  defaultStart,
+  defaultEnd,
 }: {
   employee: ProfileEmployee;
   attendance: AttendanceSummary;
   balances: LeaveBalanceSummary[];
   history: HistoryRow[];
-  defaultMonth: string;
+  defaultStart: string;
+  defaultEnd: string;
 }) {
   const [activeTab, setActiveTab] = useState("basic");
 
   return (
-    <div className="space-y-8">
-      <div>
-        <Button variant="ghost" size="sm" asChild className="-ml-2 mb-6">
-          <Link href="/admin/employees">
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Employees
-          </Link>
-        </Button>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1 border-l-[3px] border-primary pl-4">
-            <h1 className="text-[1.75rem] font-semibold tracking-tight text-primary">{employee.name}</h1>
-            <p className="text-sm text-muted-foreground">
-              {[employee.employeeCode, employee.designation, employee.department]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
-          </div>
-          <StatusBadge status={employee.employeeStatus} />
-        </div>
-      </div>
+    <div className="space-y-6 lg:space-y-8">
+      <WorkspacePageHeader
+        title={employee.name}
+        description={[employee.employeeCode, employee.designation, employee.department]
+          .filter(Boolean)
+          .join(" · ")}
+        backHref="/admin/employees"
+        backLabel="Employees"
+        action={<StatusBadge status={employee.employeeStatus} />}
+      />
 
       <AppTabs tabs={TABS} active={activeTab} onChange={setActiveTab} />
 
       <div className="pt-2">
         {activeTab === "basic" && <BasicInfoTab employee={employee} />}
         {activeTab === "attendance" && (
-          <AttendanceTab summary={attendance} defaultMonth={defaultMonth} />
+          <AttendanceTab
+            summary={attendance}
+            defaultStart={defaultStart}
+            defaultEnd={defaultEnd}
+          />
         )}
         {activeTab === "balances" && (
           <LeaveBalancesTab employeeId={employee.id} balances={balances} />

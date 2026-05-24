@@ -10,5 +10,9 @@ export default async function AdminLayout({
   const session = await getSession();
   if (!session || session.role !== "admin") redirect("/login");
 
-  return <AppShell user={session}>{children}</AppShell>;
+  return (
+    <AppShell user={session} variant="wide">
+      {children}
+    </AppShell>
+  );
 }

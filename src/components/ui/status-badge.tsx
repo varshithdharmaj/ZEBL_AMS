@@ -1,16 +1,16 @@
 import { cn } from "@/lib/utils";
 
 const styles: Record<string, string> = {
-  present: "border border-emerald/20 bg-emerald-muted text-emerald",
-  absent: "border border-danger/20 bg-danger-muted text-danger",
-  short: "border border-amber/20 bg-amber-muted text-amber",
-  pending: "border border-amber/20 bg-amber-muted text-amber",
-  approved: "border border-emerald/20 bg-emerald-muted text-emerald",
-  rejected: "border border-danger/20 bg-danger-muted text-danger",
-  default: "border border-border bg-muted text-muted-foreground",
-  active: "border border-emerald/20 bg-emerald-muted text-emerald",
-  inactive: "border border-border bg-muted text-muted-foreground",
-  resigned: "border border-danger/20 bg-danger-muted text-danger",
+  present: "bg-success-muted text-success ring-1 ring-success/15",
+  absent: "bg-danger-muted text-danger ring-1 ring-danger/15",
+  short: "bg-warning-muted text-warning ring-1 ring-warning/15",
+  pending: "bg-warning-muted text-warning ring-1 ring-warning/15",
+  approved: "bg-success-muted text-success ring-1 ring-success/15",
+  rejected: "bg-danger-muted text-danger ring-1 ring-danger/15",
+  default: "bg-muted text-muted-foreground ring-1 ring-border",
+  active: "bg-success-muted text-success ring-1 ring-success/15",
+  inactive: "bg-muted text-muted-foreground ring-1 ring-border",
+  resigned: "bg-danger-muted text-danger ring-1 ring-danger/15",
 };
 
 function resolveVariant(status: string): string {
@@ -30,7 +30,7 @@ export function StatusBadge({ status, className }: { status: string; className?:
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
+        "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold",
         styles[variant],
         className
       )}

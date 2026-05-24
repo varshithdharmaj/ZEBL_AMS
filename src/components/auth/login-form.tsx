@@ -13,7 +13,10 @@ export function LoginForm() {
   const [state, formAction, pending] = useActionState(loginAction, initialState);
 
   return (
-    <form action={formAction} className="space-y-4 rounded-2xl border border-border bg-card p-6 shadow-subtle">
+    <form
+      action={formAction}
+      className="space-y-4 rounded-[var(--radius-card)] border border-border bg-card p-6 shadow-card"
+    >
       {state.error && <ErrorAlert message={state.error} />}
       <div className="space-y-2">
         <Label htmlFor="email">Email</Label>

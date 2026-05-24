@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { CalendarX2, ArrowRight } from "lucide-react";
+import { SectionCard } from "@/components/ui/section-card";
 import { DataTable, DataTableRow, DataTableCell } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -19,31 +20,31 @@ type Record = {
 };
 
 export function HistorySection({
-  monthLabel,
+  rangeLabel,
   records,
   defaultDate,
-  defaultMonth,
+  defaultStart,
+  defaultEnd,
 }: {
-  monthLabel: string;
+  rangeLabel: string;
   records: Record[];
   defaultDate: string;
-  defaultMonth: string;
+  defaultStart: string;
+  defaultEnd: string;
 }) {
   return (
-    <section className="employee-dashboard__history min-w-0">
-      <header className="mb-4 flex flex-col gap-4 rounded-2xl border border-border bg-card px-5 py-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="border-l-[3px] border-primary pl-4">
-          <h2 className="text-lg font-semibold tracking-tight text-primary">Attendance history</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {monthLabel} · {records.length} record{records.length === 1 ? "" : "s"}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-end gap-3">
+    <SectionCard
+      title="Attendance history"
+      description={`${rangeLabel} · ${records.length} record${records.length === 1 ? "" : "s"}`}
+      action={
+        <div className="flex flex-wrap items-center gap-2">
           <Suspense fallback={null}>
             <DashboardToolbar
               defaultDate={defaultDate}
-              defaultMonth={defaultMonth}
+              defaultStart={defaultStart}
+              defaultEnd={defaultEnd}
               layout="inline"
+              showDayPicker={false}
             />
           </Suspense>
           <Button variant="outline" size="sm" asChild>
@@ -53,19 +54,19 @@ export function HistorySection({
             </Link>
           </Button>
         </div>
-      </header>
-
+      }
+      noPadding
+    >
       {records.length === 0 ? (
-        <EmptyState
-          icon={CalendarX2}
-          title="No records this month"
-          description="Try another month or check back after attendance is uploaded."
-        />
+        <div className="p-8">
+          <EmptyState
+            icon={CalendarX2}
+            title="No records in this range"
+            description="Try a different date range or check back after attendance is uploaded."
+          />
+        </div>
       ) : (
-        <DataTable
-          columns={["Date", "Check in", "Check out", "Worked", "Overtime", "Status"]}
-          className="w-full"
-        >
+        <DataTable columns={["Date", "Check in", "Check out", "Worked", "Overtime", "Status"]}>
           {records.map((r) => (
             <DataTableRow key={r.id}>
               <DataTableCell className="font-medium whitespace-nowrap">
@@ -86,6 +87,6 @@ export function HistorySection({
           ))}
         </DataTable>
       )}
-    </section>
+    </SectionCard>
   );
 }

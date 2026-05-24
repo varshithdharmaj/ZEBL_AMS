@@ -1,13 +1,12 @@
 import { cn } from "@/lib/utils";
 
-export function SectionCard({
+export function WidgetCard({
   title,
   description,
   action,
   children,
   className,
   contentClassName,
-  noPadding,
 }: {
   title?: string;
   description?: string;
@@ -15,7 +14,6 @@ export function SectionCard({
   children: React.ReactNode;
   className?: string;
   contentClassName?: string;
-  noPadding?: boolean;
 }) {
   return (
     <section
@@ -25,17 +23,17 @@ export function SectionCard({
       )}
     >
       {(title || action) && (
-        <header className="flex flex-col gap-2 border-b border-border px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            {title && <h2 className="text-base font-semibold text-foreground">{title}</h2>}
+        <header className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
+          <div className="min-w-0">
+            {title && <h3 className="text-sm font-semibold text-foreground">{title}</h3>}
             {description && (
-              <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
             )}
           </div>
           {action}
         </header>
       )}
-      <div className={cn(!noPadding && "p-6", contentClassName)}>{children}</div>
+      <div className={cn("p-5", contentClassName)}>{children}</div>
     </section>
   );
 }

@@ -29,7 +29,7 @@ export function AppShell({
         <main
           className={
             variant === "wide"
-              ? "mx-auto min-h-screen w-full max-w-[var(--page-max-wide)] px-4 py-8 pt-16 sm:px-6 lg:px-8 xl:px-10 lg:pt-10"
+              ? "min-h-screen w-full px-4 py-6 pt-[4.5rem] sm:px-6 lg:px-8 lg:py-8 lg:pt-8 xl:px-10"
               : "mx-auto min-h-screen w-full max-w-[var(--page-max)] px-5 py-8 pt-16 lg:px-10 lg:pt-10"
           }
         >

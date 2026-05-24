@@ -1,8 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { getLeaveBalanceSummaries } from "@/lib/leave";
-import { startOfDay, endOfDay, startOfMonth, endOfMonth } from "@/lib/utils";
+import {
+  startOfDay,
+  endOfDay,
+  parseDateRange,
+  toISODate,
+} from "@/lib/utils";
 
 const PAGE_SIZE = 15;
+const RANGE_RECORD_LIMIT = 100;
 
 export async function getAdminDashboardStats() {
   const today = startOfDay();
@@ -35,33 +41,27 @@ export async function getAdminDashboardStats() {
   };
 }
 
-function parseMonthParam(monthStr?: string): Date {
-  if (monthStr && /^\d{4}-\d{2}$/.test(monthStr)) {
-    const [y, m] = monthStr.split("-").map(Number);
-    return new Date(y, m - 1, 1);
-  }
-  return startOfMonth();
-}
-
 export async function getEmployeeDashboardData(
   employeeId: number,
   selectedDateStr?: string,
-  monthStr?: string
+  startStr?: string,
+  endStr?: string
 ) {
   const selectedDate = selectedDateStr
-    ? startOfDay(new Date(selectedDateStr))
+    ? startOfDay(new Date(selectedDateStr + "T00:00:00"))
     : startOfDay();
 
   if (Number.isNaN(selectedDate.getTime())) {
-    return getEmployeeDashboardData(employeeId, undefined, monthStr);
+    return getEmployeeDashboardData(employeeId, undefined, startStr, endStr);
   }
 
-  const monthAnchor = parseMonthParam(monthStr);
-  const monthStart = startOfMonth(monthAnchor);
-  const monthEnd = endOfMonth(monthAnchor);
+  const { rangeStart, rangeEnd, startIso, endIso, rangeLabel } = parseDateRange(
+    startStr,
+    endStr
+  );
   const dayEnd = endOfDay(selectedDate);
 
-  const [dayRecord, monthlyRecords, recentRecords] = await Promise.all([
+  const [dayRecord, periodRecords, recentRecords] = await Promise.all([
     prisma.attendanceRecord.findFirst({
       where: {
         employeeId,
@@ -71,26 +71,26 @@ export async function getEmployeeDashboardData(
     prisma.attendanceRecord.findMany({
       where: {
         employeeId,
-        attendanceDate: { gte: monthStart, lte: monthEnd },
+        attendanceDate: { gte: rangeStart, lte: rangeEnd },
       },
       orderBy: { attendanceDate: "asc" },
     }),
     prisma.attendanceRecord.findMany({
       where: {
         employeeId,
-        attendanceDate: { gte: monthStart, lte: monthEnd },
+        attendanceDate: { gte: rangeStart, lte: rangeEnd },
       },
       orderBy: { attendanceDate: "desc" },
-      take: 15,
+      take: RANGE_RECORD_LIMIT,
     }),
   ]);
 
-  const workingDays = monthlyRecords.length;
-  const monthlyPresent = monthlyRecords.filter((r) => r.status === "Present").length;
-  const monthlyShortHours = monthlyRecords.filter((r) => r.status === "Short Hours").length;
-  const monthlyOT = monthlyRecords.reduce((sum, r) => sum + r.overtimeMinutes, 0);
+  const workingDays = periodRecords.length;
+  const periodPresent = periodRecords.filter((r) => r.status === "Present").length;
+  const periodShortHours = periodRecords.filter((r) => r.status === "Short Hours").length;
+  const periodOT = periodRecords.reduce((sum, r) => sum + r.overtimeMinutes, 0);
   const attendancePercent =
-    workingDays > 0 ? Math.round((monthlyPresent / workingDays) * 100) : 0;
+    workingDays > 0 ? Math.round((periodPresent / workingDays) * 100) : 0;
 
   const lastRecord = await prisma.attendanceRecord.findFirst({
     where: { employeeId },
@@ -98,8 +98,9 @@ export async function getEmployeeDashboardData(
   });
 
   return {
-    selectedDate: selectedDate.toISOString().split("T")[0],
-    selectedMonth: `${monthAnchor.getFullYear()}-${String(monthAnchor.getMonth() + 1).padStart(2, "0")}`,
+    selectedDate: toISODate(selectedDate),
+    selectedStart: startIso,
+    selectedEnd: endIso,
     day: {
       workedMinutes: dayRecord?.workedMinutes ?? 0,
       checkIn: dayRecord?.checkIn ?? null,
@@ -107,35 +108,36 @@ export async function getEmployeeDashboardData(
       overtimeMinutes: dayRecord?.overtimeMinutes ?? 0,
       status: dayRecord?.status ?? "No Record",
     },
-    monthly: {
-      presentDays: monthlyPresent,
-      shortHoursCount: monthlyShortHours,
-      overtimeMinutes: monthlyOT,
+    period: {
+      presentDays: periodPresent,
+      shortHoursCount: periodShortHours,
+      overtimeMinutes: periodOT,
       attendancePercent,
-      monthLabel: monthAnchor.toLocaleDateString("en-IN", {
-        month: "long",
-        year: "numeric",
-      }),
+      rangeLabel,
     },
     lastAttendanceDate: lastRecord?.attendanceDate ?? null,
+    periodRecords,
     recentRecords,
   };
 }
 
 export async function getEmployeeAttendanceSummary(
   employeeId: number,
-  monthStr?: string
+  startStr?: string,
+  endStr?: string
 ) {
-  const monthAnchor = parseMonthParam(monthStr);
-  const monthStart = startOfMonth(monthAnchor);
-  const monthEnd = endOfMonth(monthAnchor);
+  const { rangeStart, rangeEnd, startIso, endIso, rangeLabel } = parseDateRange(
+    startStr,
+    endStr
+  );
 
   const records = await prisma.attendanceRecord.findMany({
     where: {
       employeeId,
-      attendanceDate: { gte: monthStart, lte: monthEnd },
+      attendanceDate: { gte: rangeStart, lte: rangeEnd },
     },
     orderBy: { attendanceDate: "desc" },
+    take: RANGE_RECORD_LIMIT,
   });
 
   const workingDays = records.length;
@@ -151,8 +153,9 @@ export async function getEmployeeAttendanceSummary(
   });
 
   return {
-    monthLabel: monthAnchor.toLocaleDateString("en-IN", { month: "long", year: "numeric" }),
-    selectedMonth: `${monthAnchor.getFullYear()}-${String(monthAnchor.getMonth() + 1).padStart(2, "0")}`,
+    rangeLabel,
+    selectedStart: startIso,
+    selectedEnd: endIso,
     presentDays,
     shortHoursCount,
     overtimeMinutes,
@@ -220,20 +223,39 @@ export async function getAttendanceRecords(params: {
   return { records, total, page, pageSize: PAGE_SIZE, totalPages: Math.ceil(total / PAGE_SIZE) };
 }
 
-export async function getEmployeeAttendanceHistory(employeeId: number, page = 1) {
+export async function getEmployeeAttendanceHistory(
+  employeeId: number,
+  page = 1,
+  startStr?: string,
+  endStr?: string
+) {
   const skip = (page - 1) * PAGE_SIZE;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const where: Record<string, any> = { employeeId };
+
+  if (startStr || endStr) {
+    const { rangeStart, rangeEnd } = parseDateRange(startStr, endStr);
+    where.attendanceDate = { gte: rangeStart, lte: rangeEnd };
+  }
 
   const [records, total] = await Promise.all([
     prisma.attendanceRecord.findMany({
-      where: { employeeId },
+      where,
       orderBy: { attendanceDate: "desc" },
       skip,
       take: PAGE_SIZE,
     }),
-    prisma.attendanceRecord.count({ where: { employeeId } }),
+    prisma.attendanceRecord.count({ where }),
   ]);
 
-  return { records, total, page, pageSize: PAGE_SIZE, totalPages: Math.ceil(total / PAGE_SIZE) };
+  return {
+    records,
+    total,
+    page,
+    pageSize: PAGE_SIZE,
+    totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+  };
 }
 
 export async function getEmployees(search?: string) {

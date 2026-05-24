@@ -6,78 +6,76 @@ import {
   Palmtree,
 } from "lucide-react";
 import { DashboardCard } from "@/components/ui/dashboard-card";
+import { StatsGrid } from "@/components/ui/stats-grid";
 import { formatLeaveDays } from "@/lib/leave-types";
 import type { LeaveBalanceSummary } from "@/lib/leave";
-import { cn, minutesToHours } from "@/lib/utils";
+import { minutesToHours } from "@/lib/utils";
 
-export function DashboardKpiGrid({
+export function StatsGridSection({
   workedMinutes,
   presentDays,
   overtimeMinutes,
   shortHoursCount,
-  monthLabel,
+  rangeLabel,
   balances,
 }: {
   workedMinutes: number;
   presentDays: number;
   overtimeMinutes: number;
   shortHoursCount: number;
-  monthLabel: string;
+  rangeLabel: string;
   balances: LeaveBalanceSummary[];
 }) {
   const el = balances.find((b) => b.leaveType === "EL");
   const cl = balances.find((b) => b.leaveType === "CL");
   const sl = balances.find((b) => b.leaveType === "SL");
 
-  const leaveRows = [
-    { key: "EL", val: el?.remaining ?? 0, color: "text-emerald" as const },
-    { key: "CL", val: cl?.remaining ?? 0, color: "text-sky" as const },
-    { key: "SL", val: sl?.remaining ?? 0, color: "text-amber" as const },
-  ];
-
   return (
-    <section className="employee-dashboard__kpi employee-dashboard-kpi" aria-label="Key metrics">
+    <StatsGrid>
       <DashboardCard
-        label="Today hours worked"
+        label="Today worked"
         value={minutesToHours(workedMinutes)}
         hint="Selected day"
         icon={Clock}
-        accent="sky"
+        accent="blue"
       />
       <DashboardCard
         label="Present days"
         value={presentDays}
-        hint={monthLabel}
+        hint={rangeLabel}
         icon={CalendarCheck}
-        accent="emerald"
+        accent="green"
       />
       <DashboardCard
-        label="Overtime hours"
+        label="Overtime"
         value={minutesToHours(overtimeMinutes)}
-        hint="This month"
+        hint="In range"
         icon={Timer}
         accent="violet"
       />
       <DashboardCard
         label="Short hours"
         value={shortHoursCount}
-        hint="This month"
+        hint="In range"
         icon={AlertCircle}
         accent="amber"
       />
-      <DashboardCard label="Leave balance" icon={Palmtree} accent="teal">
-        <ul className="space-y-2">
-          {leaveRows.map((row) => (
-            <li key={row.key} className="flex items-baseline justify-between gap-3 text-sm">
-              <span className="font-semibold text-muted-foreground">{row.key}</span>
-              <span className={cn("text-lg font-semibold tabular-nums tracking-tight", row.color)}>
+      <DashboardCard label="Leave balance" icon={Palmtree} accent="teal" className="sm:col-span-2 lg:col-span-1">
+        <ul className="space-y-2.5">
+          {[
+            { key: "EL", val: el?.remaining ?? 0 },
+            { key: "CL", val: cl?.remaining ?? 0 },
+            { key: "SL", val: sl?.remaining ?? 0 },
+          ].map((row) => (
+            <li key={row.key} className="flex items-center justify-between gap-2 text-sm">
+              <span className="font-medium text-muted-foreground">{row.key}</span>
+              <span className="text-lg font-semibold tabular-nums text-foreground">
                 {formatLeaveDays(row.val)}
               </span>
             </li>
           ))}
         </ul>
-        <p className="mt-3 text-xs text-muted-foreground">Remaining balance</p>
       </DashboardCard>
-    </section>
+    </StatsGrid>
   );
 }

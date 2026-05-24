@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SectionCard } from "@/components/ui/section-card";
 import { DataTable, DataTableRow, DataTableCell } from "@/components/ui/data-table";
 import { ErrorAlert } from "@/components/ui/error-alert";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -58,8 +59,8 @@ export function EmployeeManagement({ employees }: { employees: Employee[] }) {
   });
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <SectionCard noPadding>
+      <div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between">
         <Input
           placeholder="Search employees…"
           value={search}
@@ -107,7 +108,7 @@ export function EmployeeManagement({ employees }: { employees: Employee[] }) {
       </DataTable>
 
       <CreateEmployeeDialog open={createOpen} onOpenChange={setCreateOpen} />
-    </div>
+    </SectionCard>
   );
 }
 

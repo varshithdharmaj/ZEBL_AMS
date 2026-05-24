@@ -1,8 +1,10 @@
-import { DashboardHero } from "@/components/employee/dashboard/dashboard-hero";
-import { DashboardKpiGrid } from "@/components/employee/dashboard/dashboard-kpi-grid";
+import { Suspense } from "react";
+import { DashboardWelcome } from "@/components/employee/dashboard/dashboard-welcome";
+import { StatsGridSection } from "@/components/employee/dashboard/stats-grid-section";
 import { HistorySection } from "@/components/employee/dashboard/history-section";
-import { MonthlySummaryPanel } from "@/components/employee/dashboard/monthly-summary-panel";
+import { DashboardWidgets } from "@/components/employee/dashboard/dashboard-widgets";
 import { AttendanceTimeline } from "@/components/employee/attendance-timeline";
+import { ChartCard } from "@/components/ui/chart-card";
 import { getEmployeeDashboardData } from "@/lib/queries";
 import { getLeaveBalanceSummaries } from "@/lib/leave";
 import { startOfDay } from "@/lib/utils";
@@ -11,17 +13,19 @@ export async function EmployeeDashboard({
   employeeId,
   employeeName,
   selectedDate,
-  selectedMonth,
+  startDate,
+  endDate,
 }: {
   employeeId: number;
   employeeName: string | null;
   selectedDate?: string;
-  selectedMonth?: string;
+  startDate?: string;
+  endDate?: string;
 }) {
   const today = startOfDay().toISOString().split("T")[0];
 
   const [data, balances] = await Promise.all([
-    getEmployeeDashboardData(employeeId, selectedDate, selectedMonth),
+    getEmployeeDashboardData(employeeId, selectedDate, startDate, endDate),
     getLeaveBalanceSummaries(employeeId, { processAccruals: false }),
   ]);
 
@@ -41,54 +45,69 @@ export async function EmployeeDashboard({
   });
 
   return (
-    <div className="employee-dashboard w-full">
-      <DashboardHero
-        firstName={firstName}
-        fullName={employeeName}
-        displayDate={displayDate}
-        dateIso={data.selectedDate}
-        status={data.day.status}
-        workedMinutes={data.day.workedMinutes}
-        presentDays={data.monthly.presentDays}
-        monthLabel={data.monthly.monthLabel}
-        defaultDate={today}
-        defaultMonth={data.selectedMonth}
-      />
-
-      <DashboardKpiGrid
-        workedMinutes={data.day.workedMinutes}
-        presentDays={data.monthly.presentDays}
-        overtimeMinutes={data.monthly.overtimeMinutes}
-        shortHoursCount={data.monthly.shortHoursCount}
-        monthLabel={data.monthly.monthLabel}
-        balances={balances}
-      />
-
-      <section className="employee-dashboard__overview employee-dashboard-overview">
-        <AttendanceTimeline
-          checkIn={data.day.checkIn}
-          checkOut={data.day.checkOut}
-          workedMinutes={data.day.workedMinutes}
-          overtimeMinutes={data.day.overtimeMinutes}
+    <div className="hr-dashboard">
+      <div className="hr-dashboard__main">
+        <DashboardWelcome
+          firstName={firstName}
+          fullName={employeeName}
+          displayDate={displayDate}
+          dateIso={data.selectedDate}
           status={data.day.status}
-          selectedDateLabel={selectedDayLabel}
+          workedMinutes={data.day.workedMinutes}
+          presentDays={data.period.presentDays}
+          attendancePercent={data.period.attendancePercent}
+          rangeLabel={data.period.rangeLabel}
+          defaultDate={today}
+          defaultStart={data.selectedStart}
+          defaultEnd={data.selectedEnd}
         />
-        <MonthlySummaryPanel
-          monthLabel={data.monthly.monthLabel}
-          attendancePercent={data.monthly.attendancePercent}
-          presentDays={data.monthly.presentDays}
-          shortHoursCount={data.monthly.shortHoursCount}
-          overtimeMinutes={data.monthly.overtimeMinutes}
+
+        <StatsGridSection
+          workedMinutes={data.day.workedMinutes}
+          presentDays={data.period.presentDays}
+          overtimeMinutes={data.period.overtimeMinutes}
+          shortHoursCount={data.period.shortHoursCount}
+          rangeLabel={data.period.rangeLabel}
           balances={balances}
         />
-      </section>
 
-      <HistorySection
-        monthLabel={data.monthly.monthLabel}
-        records={data.recentRecords}
-        defaultDate={today}
-        defaultMonth={data.selectedMonth}
-      />
+        <div className="hr-dashboard__analytics">
+          <AttendanceTimeline
+            checkIn={data.day.checkIn}
+            checkOut={data.day.checkOut}
+            workedMinutes={data.day.workedMinutes}
+            overtimeMinutes={data.day.overtimeMinutes}
+            status={data.day.status}
+            selectedDateLabel={selectedDayLabel}
+          />
+          <Suspense fallback={null}>
+            <ChartCard
+              title="Attendance trend"
+              description={data.period.rangeLabel}
+              records={data.periodRecords}
+            />
+          </Suspense>
+        </div>
+
+        <HistorySection
+          rangeLabel={data.period.rangeLabel}
+          records={data.recentRecords}
+          defaultDate={today}
+          defaultStart={data.selectedStart}
+          defaultEnd={data.selectedEnd}
+        />
+      </div>
+
+      <aside className="hr-dashboard__rail">
+        <DashboardWidgets
+          balances={balances}
+          attendancePercent={data.period.attendancePercent}
+          presentDays={data.period.presentDays}
+          overtimeMinutes={data.period.overtimeMinutes}
+          rangeLabel={data.period.rangeLabel}
+          employeeName={employeeName}
+        />
+      </aside>
     </div>
   );
 }

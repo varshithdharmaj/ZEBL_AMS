@@ -46,3 +46,52 @@ export function startOfMonth(date: Date = new Date()): Date {
 export function endOfMonth(date: Date = new Date()): Date {
   return new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
 }
+
+export function toISODate(date: Date): string {
+  return date.toISOString().split("T")[0];
+}
+
+export function parseISODate(str?: string): Date | null {
+  if (!str || !/^\d{4}-\d{2}-\d{2}$/.test(str)) return null;
+  const d = startOfDay(new Date(str + "T00:00:00"));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Default period: 1st of current month through today */
+export function defaultDateRange(): { start: string; end: string } {
+  const end = startOfDay();
+  const start = startOfMonth(end);
+  return { start: toISODate(start), end: toISODate(end) };
+}
+
+export function parseDateRange(startStr?: string, endStr?: string) {
+  const fallback = defaultDateRange();
+  let start = parseISODate(startStr) ?? parseISODate(fallback.start)!;
+  let end = parseISODate(endStr) ?? parseISODate(fallback.end)!;
+
+  if (start > end) {
+    const tmp = start;
+    start = end;
+    end = tmp;
+  }
+
+  const rangeStart = startOfDay(start);
+  const rangeEnd = endOfDay(end);
+
+  const rangeLabel =
+    toISODate(rangeStart) === toISODate(rangeEnd)
+      ? rangeStart.toLocaleDateString("en-IN", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        })
+      : `${rangeStart.toLocaleDateString("en-IN", { day: "numeric", month: "short" })} – ${rangeEnd.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`;
+
+  return {
+    rangeStart,
+    rangeEnd,
+    startIso: toISODate(rangeStart),
+    endIso: toISODate(startOfDay(end)),
+    rangeLabel,
+  };
+}

@@ -15,64 +15,67 @@
   --color-primary: var(--primary);
   --color-primary-muted: var(--primary-muted);
   --color-primary-foreground: var(--primary-foreground);
-  --color-accent: var(--accent);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-accent-blue: var(--accent-blue);
+  --color-accent-blue-muted: var(--accent-blue-muted);
+  --color-accent-green: var(--accent-green);
+  --color-accent-green-muted: var(--accent-green-muted);
+  --color-accent-violet: var(--accent-violet);
+  --color-accent-violet-muted: var(--accent-violet-muted);
+  --color-accent-amber: var(--accent-amber);
+  --color-accent-amber-muted: var(--accent-amber-muted);
+  --color-accent-teal: var(--accent-teal);
+  --color-accent-teal-muted: var(--accent-teal-muted);
   --color-success: var(--success);
   --color-success-muted: var(--success-muted);
   --color-warning: var(--warning);
   --color-warning-muted: var(--warning-muted);
   --color-danger: var(--danger);
   --color-danger-muted: var(--danger-muted);
-  --color-sky: var(--sky);
-  --color-sky-muted: var(--sky-muted);
-  --color-emerald: var(--emerald);
-  --color-emerald-muted: var(--emerald-muted);
-  --color-violet: var(--violet);
-  --color-violet-muted: var(--violet-muted);
-  --color-amber: var(--amber);
-  --color-amber-muted: var(--amber-muted);
-  --color-rose: var(--rose);
-  --color-rose-muted: var(--rose-muted);
-  --color-teal: var(--teal);
-  --color-teal-muted: var(--teal-muted);
 }
 
 :root {
-  --background: #f4f6fb;
-  --foreground: #1e293b;
+  --background: #f4f6fa;
+  --foreground: #0f172a;
   --card: #ffffff;
-  --muted: #eef1f7;
+  --muted: #f1f5f9;
   --muted-foreground: #64748b;
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: #a5b4fc;
+  --border: #e8edf4;
+  --input: #e8edf4;
+  --ring: #6366f1;
   --primary: #4f46e5;
   --primary-hover: #4338ca;
   --primary-muted: #eef2ff;
   --primary-foreground: #ffffff;
-  --accent: #f1f5f9;
+  --sidebar: #fafbfc;
+  --sidebar-foreground: #334155;
+  --sidebar-border: #e8edf4;
+  --sidebar-accent: #eef2ff;
+  --accent-blue: #3b82f6;
+  --accent-blue-muted: #eff6ff;
+  --accent-green: #10b981;
+  --accent-green-muted: #ecfdf5;
+  --accent-violet: #8b5cf6;
+  --accent-violet-muted: #f5f3ff;
+  --accent-amber: #f59e0b;
+  --accent-amber-muted: #fffbeb;
+  --accent-teal: #14b8a6;
+  --accent-teal-muted: #f0fdfa;
   --success: #059669;
   --success-muted: #ecfdf5;
   --warning: #d97706;
   --warning-muted: #fffbeb;
   --danger: #dc2626;
   --danger-muted: #fef2f2;
-  --sky: #0284c7;
-  --sky-muted: #e0f2fe;
-  --emerald: #059669;
-  --emerald-muted: #ecfdf5;
-  --violet: #7c3aed;
-  --violet-muted: #f5f3ff;
-  --amber: #d97706;
-  --amber-muted: #fffbeb;
-  --rose: #e11d48;
-  --rose-muted: #fff1f2;
-  --teal: #0d9488;
-  --teal-muted: #f0fdfa;
-  --sidebar-width: 15.5rem;
-  --page-max: 72rem;
-  --page-max-wide: 100rem;
-  --dashboard-gap: 1.5rem;
-  --dashboard-gap-lg: 2rem;
+  --sidebar-width: 16rem;
+  --page-max: 76rem;
+  --page-max-wide: none;
+  --dashboard-gap: 1.25rem;
+  --dashboard-gap-lg: 1.5rem;
+  --radius-card: 1rem;
 }
 
 * {
@@ -103,79 +106,77 @@ body {
   background: var(--border);
   border-radius: 4px;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: var(--ring);
-}
 
 @utility shadow-subtle {
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+@utility shadow-card {
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 4px 16px rgba(15, 23, 42, 0.03);
 }
 
 @utility shadow-elevated {
   box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.05),
-    0 8px 24px rgba(79, 70, 229, 0.06);
+    0 4px 6px -1px rgba(15, 23, 42, 0.05),
+    0 12px 28px rgba(15, 23, 42, 0.06);
 }
 
-/* Employee dashboard grid */
-.employee-dashboard {
-  --dash-gap: var(--dashboard-gap);
+/* Premium HR dashboard shell */
+.hr-dashboard {
   display: grid;
   width: 100%;
-  gap: var(--dash-gap);
-  grid-template-columns: 1fr;
-  grid-template-areas:
-    "hero"
-    "kpi"
-    "overview"
-    "history";
-}
-
-@media (min-width: 1024px) {
-  .employee-dashboard {
-    --dash-gap: var(--dashboard-gap-lg);
-  }
-}
-
-.employee-dashboard__hero {
-  grid-area: hero;
-}
-.employee-dashboard__kpi {
-  grid-area: kpi;
-}
-.employee-dashboard__overview {
-  grid-area: overview;
-}
-.employee-dashboard__history {
-  grid-area: history;
-}
-
-.employee-dashboard-kpi {
-  display: grid;
-  gap: var(--dash-gap);
-  grid-template-columns: repeat(auto-fit, minmax(11.5rem, 1fr));
+  gap: var(--dashboard-gap-lg);
+  align-items: start;
 }
 
 @media (min-width: 1280px) {
-  .employee-dashboard-kpi {
+  .hr-dashboard {
+    grid-template-columns: minmax(0, 1fr) 19.5rem;
+  }
+}
+
+.hr-dashboard__main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--dashboard-gap-lg);
+}
+
+.hr-dashboard__rail {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--dashboard-gap);
+}
+
+.hr-dashboard__stats {
+  display: grid;
+  gap: var(--dashboard-gap);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 640px) {
+  .hr-dashboard__stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .hr-dashboard__stats {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
 
-.employee-dashboard-overview {
+.hr-dashboard__analytics {
   display: grid;
-  gap: var(--dash-gap);
+  gap: var(--dashboard-gap-lg);
   align-items: stretch;
 }
 
 @media (min-width: 1024px) {
-  .employee-dashboard-overview {
-    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
-  }
-}
-
-@media (min-width: 1536px) {
-  .employee-dashboard-overview {
-    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  .hr-dashboard__analytics {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   }
 }

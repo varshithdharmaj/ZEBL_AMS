@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { EmployeeProfileShell } from "@/components/admin/employee-profile/profile-shell";
 import { getEmployeeProfileLeaveData } from "@/actions/leave-balances";
 import { getEmployeeAttendanceSummary, getEmployeeById } from "@/lib/queries";
-import { startOfMonth } from "@/lib/utils";
+import { defaultDateRange } from "@/lib/utils";
 import type { EmployeeStatus } from "@/lib/employee-types";
 
 export default async function EmployeeProfilePage({
@@ -10,10 +10,10 @@ export default async function EmployeeProfilePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ start?: string; end?: string }>;
 }) {
   const { id: idStr } = await params;
-  const { month } = await searchParams;
+  const { start, end } = await searchParams;
   const id = parseInt(idStr, 10);
 
   if (Number.isNaN(id)) notFound();
@@ -21,10 +21,10 @@ export default async function EmployeeProfilePage({
   const employee = await getEmployeeById(id);
   if (!employee) notFound();
 
-  const defaultMonth = `${startOfMonth().getFullYear()}-${String(startOfMonth().getMonth() + 1).padStart(2, "0")}`;
+  const { start: defaultStart, end: defaultEnd } = defaultDateRange();
 
   const [attendance, leaveData] = await Promise.all([
-    getEmployeeAttendanceSummary(id, month),
+    getEmployeeAttendanceSummary(id, start, end),
     getEmployeeProfileLeaveData(id),
   ]);
 
@@ -48,7 +48,8 @@ export default async function EmployeeProfilePage({
       attendance={attendance}
       balances={leaveData.balances}
       history={leaveData.history}
-      defaultMonth={defaultMonth}
+      defaultStart={defaultStart}
+      defaultEnd={defaultEnd}
     />
   );
 }

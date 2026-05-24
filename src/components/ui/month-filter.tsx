@@ -1,35 +1,29 @@
 "use client";
 
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { DateRangeFilter } from "@/components/ui/date-range-filter";
 
+/** @deprecated Use DateRangeFilter — kept for backward-compatible imports */
 export function MonthFilter({
-  paramName = "month",
   defaultMonth,
-  label = "Month",
+  label = "Date range",
 }: {
-  paramName?: string;
-  defaultMonth: string;
+  defaultMonth?: string;
   label?: string;
+  paramName?: string;
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const current = searchParams.get(paramName) ?? defaultMonth;
+  const today = new Date();
+  const end = today.toISOString().split("T")[0];
+  const start =
+    defaultMonth && /^\d{4}-\d{2}$/.test(defaultMonth)
+      ? `${defaultMonth}-01`
+      : new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split("T")[0];
 
   return (
-    <div className="flex flex-col gap-1.5 max-w-xs">
-      <label className="text-xs font-medium text-muted-foreground">{label}</label>
-      <input
-        type="month"
-        value={current}
-        onChange={(e) => {
-          const p = new URLSearchParams(searchParams.toString());
-          if (e.target.value) p.set(paramName, e.target.value);
-          else p.delete(paramName);
-          router.push(`${pathname}?${p.toString()}`);
-        }}
-        className="h-9 rounded-lg border border-input bg-card px-3 text-sm shadow-subtle focus:outline-none focus:ring-2 focus:ring-ring/40"
-      />
-    </div>
+    <DateRangeFilter
+      defaultStart={start}
+      defaultEnd={end}
+      layout="default"
+      showPresets
+    />
   );
 }

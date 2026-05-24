@@ -32,8 +32,8 @@ export function AttendanceFilters({
   }
 
   return (
-    <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 shadow-subtle sm:flex-row sm:items-end">
-      <div className="flex-1 space-y-1.5">
+    <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
+      <div className="min-w-[12rem] flex-1 space-y-1.5">
         <Label htmlFor="search">Employee</Label>
         <Input
           id="search"
@@ -46,7 +46,7 @@ export function AttendanceFilters({
         <Label htmlFor="date">Date</Label>
         <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
       </div>
-      <div className="flex gap-2">
+      <div className="flex gap-2 pb-0.5">
         <Button onClick={apply}>Apply</Button>
         <Button variant="outline" onClick={clear}>
           Clear
