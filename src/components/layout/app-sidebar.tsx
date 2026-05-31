@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -84,16 +85,13 @@ function initials(name: string) {
 export function AppSidebar({
   role,
   userName,
-  mobileOpen,
-  onMobileOpen,
-  onMobileClose,
 }: {
   role: AppUserRole;
   userName: string;
-  mobileOpen: boolean;
-  onMobileOpen: () => void;
-  onMobileClose: () => void;
 }) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const onMobileOpen = () => setMobileOpen(true);
+  const onMobileClose = () => setMobileOpen(false);
   const pathname = usePathname();
   const nav = navForRole(role);
   const home = getRoleHomePath(role);
