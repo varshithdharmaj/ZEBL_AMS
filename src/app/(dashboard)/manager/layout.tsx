@@ -9,7 +9,7 @@ export default async function ManagerLayout({
   children: React.ReactNode;
 }) {
   const session = await getSession();
-  if (!session || !canAccessManagerShell(session.role)) await redirectToLogin();
+  if (!session || !canAccessManagerShell(session.role)) return redirectToLogin();
 
   return (
     <AppShell user={session} variant="wide">
