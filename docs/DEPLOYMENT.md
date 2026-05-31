@@ -15,7 +15,7 @@ Internal company HR/attendance app. **No Docker, no VPS, no custom domain requir
 ### 1. Neon PostgreSQL
 
 1. Create a project at [console.neon.tech](https://console.neon.tech).
-2. Copy the **connection string** (use **pooled** URL for serverless if offered, e.g. host contains `-pooler`).
+2. Copy the **pooled** connection string for Vercel (host often contains `-pooler`). Use the direct (non-pooled) URL only for local `prisma migrate`.
 3. Append SSL if missing: `?sslmode=require`
 
 Example:

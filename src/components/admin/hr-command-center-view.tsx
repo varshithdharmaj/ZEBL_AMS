@@ -12,6 +12,7 @@ import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
 import { getHrCommandCenterData } from "@/lib/hr/command-center";
 import { formatDate } from "@/lib/utils";
+import { ErrorAlert } from "@/components/ui/error-alert";
 
 function ActionCard({
   title,
@@ -41,7 +42,21 @@ function ActionCard({
 }
 
 export async function HrCommandCenterView() {
-  const data = await getHrCommandCenterData();
+  let data: Awaited<ReturnType<typeof getHrCommandCenterData>>;
+  try {
+    data = await getHrCommandCenterData();
+  } catch (error) {
+    console.error("[HrCommandCenter] failed to load dashboard data", error);
+    return (
+      <div className="space-y-4">
+        <WorkspacePageHeader
+          title="HR command center"
+          description="Action-oriented view — pending work, risks, and staffing gaps."
+        />
+        <ErrorAlert message="Dashboard data could not be loaded. Check DATABASE_URL on Vercel (use Neon pooled URL with ?sslmode=require) and try again." />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
