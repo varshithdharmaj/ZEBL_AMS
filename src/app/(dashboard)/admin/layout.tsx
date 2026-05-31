@@ -9,7 +9,7 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   const session = await getSession();
-  if (!session || !canAccessAdmin(session.role)) await redirectToLogin();
+  if (!session || !canAccessAdmin(session.role)) return redirectToLogin();
 
   return (
     <AppShell user={session} variant="wide">

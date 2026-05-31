@@ -7,7 +7,7 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const session = await getSession();
-  if (!session) await redirectToLogin();
+  if (!session) return redirectToLogin();
 
   return children;
 }
