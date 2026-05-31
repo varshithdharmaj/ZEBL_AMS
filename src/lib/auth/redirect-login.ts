@@ -1,8 +1,6 @@
 import { redirect } from "next/navigation";
-import { clearSessionCookie } from "@/lib/auth/cookies";
 
-/** Clears session cookie before login redirect to avoid ERR_TOO_MANY_REDIRECTS. */
-export async function redirectToLogin(): Promise<never> {
-  await clearSessionCookie();
-  redirect("/login");
+/** Redirect to login; middleware clears stale cookies when `clear=1` is present. */
+export function redirectToLogin(): never {
+  redirect("/login?clear=1");
 }

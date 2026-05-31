@@ -54,10 +54,16 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isPublicPath(pathname)) {
+    if (pathname === "/login" && request.nextUrl.searchParams.get("clear") === "1") {
+      const response = NextResponse.next();
+      response.cookies.set(COOKIE_NAME, "", { path: "/", maxAge: 0 });
+      return response;
+    }
     if (session && !isApprovalPublicPath(pathname)) {
       // Do not bounce away from login when sent here after a failed dashboard auth check.
       const returningFromProtected = request.nextUrl.searchParams.has("from");
-      if (!returningFromProtected) {
+      const clearingSession = request.nextUrl.searchParams.get("clear") === "1";
+      if (!returningFromProtected && !clearingSession) {
         return redirectToRoleHome(request, session.role);
       }
     }
