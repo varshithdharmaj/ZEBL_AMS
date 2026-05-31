@@ -1,9 +1,6 @@
-"use client";
-
-import { useState } from "react";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppTopBar, AppTopBarDesktop } from "@/components/layout/app-top-bar";
-import type { SessionUser } from "@/lib/auth";
+import type { SessionUser } from "@/lib/session";
 
 export function AppShell({
   user,
@@ -14,18 +11,11 @@ export function AppShell({
   children: React.ReactNode;
   variant?: "default" | "wide";
 }) {
-  const [mobileOpen, setMobileOpen] = useState(false);
   const displayName = user.employeeName ?? user.email;
 
   return (
     <div className="min-h-screen bg-background">
-      <AppSidebar
-        role={user.role}
-        userName={displayName}
-        mobileOpen={mobileOpen}
-        onMobileOpen={() => setMobileOpen(true)}
-        onMobileClose={() => setMobileOpen(false)}
-      />
+      <AppSidebar role={user.role} userName={displayName} />
       <div className="lg:pl-[var(--sidebar-width)]">
         <AppTopBar />
         <main
