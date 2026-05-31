@@ -30,15 +30,11 @@ async function resolveSessionFromToken(token: string): Promise<SessionUser | nul
       include: { employee: true },
     });
   } catch (e) {
-    const name = e instanceof Error ? e.constructor.name : "Error";
-    if (name === "PrismaClientInitializationError") {
-      console.error(
-        "[zebl] Database unavailable — check DATABASE_URL in .env (postgresql:// required).",
-        e instanceof Error ? e.message : e
-      );
-      return null;
-    }
-    throw e;
+    console.error(
+      "[zebl] Session lookup failed — check DATABASE_URL (Neon pooled URL on Vercel).",
+      e instanceof Error ? e.message : e
+    );
+    return null;
   }
 
   if (!user) return null;
