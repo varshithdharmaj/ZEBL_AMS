@@ -55,7 +55,11 @@ export async function middleware(request: NextRequest) {
 
   if (isPublicPath(pathname)) {
     if (session && !isApprovalPublicPath(pathname)) {
-      return redirectToRoleHome(request, session.role);
+      // Do not bounce away from login when sent here after a failed dashboard auth check.
+      const returningFromProtected = request.nextUrl.searchParams.has("from");
+      if (!returningFromProtected) {
+        return redirectToRoleHome(request, session.role);
+      }
     }
     return NextResponse.next();
   }
