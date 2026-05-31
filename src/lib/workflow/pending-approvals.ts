@@ -1,4 +1,4 @@
-import { ApprovalStepStatus, LeaveWorkflowStatus } from "@prisma/client";
+import { ApprovalStepStatus, ApproverRole, LeaveWorkflowStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getLeaveBalanceSummaries } from "@/lib/leave";
 import { canAccessAdmin } from "@/lib/permissions";
@@ -45,7 +45,7 @@ async function getPendingManagerApprovals(managerEmployeeId: number) {
 export async function getPendingHrApprovals() {
   const steps = await prisma.leaveApprovalStep.findMany({
     where: {
-      approverRole: "hr_admin",
+      approverRole: ApproverRole.hr_admin,
       status: ApprovalStepStatus.pending,
       leaveRequest: {
         workflowStatus: LeaveWorkflowStatus.pending_approval,
