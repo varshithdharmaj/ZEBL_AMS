@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession } from "@/lib/auth";
+import { canAccessEmployeeShell } from "@/lib/permissions";
 
 export default async function EmployeeLayout({
   children,
@@ -8,7 +9,7 @@ export default async function EmployeeLayout({
   children: React.ReactNode;
 }) {
   const session = await getSession();
-  if (!session || session.role !== "employee") redirect("/login");
+  if (!session || !canAccessEmployeeShell(session.role)) redirect("/login");
 
   return (
     <AppShell user={session} variant="wide">

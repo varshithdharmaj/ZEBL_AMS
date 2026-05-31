@@ -2,27 +2,29 @@
 
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
+import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
 import { initializeEmployeeLeaveBalances } from "@/lib/leave";
 import { isValidEmployeeStatus, statusToIsActive } from "@/lib/employee-types";
+import { requireManageEmployeeSession } from "@/lib/auth-guards";
+import { AUDIT_ACTIONS, writeAuditLog } from "@/lib/audit";
+import { detectCircularManagerRelationship } from "@/lib/org";
 
 export type ActionState = {
   error?: string;
   success?: string;
 };
 
-async function requireAdmin() {
-  const session = await getSession();
-  if (!session || session.role !== "admin") {
-    throw new Error("Unauthorized");
-  }
-  return session;
-}
-
 function parseInitialBalance(formData: FormData, field: string): number {
   const val = parseFloat(String(formData.get(field) ?? "0"));
   return Number.isNaN(val) ? 0 : Math.max(0, val);
+}
+
+function parseManagerId(formData: FormData): number | null {
+  const raw = String(formData.get("managerId") ?? "").trim();
+  if (!raw || raw === "none") return null;
+  const id = parseInt(raw, 10);
+  return Number.isNaN(id) ? null : id;
 }
 
 export async function createEmployeeAction(
@@ -30,7 +32,7 @@ export async function createEmployeeAction(
   formData: FormData
 ): Promise<ActionState> {
   try {
-    const session = await requireAdmin();
+    const session = await requireManageEmployeeSession();
 
     const employeeCode = String(formData.get("employeeCode") ?? "").trim();
     const name = String(formData.get("name") ?? "").trim();
@@ -96,7 +98,7 @@ export async function createEmployeeAction(
         data: {
           email: email.toLowerCase(),
           password: passwordHash,
-          role: "employee",
+          role: UserRole.employee,
           employeeId: employee.id,
         },
       });
@@ -112,6 +114,15 @@ export async function createEmployeeAction(
       session.email
     );
 
+    await writeAuditLog({
+      entityType: "employee",
+      entityId: String(employee.id),
+      action: AUDIT_ACTIONS.EMPLOYEE_UPDATED,
+      actorUserId: session.id,
+      actorEmail: session.email,
+      metadata: { operation: "create", employeeCode },
+    });
+
     revalidatePath("/admin/employees");
     return { success: "Employee created successfully." };
   } catch {
@@ -124,7 +135,7 @@ export async function updateEmployeeProfileAction(
   formData: FormData
 ): Promise<ActionState> {
   try {
-    await requireAdmin();
+    const session = await requireManageEmployeeSession();
 
     const id = parseInt(String(formData.get("id")), 10);
     const employeeCode = String(formData.get("employeeCode") ?? "").trim();
@@ -136,6 +147,7 @@ export async function updateEmployeeProfileAction(
     const shift = String(formData.get("shift") ?? "").trim();
     const joiningDateStr = String(formData.get("joiningDate") ?? "").trim();
     const employeeStatus = String(formData.get("employeeStatus") ?? "Active").trim();
+    const managerId = parseManagerId(formData);
 
     if (!id || !name || !employeeCode || !joiningDateStr) {
       return { error: "Required fields are missing." };
@@ -150,12 +162,29 @@ export async function updateEmployeeProfileAction(
       return { error: "Invalid employee status." };
     }
 
+    const existing = await prisma.employee.findUnique({ where: { id } });
+    if (!existing) return { error: "Employee not found." };
+
+    if (managerId !== null) {
+      if (managerId === id) {
+        return { error: "An employee cannot be their own manager." };
+      }
+      const managerExists = await prisma.employee.findUnique({ where: { id: managerId } });
+      if (!managerExists) return { error: "Selected manager not found." };
+      const circular = await detectCircularManagerRelationship(id, managerId);
+      if (circular) {
+        return { error: "This assignment would create a circular reporting chain." };
+      }
+    }
+
     const duplicate = await prisma.employee.findFirst({
       where: { employeeCode, NOT: { id } },
     });
     if (duplicate) {
       return { error: "Employee code already in use." };
     }
+
+    const previousManagerId = existing.managerId;
 
     await prisma.employee.update({
       where: { id },
@@ -170,11 +199,44 @@ export async function updateEmployeeProfileAction(
         joiningDate,
         employeeStatus,
         isActive: statusToIsActive(employeeStatus),
+        managerId,
       },
     });
 
+    await writeAuditLog({
+      entityType: "employee",
+      entityId: String(id),
+      action: AUDIT_ACTIONS.EMPLOYEE_UPDATED,
+      actorUserId: session.id,
+      actorEmail: session.email,
+      metadata: { operation: "profile_update", employeeCode },
+    });
+
+    if (previousManagerId !== managerId) {
+      if (managerId === null) {
+        await writeAuditLog({
+          entityType: "employee",
+          entityId: String(id),
+          action: AUDIT_ACTIONS.EMPLOYEE_MANAGER_REMOVED,
+          actorUserId: session.id,
+          actorEmail: session.email,
+          metadata: { previousManagerId },
+        });
+      } else {
+        await writeAuditLog({
+          entityType: "employee",
+          entityId: String(id),
+          action: AUDIT_ACTIONS.EMPLOYEE_MANAGER_ASSIGNED,
+          actorUserId: session.id,
+          actorEmail: session.email,
+          metadata: { managerId, previousManagerId },
+        });
+      }
+    }
+
     revalidatePath(`/admin/employees/${id}`);
     revalidatePath("/admin/employees");
+    revalidatePath("/manager/dashboard");
     return { success: "Profile updated successfully." };
   } catch {
     return { error: "Failed to update employee profile." };
@@ -188,7 +250,7 @@ export async function toggleEmployeeStatusFormAction(formData: FormData): Promis
 
 export async function toggleEmployeeStatusAction(employeeId: number): Promise<ActionState> {
   try {
-    await requireAdmin();
+    await requireManageEmployeeSession();
 
     const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
     if (!employee) return { error: "Employee not found." };

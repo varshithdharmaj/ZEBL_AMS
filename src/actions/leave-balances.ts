@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getSession } from "@/lib/auth";
 import {
   adminAdjustLeaveBalance,
   getLeaveBalanceSummaries,
@@ -10,26 +9,21 @@ import {
 } from "@/lib/leave";
 import { isValidLeaveType } from "@/lib/leave-types";
 import { prisma } from "@/lib/prisma";
+import { requireAdminSession } from "@/lib/auth-guards";
+import { getSession } from "@/lib/auth";
+import { canAccessAdmin } from "@/lib/permissions";
 
 export type ActionState = {
   error?: string;
   success?: string;
 };
 
-async function requireAdmin() {
-  const session = await getSession();
-  if (!session || session.role !== "admin") {
-    throw new Error("Unauthorized");
-  }
-  return session;
-}
-
 export async function adjustLeaveBalanceAction(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
   try {
-    const session = await requireAdmin();
+    const session = await requireAdminSession();
 
     const employeeId = parseInt(String(formData.get("employeeId")), 10);
     const leaveType = String(formData.get("leaveType") ?? "").trim();
@@ -66,7 +60,7 @@ export async function adjustLeaveBalanceAction(
 
 export async function syncEmployeeAccrualsAction(employeeId: number): Promise<ActionState> {
   try {
-    await requireAdmin();
+    await requireAdminSession();
     await processPendingLeaveAccruals(employeeId);
     revalidatePath(`/admin/employees/${employeeId}`);
     return { success: "Pending accruals processed." };
@@ -86,7 +80,7 @@ export async function getEmployeeProfileLeaveData(employeeId: number) {
 
 export async function getAdminLeaveBalancesOverview() {
   const session = await getSession();
-  if (!session || session.role !== "admin") return [];
+  if (!session || !canAccessAdmin(session.role)) return [];
 
   const employees = await prisma.employee.findMany({
     where: { employeeStatus: { not: "Resigned" } },

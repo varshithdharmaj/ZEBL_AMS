@@ -1,13 +1,16 @@
 # Zebl Attendance Manager
 
-A lightweight attendance management web application built with Next.js 15, TypeScript, Tailwind CSS, shadcn/ui, Prisma, and SQLite.
+Next.js 15 attendance and leave management: TypeScript, Tailwind, shadcn/ui, Prisma, **PostgreSQL**.
 
 ## Features
 
-- **Authentication** — Email/password login with admin and employee roles
-- **Admin** — Dashboard, Excel upload, employee management, attendance records, leave management
-- **Employee** — Date-filtered dashboard, attendance history, leave requests with balances
-- **Leave system** — EL / CL / SL with accrual, usage tracking, and HR balance adjustments
+- **Authentication** — Local login + optional Microsoft Entra ID SSO
+- **Roles** — `admin`, `hr_admin`, `manager`, `employee` with separate shells
+- **Leave workflow** — Multi-step approvals, balance deduction, cancellation
+- **Email approvals** — One-time signed links (`/approve/[token]`)
+- **Notifications** — Email queue + optional Microsoft Teams webhooks
+- **Integrations** — Calendar sync, org sync, escalation worker
+- **Analytics** — Workforce metrics and admin dashboards (Phase 7)
 
 ## Getting Started
 
@@ -16,92 +19,142 @@ A lightweight attendance management web application built with Next.js 15, TypeS
 - Node.js 18+
 - npm
 
-### Setup
+### Setup (recommended)
 
 ```bash
 npm install
-npx prisma generate
-npm run db:migrate-hr   # in-place migration for existing databases
-npx prisma db push
+cp .env.example .env     # fill DATABASE_URL, AUTH_SECRET (never commit .env)
+npm run db:ping          # verifies Neon/Docker/local Postgres
+npx prisma migrate deploy
 npm run db:seed
 npm run dev
 ```
 
-### HR Module Migration
+**Neon:** [docs/NEON_SETUP.md](docs/NEON_SETUP.md) · **Local Docker:** `npm run db:postgres:up` · **Troubleshooting:** [docs/DATABASE_SETUP.md](docs/DATABASE_SETUP.md)
 
-If upgrading from an older schema, run:
+Or step-by-step — see [docs/MIGRATIONS.md](docs/MIGRATIONS.md).
 
 ```bash
-npm run db:migrate-hr
-npx prisma db push --accept-data-loss
+npx prisma generate
+npx prisma migrate deploy
+npm run db:migrate-phase3
+npm run db:migrate-phase4
+npm run db:migrate-phase5
+npm run db:migrate-phase6
+npm run db:migrate-phase7
 npm run db:seed
+npm run db:validate
 ```
 
 Open [http://localhost:3000](http://localhost:3000)
 
-### Default Admin Login
+### Default admin login
 
 - **Email:** hr@zebl.com
 - **Password:** Hr@2026
 
-## Leave Types & Balances
+## Environment variables
 
-| Type | Name | Rules |
-|------|------|-------|
-| **EL** | Earned Leave | +0.5 days/month after 1 year of service |
-| **CL** | Casual Leave | 12 days/year (auto-allocated) |
-| **SL** | Sick Leave | 12 days/year (auto-allocated) |
+See [.env.example](.env.example). Required:
 
-Balances are stored per employee in `employee_leave_balances` (`el_balance`, `cl_balance`, `sl_balance`) with a full audit trail in `leave_transactions` (`accrual`, `deduction`, `manual_adjustment`).
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | PostgreSQL connection string (required) |
+| `AUTH_SECRET` | JWT session signing |
+| `APP_BASE_URL` | Links in approval/notification emails |
 
-### Employee Profile
+Optional: SMTP, `APPROVAL_TOKEN_SECRET`, Microsoft SSO (`AZURE_AD_*`), `TEAMS_WEBHOOK_URL`, cron secrets (`NOTIFICATION_CRON_SECRET`, `INTEGRATION_CRON_SECRET`).
 
-Admin HR can manage each employee at `/admin/employees/[id]` with tabs:
+## Background workers
 
-- **Basic Information** — edit profile fields
-- **Attendance Summary** — monthly stats with filter
-- **Leave Balances** — view/adjust with transaction logging
-- **Leave History** — full transaction audit trail
+Run on a schedule (cron, Task Scheduler, or platform scheduler):
 
-## Excel Upload Format
+| Command | Purpose |
+|---------|---------|
+| `npm run notifications:process` | Drain email/Teams notification queue |
+| `npm run integrations:process` | Calendar sync, escalation scan |
+| `npm run analytics:process` | Analytics snapshots |
 
-Required columns:
+HTTP triggers (protect with Bearer cron secrets):
 
-- Employee Code
-- Employee Name
-- Shift
-- In Time
-- Out Time
-- Work Duration
-- OT
-- Status
-- Remarks
+- `POST /api/notifications/process`
+- `POST /api/integrations/process`
+- `POST /api/analytics/process`
 
-Attendance rules:
+Health:
 
-- ≥ 480 minutes = Present
-- < 480 minutes = Short Hours
-- No check-in = Absent
+- `GET /api/health` — liveness
+- `GET /api/health/deep` — queues, workers, config (auth required)
 
-## Tech Stack
+Admin operations:
 
-- Next.js 15 (App Router)
-- TypeScript
-- Tailwind CSS v4
-- shadcn/ui components
-- Prisma ORM
-- SQLite
+- `/admin/operations` — worker health, queue depth, failed jobs
+- `/admin/audit` — searchable audit log with export
 
-## Project Structure
+## Microsoft SSO
+
+Set `AZURE_AD_CLIENT_ID`, `AZURE_AD_CLIENT_SECRET`, `AZURE_AD_TENANT_ID`, and `AZURE_AD_REDIRECT_URI`. Optional role maps: `AZURE_AD_GROUP_ROLE_MAP`, `AZURE_AD_APP_ROLE_MAP`.
+
+## Teams notifications
+
+1. Create an Incoming Webhook in a Teams channel.
+2. Set `TEAMS_WEBHOOK_URL` in `.env` or configure in **Admin → Integrations**.
+3. Enable Teams toggles in integration settings.
+4. Ensure `notifications:process` runs regularly.
+
+## Tests
+
+```bash
+npm test
+npm run validate   # typecheck + lint + test
+```
+
+Unit tests run without a database. Integration tests require `DATABASE_URL=postgresql://...` and `npm run db:setup`.
+
+## Documentation
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system overview and layers
+- [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) — developer setup and conventions
+- [docs/WORKFLOW.md](docs/WORKFLOW.md) — leave workflow engine
+- [docs/AUTH.md](docs/AUTH.md) — sessions, roles, SSO
+- [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md) — queue and channels
+- [docs/DATABASE.md](docs/DATABASE.md) — schema and query conventions
+- [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) — Graph, Teams, calendar
+- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — operational fixes
+- [docs/CODE_OWNERSHIP.md](docs/CODE_OWNERSHIP.md) — module boundaries
+- [docs/MIGRATIONS.md](docs/MIGRATIONS.md) — migration order and rules
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — production runbook
+- [docs/P3_DELIVERABLES.md](docs/P3_DELIVERABLES.md) — P3 maintainability summary
+- [docs/P2_DELIVERABLES.md](docs/P2_DELIVERABLES.md) — P2 UX polish summary
+- [docs/P1_DELIVERABLES.md](docs/P1_DELIVERABLES.md) — P1 stabilization summary
+- [docs/P0_HARDENING_DELIVERABLES.md](docs/P0_HARDENING_DELIVERABLES.md) — P0 hardening summary
+
+## Tech stack
+
+- Next.js 15 (App Router), React 19
+- Prisma ORM, PostgreSQL
+- Jose (JWT), bcrypt, nodemailer, openid-client
+
+## Project structure
 
 ```
 src/
-├── app/              # App Router pages
-├── actions/          # Server Actions
-├── components/       # UI components
-└── lib/              # Utilities, auth, Prisma
+├── app/              # Routes (admin, manager, employee, approve, api)
+├── actions/          # Server actions
+├── components/       # UI by role/domain
+└── lib/
+    ├── data/         # Centralized read models
+    ├── validation/   # Zod schemas
+    ├── errors/       # AppError + API handlers
+    ├── workflow/     # Leave engine
+    └── ...           # auth, notifications, integrations
 prisma/
 ├── schema.prisma
-├── seed.ts
-└── attendance_manager.db
+├── migrations/
+└── scripts/          # Phase migrations + workers
+tests/
+├── fixtures/         # Shared test data
+├── helpers/
+├── unit/
+└── integration/
 ```
