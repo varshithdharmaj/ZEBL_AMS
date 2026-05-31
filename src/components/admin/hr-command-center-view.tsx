@@ -154,7 +154,7 @@ export async function HrCommandCenterView() {
                   <span className="font-medium">{e.employeeName}</span>
                   <span className="text-muted-foreground">
                     {" "}
-                    · {e.leaveType} · {e.submittedAt ? formatDate(e.submittedAt) : "—"}
+                    · {e.leaveType} · {e.submittedAt ? formatDate(new Date(e.submittedAt)) : "—"}
                   </span>
                 </li>
               ))}

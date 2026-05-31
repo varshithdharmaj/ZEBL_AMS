@@ -6,6 +6,17 @@ import { scanWorkflowIntegrity } from "@/lib/workflow/workflow-integrity";
 import { getPendingHrApprovals } from "@/lib/workflow/pending-approvals";
 import { getLeaveOverlapWarnings } from "@/lib/leave/leave-overlap";
 
+const EMPTY_WORKFLOW = { issues: [], stuckCount: 0, orphanStepCount: 0 };
+
+async function safeLoad<T>(label: string, fallback: T, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    console.error(`[HrCommandCenter] ${label} failed`, error);
+    return fallback;
+  }
+}
+
 export async function getHrCommandCenterData() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -22,50 +33,66 @@ export async function getHrCommandCenterData() {
     failedNotifications,
     departmentsShortStaffed,
   ] = await Promise.all([
-    getPendingHrApprovals(),
-    getNotificationStats(),
-    getIntegrationSettings(),
-    scanWorkflowIntegrity(),
-    prisma.attendanceRecord.count({
-      where: {
-        attendanceDate: { gte: today, lt: tomorrow },
-        status: "Absent",
-      },
+    safeLoad("pendingHr", [], getPendingHrApprovals),
+    safeLoad("notificationStats", { pending: 0, failed: 0, sent: 0 }, getNotificationStats),
+    safeLoad("integrationSettings", { escalationHours: 24, graphLastHealthStatus: null }, async () => {
+      const s = await getIntegrationSettings();
+      return {
+        escalationHours: s.escalationHours,
+        graphLastHealthStatus: s.graphLastHealthStatus,
+      };
     }),
-    prisma.leaveRequest.findMany({
-      where: {
-        workflowStatus: LeaveWorkflowStatus.approved,
-        startDate: { lt: tomorrow },
-        endDate: { gte: today },
-      },
-      include: { employee: { select: { name: true, department: true } } },
-      take: 15,
-    }),
-    prisma.notification.count({
-      where: { status: NotificationDeliveryStatus.failed },
-    }),
-    getDepartmentsWithHighAbsence(today, tomorrow),
+    safeLoad("workflowScan", EMPTY_WORKFLOW, scanWorkflowIntegrity),
+    safeLoad("absentToday", 0, () =>
+      prisma.attendanceRecord.count({
+        where: {
+          attendanceDate: { gte: today, lt: tomorrow },
+          status: "Absent",
+        },
+      })
+    ),
+    safeLoad("onLeaveToday", [], () =>
+      prisma.leaveRequest.findMany({
+        where: {
+          workflowStatus: LeaveWorkflowStatus.approved,
+          startDate: { lt: tomorrow },
+          endDate: { gte: today },
+        },
+        include: { employee: { select: { name: true, department: true } } },
+        take: 15,
+      })
+    ),
+    safeLoad("failedNotifications", 0, () =>
+      prisma.notification.count({
+        where: { status: NotificationDeliveryStatus.failed },
+      })
+    ),
+    safeLoad("departmentsShortStaffed", [], () => getDepartmentsWithHighAbsence(today, tomorrow)),
   ]);
 
   const escalationRisk = pendingHr.filter((l) => {
     if (!l.submittedAt) return false;
-    const hours =
-      (Date.now() - l.submittedAt.getTime()) / (1000 * 60 * 60);
+    const hours = (Date.now() - l.submittedAt.getTime()) / (1000 * 60 * 60);
     return hours >= integrationSettings.escalationHours;
   });
 
   const conflictSamples = await Promise.all(
-    pendingHr.slice(0, 5).map(async (leave) => ({
-      leaveId: leave.id,
-      employeeName: leave.employee.name,
-      warnings: await getLeaveOverlapWarnings({
-        leaveRequestId: leave.id,
-        employeeId: leave.employeeId,
-        department: leave.employee.department,
-        startDate: leave.startDate,
-        endDate: leave.endDate,
-      }),
-    }))
+    pendingHr.slice(0, 5).map(async (leave) => {
+      const warnings = await safeLoad(`overlap-${leave.id}`, [], () =>
+        getLeaveOverlapWarnings({
+          leaveRequestId: leave.id,
+          employeeId: leave.employeeId,
+          department: leave.employee.department,
+          startDate: leave.startDate,
+          endDate: leave.endDate,
+        })
+      );
+      return {
+        leaveId: leave.id,
+        employeeName: leave.employee.name,
+        warnings,
+      };
+    })
   );
 
   const leaveConflicts = conflictSamples.filter((c) => c.warnings.length > 0);
@@ -77,7 +104,7 @@ export async function getHrCommandCenterData() {
       id: l.id,
       employeeName: l.employee.name,
       leaveType: l.leaveType,
-      submittedAt: l.submittedAt,
+      submittedAt: l.submittedAt?.toISOString() ?? null,
     })),
     absentToday,
     onLeaveToday: onLeaveToday.map((l) => ({

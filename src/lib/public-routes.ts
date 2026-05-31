@@ -4,6 +4,7 @@ export const PUBLIC_PATHS = [
   "/api/approve",
   "/api/auth/microsoft",
   "/api/integrations/teams",
+  "/api/health",
 ] as const;
 
 export const APPROVAL_PUBLIC_PATHS = ["/approve", "/api/approve"] as const;
