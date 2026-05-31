@@ -4,12 +4,14 @@ import { useState } from "react";
 import { AppTabs, type TabDef } from "@/components/ui/app-tabs";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
+import { OverviewTab } from "@/components/admin/employee-profile/overview-tab";
 import { BasicInfoTab } from "@/components/admin/employee-profile/basic-info-tab";
 import { AttendanceTab } from "@/components/admin/employee-profile/attendance-tab";
 import { LeaveBalancesTab } from "@/components/admin/employee-profile/leave-balances-tab";
 import { LeaveHistoryTab } from "@/components/admin/employee-profile/leave-history-tab";
 import type { EmployeeStatus } from "@/lib/employee-types";
 import type { LeaveBalanceSummary } from "@/lib/leave";
+import type { ManagerSummary } from "@/lib/org-types";
 
 export type ProfileEmployee = {
   id: number;
@@ -23,6 +25,8 @@ export type ProfileEmployee = {
   joiningDate: Date;
   employeeStatus: EmployeeStatus;
   user: { email: string } | null;
+  manager: ManagerSummary | null;
+  directReportsCount: number;
 };
 
 type AttendanceSummary = {
@@ -56,6 +60,7 @@ type HistoryRow = {
 };
 
 const TABS: TabDef[] = [
+  { id: "overview", label: "Overview" },
   { id: "basic", label: "Profile" },
   { id: "attendance", label: "Attendance" },
   { id: "balances", label: "Leave balances" },
@@ -69,6 +74,8 @@ export function EmployeeProfileShell({
   history,
   defaultStart,
   defaultEnd,
+  managerCandidates,
+  overviewStats,
 }: {
   employee: ProfileEmployee;
   attendance: AttendanceSummary;
@@ -76,8 +83,15 @@ export function EmployeeProfileShell({
   history: HistoryRow[];
   defaultStart: string;
   defaultEnd: string;
+  managerCandidates: ManagerSummary[];
+  overviewStats: {
+    pendingLeaves: number;
+    approvedLeavesYtd: number;
+    attendancePercent: number;
+    lastAttendance: Date | null;
+  };
 }) {
-  const [activeTab, setActiveTab] = useState("basic");
+  const [activeTab, setActiveTab] = useState("overview");
 
   return (
     <div className="space-y-6 lg:space-y-8">
@@ -94,7 +108,12 @@ export function EmployeeProfileShell({
       <AppTabs tabs={TABS} active={activeTab} onChange={setActiveTab} />
 
       <div className="pt-2">
-        {activeTab === "basic" && <BasicInfoTab employee={employee} />}
+        {activeTab === "overview" && (
+          <OverviewTab employee={employee} stats={overviewStats} />
+        )}
+        {activeTab === "basic" && (
+          <BasicInfoTab employee={employee} managerCandidates={managerCandidates} />
+        )}
         {activeTab === "attendance" && (
           <AttendanceTab
             summary={attendance}

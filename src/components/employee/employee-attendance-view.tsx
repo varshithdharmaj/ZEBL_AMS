@@ -9,7 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { EmployeePageHeader } from "@/components/employee/employee-page-header";
+import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { DashboardCard } from "@/components/ui/dashboard-card";
 import { StatsGrid } from "@/components/ui/stats-grid";
 import { SectionCard } from "@/components/ui/section-card";
@@ -53,9 +53,11 @@ export async function EmployeeAttendanceView({
 
   return (
     <div className="space-y-6 lg:space-y-8">
-      <EmployeePageHeader
+      <WorkspacePageHeader
         title="Attendance history"
         description="Browse and filter your complete attendance record."
+        backHref="/employee/dashboard"
+        backLabel="Dashboard"
         action={
           <div className="w-full rounded-xl border border-border bg-muted/40 p-4 lg:min-w-[20rem]">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">

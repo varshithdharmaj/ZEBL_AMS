@@ -1,8 +1,31 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { verifySessionToken } from "@/lib/session";
+import { verifySessionToken, COOKIE_NAME } from "@/lib/session";
+import { getRoleHomePath } from "@/lib/routing";
+import {
+  canAccessAdmin,
+  canAccessEmployeeShell,
+  canAccessManagerShell,
+} from "@/lib/permissions";
+import { isSessionVersionStale } from "@/lib/session-version-cache";
+import type { AppUserRole } from "@/lib/roles";
+import { isApprovalPublicPath, isPublicPath } from "@/lib/public-routes";
 
-const publicPaths = ["/login"];
+function redirectToRoleHome(request: NextRequest, role: AppUserRole) {
+  return NextResponse.redirect(new URL(getRoleHomePath(role), request.url));
+}
+
+function redirectToLogin(request: NextRequest, pathname: string, clearSession: boolean) {
+  const loginUrl = new URL("/login", request.url);
+  if (pathname !== "/login") {
+    loginUrl.searchParams.set("from", pathname);
+  }
+  const response = NextResponse.redirect(loginUrl);
+  if (clearSession) {
+    response.cookies.set(COOKIE_NAME, "", { path: "/", maxAge: 0 });
+  }
+  return response;
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -15,39 +38,42 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = request.cookies.get("zebl_session")?.value;
+  const token = request.cookies.get(COOKIE_NAME)?.value;
   const session = token ? await verifySessionToken(token) : null;
 
-  const isPublic = publicPaths.some((p) => pathname === p || pathname.startsWith(p + "/"));
+  if (session) {
+    const stale = isSessionVersionStale(session.id, session.sessionVersion);
+    if (stale === true && !isApprovalPublicPath(pathname)) {
+      return redirectToLogin(request, pathname, true);
+    }
+  }
 
   if (pathname === "/") {
-    if (session) {
-      const dest = session.role === "admin" ? "/admin/dashboard" : "/employee/dashboard";
-      return NextResponse.redirect(new URL(dest, request.url));
-    }
+    if (session) return redirectToRoleHome(request, session.role);
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (isPublic) {
-    if (session) {
-      const dest = session.role === "admin" ? "/admin/dashboard" : "/employee/dashboard";
-      return NextResponse.redirect(new URL(dest, request.url));
+  if (isPublicPath(pathname)) {
+    if (session && !isApprovalPublicPath(pathname)) {
+      return redirectToRoleHome(request, session.role);
     }
     return NextResponse.next();
   }
 
   if (!session) {
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("from", pathname);
-    return NextResponse.redirect(loginUrl);
+    return redirectToLogin(request, pathname, false);
   }
 
-  if (pathname.startsWith("/admin") && session.role !== "admin") {
-    return NextResponse.redirect(new URL("/employee/dashboard", request.url));
+  if (pathname.startsWith("/admin") && !canAccessAdmin(session.role)) {
+    return redirectToRoleHome(request, session.role);
   }
 
-  if (pathname.startsWith("/employee") && session.role !== "employee") {
-    return NextResponse.redirect(new URL("/admin/dashboard", request.url));
+  if (pathname.startsWith("/manager") && !canAccessManagerShell(session.role)) {
+    return redirectToRoleHome(request, session.role);
+  }
+
+  if (pathname.startsWith("/employee") && !canAccessEmployeeShell(session.role)) {
+    return redirectToRoleHome(request, session.role);
   }
 
   return NextResponse.next();

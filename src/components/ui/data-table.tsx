@@ -63,12 +63,17 @@ export function DataTableRow({
 export function DataTableCell({
   children,
   className,
+  colSpan,
 }: {
   children: React.ReactNode;
   className?: string;
+  colSpan?: number;
 }) {
   return (
-    <td className={cn("px-5 py-3.5 text-[0.875rem] text-foreground/90", className)}>
+    <td
+      colSpan={colSpan}
+      className={cn("px-5 py-3.5 text-[0.875rem] text-foreground/90", className)}
+    >
       {children}
     </td>
   );

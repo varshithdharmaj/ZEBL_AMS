@@ -3,29 +3,63 @@ import { Suspense } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { AttendanceFilters } from "@/components/admin/attendance-filters";
+import { AttendanceShiftCell } from "@/components/attendance/attendance-shift-cell";
 import { SectionCard } from "@/components/ui/section-card";
 import { DataTable, DataTableRow, DataTableCell } from "@/components/ui/data-table";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
-import { getAttendanceRecords } from "@/lib/queries";
-import { formatDate, minutesToHours } from "@/lib/utils";
+import { getAttendanceRecords } from "@/lib/data";
+import {
+  getOperationalShiftFilterOption,
+  formatTimeAmPm,
+  formatWorkedDurationDisplay,
+  formatOvertimeDisplay,
+} from "@/lib/attendance-shift";
+import { getPayrollSettings } from "@/lib/payroll/payroll-settings";
+import {
+  listPayrollPeriodOptions,
+  parsePayrollPeriodKey,
+} from "@/lib/payroll/payroll-period";
+import { formatDate } from "@/lib/utils";
 
 export default async function AdminAttendancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; date?: string; page?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    date?: string;
+    period?: string;
+    shift?: string;
+    shortfall?: string;
+    ot?: string;
+    page?: string;
+  }>;
 }) {
   const params = await searchParams;
   const page = parseInt(params.page ?? "1", 10) || 1;
+  const settings = await getPayrollSettings();
+  const shiftFilter = getOperationalShiftFilterOption(params.shift);
+  const periodOptions = listPayrollPeriodOptions(settings.payrollStartDay, 12);
+  const activePeriod = params.period
+    ? parsePayrollPeriodKey(params.period, settings.payrollStartDay)
+    : null;
+
   const { records, total, totalPages } = await getAttendanceRecords({
     search: params.q,
-    date: params.date,
+    date: params.period ? undefined : params.date,
+    period: params.period,
+    shift: params.shift,
+    shortfall: params.shortfall === "1",
+    ot: params.ot === "1",
     page,
   });
 
   const query = new URLSearchParams();
   if (params.q) query.set("q", params.q);
-  if (params.date) query.set("date", params.date);
+  if (params.period) query.set("period", params.period);
+  else if (params.date) query.set("date", params.date);
+  if (params.shift) query.set("shift", params.shift);
+  if (params.shortfall === "1") query.set("shortfall", "1");
+  if (params.ot === "1") query.set("ot", "1");
 
   function pageHref(nextPage: number) {
     const q = new URLSearchParams(query.toString());
@@ -33,15 +67,30 @@ export default async function AdminAttendancePage({
     return `/admin/attendance?${q.toString()}`;
   }
 
+  const hints: string[] = [];
+  if (activePeriod) hints.push(activePeriod.label);
+  if (shiftFilter.value) hints.push(shiftFilter.label);
+  if (params.shortfall === "1") hints.push("Shortfall");
+  if (params.ot === "1") hints.push("OT");
+  const filterHint = hints.length ? ` · ${hints.join(" · ")}` : "";
+
   return (
     <div className="space-y-6 lg:space-y-8">
       <WorkspacePageHeader
         title="Attendance"
-        description={`Search and review attendance records · ${total} total`}
+        description={`Daily attendance records · ${total} total${filterHint}`}
         action={
-          <div className="w-full rounded-xl border border-border bg-muted/40 p-4 lg:min-w-[20rem]">
+          <div className="w-full rounded-xl border border-border bg-muted/40 p-4 lg:min-w-[24rem]">
             <Suspense fallback={null}>
-              <AttendanceFilters defaultSearch={params.q} defaultDate={params.date} />
+              <AttendanceFilters
+                defaultSearch={params.q}
+                defaultDate={params.date}
+                defaultPeriod={params.period ?? ""}
+                defaultShift={params.shift ?? ""}
+                defaultShortfall={params.shortfall === "1"}
+                defaultOt={params.ot === "1"}
+                periodOptions={periodOptions.map((p) => ({ key: p.key, label: p.label }))}
+              />
             </Suspense>
           </div>
         }
@@ -49,26 +98,58 @@ export default async function AdminAttendancePage({
 
       <SectionCard
         title="Records"
-        description={`Page ${page} of ${totalPages}`}
+        description={`Page ${page} of ${totalPages}${filterHint}`}
         noPadding
       >
-        <DataTable columns={["Date", "Employee", "In", "Out", "Worked", "OT", "Status"]}>
-          {records.map((record) => (
-            <DataTableRow key={record.id}>
-              <DataTableCell className="whitespace-nowrap">{formatDate(record.attendanceDate)}</DataTableCell>
-              <DataTableCell>
-                <p className="font-medium">{record.employee.name}</p>
-                <p className="text-xs text-muted-foreground">{record.employee.employeeCode}</p>
-              </DataTableCell>
-              <DataTableCell className="tabular-nums">{record.checkIn ?? "—"}</DataTableCell>
-              <DataTableCell className="tabular-nums">{record.checkOut ?? "—"}</DataTableCell>
-              <DataTableCell className="tabular-nums">{minutesToHours(record.workedMinutes)}</DataTableCell>
-              <DataTableCell className="tabular-nums">{minutesToHours(record.overtimeMinutes)}</DataTableCell>
-              <DataTableCell>
-                <StatusBadge status={record.status} />
+        <DataTable
+          columns={[
+            "Date",
+            "Employee",
+            "Shift",
+            "In Time",
+            "Out Time",
+            "Work Duration",
+            "OT",
+            "Remarks",
+          ]}
+        >
+          {records.length === 0 ? (
+            <DataTableRow>
+              <DataTableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                No records match your filters.
               </DataTableCell>
             </DataTableRow>
-          ))}
+          ) : (
+            records.map((record) => (
+              <DataTableRow key={record.id}>
+                <DataTableCell className="whitespace-nowrap align-top">
+                  {formatDate(record.attendanceDate)}
+                </DataTableCell>
+                <DataTableCell className="align-top">
+                  <p className="font-medium">{record.employee.name}</p>
+                  <p className="text-xs text-muted-foreground">{record.employee.employeeCode}</p>
+                </DataTableCell>
+                <DataTableCell className="align-top min-w-[9rem]">
+                  <AttendanceShiftCell shift={record.employee.shift} compact />
+                </DataTableCell>
+                <DataTableCell className="tabular-nums align-top whitespace-nowrap">
+                  {formatTimeAmPm(record.checkIn)}
+                </DataTableCell>
+                <DataTableCell className="tabular-nums align-top whitespace-nowrap">
+                  {formatTimeAmPm(record.checkOut)}
+                </DataTableCell>
+                <DataTableCell className="tabular-nums align-top whitespace-nowrap">
+                  {formatWorkedDurationDisplay(record.workDuration, record.workedMinutes)}
+                </DataTableCell>
+                <DataTableCell className="tabular-nums align-top whitespace-nowrap">
+                  {formatOvertimeDisplay(record.overtimeMinutes)}
+                </DataTableCell>
+                <DataTableCell className="align-top max-w-[14rem] text-sm text-muted-foreground">
+                  {record.remarks?.trim() ? record.remarks : "—"}
+                </DataTableCell>
+              </DataTableRow>
+            ))
+          )}
         </DataTable>
 
         {totalPages > 1 && (

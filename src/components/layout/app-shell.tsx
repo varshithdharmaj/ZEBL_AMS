@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import { AppTopBar, AppTopBarDesktop } from "@/components/layout/app-top-bar";
 import type { SessionUser } from "@/lib/auth";
 
 export function AppShell({
@@ -26,6 +27,7 @@ export function AppShell({
         onMobileClose={() => setMobileOpen(false)}
       />
       <div className="lg:pl-[var(--sidebar-width)]">
+        <AppTopBar />
         <main
           className={
             variant === "wide"
@@ -33,6 +35,7 @@ export function AppShell({
               : "mx-auto min-h-screen w-full max-w-[var(--page-max)] px-5 py-8 pt-16 lg:px-10 lg:pt-10"
           }
         >
+          <AppTopBarDesktop />
           {children}
         </main>
       </div>

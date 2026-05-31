@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { isUniqueConstraintError } from "@/lib/db/prisma-errors";
 import {
   DEFAULT_CL_ANNUAL,
   DEFAULT_SL_ANNUAL,
@@ -10,6 +11,7 @@ import {
   type LeaveTransactionType,
 } from "@/lib/leave-types";
 import { startOfDay } from "@/lib/utils";
+import { LeaveRequestStatus } from "@prisma/client";
 
 export type LeaveBalanceSummary = {
   leaveType: LeaveType;
@@ -66,11 +68,23 @@ function formatMonthKey(date: Date): string {
 
 export async function getOrCreateLeaveBalanceRow(employeeId: number, tx?: TxClient) {
   const client = tx ?? prisma;
-  return client.employeeLeaveBalance.upsert({
+  const existing = await client.employeeLeaveBalance.findUnique({
     where: { employeeId },
-    create: { employeeId },
-    update: {},
   });
+  if (existing) return existing;
+
+  try {
+    return await client.employeeLeaveBalance.create({
+      data: { employeeId },
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return client.employeeLeaveBalance.findUniqueOrThrow({
+        where: { employeeId },
+      });
+    }
+    throw error;
+  }
 }
 
 function applyBalanceDelta(
@@ -96,6 +110,56 @@ function applyBalanceDelta(
   };
 }
 
+export async function recordLeaveTransactionInTx(
+  tx: TxClient,
+  params: {
+    employeeId: number;
+    leaveType: LeaveType;
+    transactionType: LeaveTransactionType;
+    amount: number;
+    reason?: string;
+    createdBy?: string;
+    leaveRequestId?: number;
+  }
+): Promise<void> {
+  const { employeeId, leaveType, transactionType, amount, reason, createdBy, leaveRequestId } =
+    params;
+
+  if (amount === 0 && transactionType !== "manual_adjustment") {
+    throw new Error("Transaction amount must be non-zero.");
+  }
+
+  await tx.leaveTransaction.create({
+    data: {
+      employeeId,
+      leaveType,
+      transactionType,
+      amount:
+        transactionType === "manual_adjustment" ? amount : Math.abs(amount),
+      reason: reason ?? null,
+      createdBy: createdBy ?? null,
+      leaveRequestId: leaveRequestId ?? null,
+    },
+  });
+
+  const current = await getOrCreateLeaveBalanceRow(employeeId, tx);
+  const updated = applyBalanceDelta(
+    {
+      elBalance: current.elBalance,
+      clBalance: current.clBalance,
+      slBalance: current.slBalance,
+    },
+    leaveType,
+    transactionType,
+    amount
+  );
+
+  await tx.employeeLeaveBalance.update({
+    where: { employeeId },
+    data: updated,
+  });
+}
+
 export async function recordLeaveTransaction(params: {
   employeeId: number;
   leaveType: LeaveType;
@@ -105,50 +169,18 @@ export async function recordLeaveTransaction(params: {
   createdBy?: string;
   leaveRequestId?: number;
 }) {
-  const { employeeId, leaveType, transactionType, amount, reason, createdBy, leaveRequestId } =
-    params;
-
-  if (amount === 0 && transactionType !== "manual_adjustment") {
-    throw new Error("Transaction amount must be non-zero.");
-  }
-
   return prisma.$transaction(async (tx) => {
-    await tx.leaveTransaction.create({
-      data: {
-        employeeId,
-        leaveType,
-        transactionType,
-        amount:
-          transactionType === "manual_adjustment"
-            ? amount
-            : Math.abs(amount),
-        reason: reason ?? null,
-        createdBy: createdBy ?? null,
-        leaveRequestId: leaveRequestId ?? null,
-      },
-    });
-
-    const current = await getOrCreateLeaveBalanceRow(employeeId, tx);
-    const updated = applyBalanceDelta(
-      {
-        elBalance: current.elBalance,
-        clBalance: current.clBalance,
-        slBalance: current.slBalance,
-      },
-      leaveType,
-      transactionType,
-      amount
-    );
-
-    await tx.employeeLeaveBalance.update({
-      where: { employeeId },
-      data: updated,
-    });
+    await recordLeaveTransactionInTx(tx, params);
   });
 }
 
-async function hasAccrualReason(employeeId: number, reason: string): Promise<boolean> {
-  const existing = await prisma.leaveTransaction.findFirst({
+async function hasAccrualReason(
+  employeeId: number,
+  reason: string,
+  tx?: TxClient
+): Promise<boolean> {
+  const client = tx ?? prisma;
+  const existing = await client.leaveTransaction.findFirst({
     where: { employeeId, reason },
   });
   return !!existing;
@@ -162,46 +194,50 @@ export async function processPendingLeaveAccruals(employeeId: number): Promise<v
   const year = getCalendarYear();
   const joiningDate = employee.joiningDate;
 
-  const clReason = `CL yearly allocation ${year}`;
-  if (!(await hasAccrualReason(employeeId, clReason))) {
-    await recordLeaveTransaction({
-      employeeId,
-      leaveType: "CL",
-      transactionType: "accrual",
-      amount: DEFAULT_CL_ANNUAL,
-      reason: clReason,
-      createdBy: "system",
-    });
-  }
+  await prisma.$transaction(async (tx) => {
+    await getOrCreateLeaveBalanceRow(employeeId, tx);
 
-  const slReason = `SL yearly allocation ${year}`;
-  if (!(await hasAccrualReason(employeeId, slReason))) {
-    await recordLeaveTransaction({
-      employeeId,
-      leaveType: "SL",
-      transactionType: "accrual",
-      amount: DEFAULT_SL_ANNUAL,
-      reason: slReason,
-      createdBy: "system",
-    });
-  }
+    const clReason = `CL yearly allocation ${year}`;
+    if (!(await hasAccrualReason(employeeId, clReason, tx))) {
+      await recordLeaveTransactionInTx(tx, {
+        employeeId,
+        leaveType: "CL",
+        transactionType: "accrual",
+        amount: DEFAULT_CL_ANNUAL,
+        reason: clReason,
+        createdBy: "system",
+      });
+    }
 
-  if (!isEligibleForEL(joiningDate)) return;
+    const slReason = `SL yearly allocation ${year}`;
+    if (!(await hasAccrualReason(employeeId, slReason, tx))) {
+      await recordLeaveTransactionInTx(tx, {
+        employeeId,
+        leaveType: "SL",
+        transactionType: "accrual",
+        amount: DEFAULT_SL_ANNUAL,
+        reason: slReason,
+        createdBy: "system",
+      });
+    }
 
-  const monthKeys = getElAccrualMonthKeys(joiningDate);
-  for (const monthKey of monthKeys) {
-    const reason = `EL monthly accrual ${monthKey}`;
-    if (await hasAccrualReason(employeeId, reason)) continue;
+    if (!isEligibleForEL(joiningDate)) return;
 
-    await recordLeaveTransaction({
-      employeeId,
-      leaveType: "EL",
-      transactionType: "accrual",
-      amount: EL_MONTHLY_ACCRUAL,
-      reason,
-      createdBy: "system",
-    });
-  }
+    const monthKeys = getElAccrualMonthKeys(joiningDate);
+    for (const monthKey of monthKeys) {
+      const reason = `EL monthly accrual ${monthKey}`;
+      if (await hasAccrualReason(employeeId, reason, tx)) continue;
+
+      await recordLeaveTransactionInTx(tx, {
+        employeeId,
+        leaveType: "EL",
+        transactionType: "accrual",
+        amount: EL_MONTHLY_ACCRUAL,
+        reason,
+        createdBy: "system",
+      });
+    }
+  });
 }
 
 async function sumUsedFromTransactions(employeeId: number, leaveType: LeaveType): Promise<number> {
@@ -299,27 +335,67 @@ export async function deductLeaveForApproval(params: {
   days: number;
   leaveRequestId: number;
   createdBy: string;
+  tx?: TxClient;
 }) {
-  const { employeeId, leaveType, days, leaveRequestId, createdBy } = params;
+  const { employeeId, leaveType, days, leaveRequestId, createdBy, tx } = params;
 
-  await processPendingLeaveAccruals(employeeId);
+  const run = async (client: TxClient) => {
+    const balance = await getOrCreateLeaveBalanceRow(employeeId, client);
+    const field = leaveTypeToBalanceField(leaveType);
+    const available = balance[field];
+    if (available < days) {
+      throw new Error(
+        `Insufficient ${leaveType} balance. Available: ${available}, required: ${days}`
+      );
+    }
 
-  const available = await getRemainingBalance(employeeId, leaveType);
-  if (available < days) {
-    throw new Error(
-      `Insufficient ${leaveType} balance. Available: ${available}, required: ${days}`
-    );
+    await recordLeaveTransactionInTx(client, {
+      employeeId,
+      leaveType,
+      transactionType: "deduction",
+      amount: days,
+      reason: `Leave request #${leaveRequestId} approved`,
+      createdBy,
+      leaveRequestId,
+    });
+  };
+
+  if (tx) {
+    await run(tx);
+  } else {
+    await processPendingLeaveAccruals(employeeId);
+    await prisma.$transaction(run);
   }
+}
 
-  await recordLeaveTransaction({
-    employeeId,
-    leaveType,
-    transactionType: "deduction",
-    amount: days,
-    reason: `Leave request #${leaveRequestId} approved`,
-    createdBy,
-    leaveRequestId,
-  });
+export async function restoreLeaveBalanceForCancellation(params: {
+  employeeId: number;
+  leaveType: LeaveType;
+  days: number;
+  leaveRequestId: number;
+  createdBy: string;
+  reason: string;
+  tx?: TxClient;
+}) {
+  const { employeeId, leaveType, days, leaveRequestId, createdBy, reason, tx } = params;
+
+  const run = async (client: TxClient) => {
+    await recordLeaveTransactionInTx(client, {
+      employeeId,
+      leaveType,
+      transactionType: "accrual",
+      amount: days,
+      reason: `Cancellation of leave #${leaveRequestId}: ${reason}`,
+      createdBy,
+      leaveRequestId,
+    });
+  };
+
+  if (tx) {
+    await run(tx);
+  } else {
+    await prisma.$transaction(run);
+  }
 }
 
 export async function adminAdjustLeaveBalance(params: {
@@ -411,7 +487,7 @@ export async function getLeaveTransactionHistory(employeeId: number, limit = 100
   }));
 
   for (const req of requests) {
-    if (req.status === "approved") {
+    if (req.status === LeaveRequestStatus.approved) {
       rows.push({
         id: `req-${req.id}`,
         date: req.reviewedAt ?? req.createdAt,

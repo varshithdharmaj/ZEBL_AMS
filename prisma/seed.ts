@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, UserRole, AuthProvider } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { initializeEmployeeLeaveBalances, processPendingLeaveAccruals } from "../src/lib/leave";
 
@@ -7,13 +7,26 @@ const prisma = new PrismaClient();
 async function main() {
   const passwordHash = await bcrypt.hash("Hr@2026", 10);
 
+  await prisma.integrationSettings.upsert({
+    where: { id: "default" },
+    create: { id: "default" },
+    update: {},
+  });
+
   await prisma.user.upsert({
     where: { email: "hr@zebl.com" },
-    update: { password: passwordHash, role: "admin" },
+    update: {
+      password: passwordHash,
+      role: UserRole.admin,
+      authProvider: AuthProvider.local,
+      sessionVersion: 1,
+    },
     create: {
       email: "hr@zebl.com",
       password: passwordHash,
-      role: "admin",
+      role: UserRole.admin,
+      authProvider: AuthProvider.local,
+      sessionVersion: 1,
     },
   });
 

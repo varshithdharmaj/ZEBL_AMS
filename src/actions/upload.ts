@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import * as XLSX from "xlsx";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { requireAdminSession } from "@/lib/auth-guards";
 import {
   deriveAttendanceStatus,
   getColumnIndex,
@@ -48,8 +48,10 @@ export async function uploadAttendanceAction(
   _prev: UploadState,
   formData: FormData
 ): Promise<UploadState> {
-  const session = await getSession();
-  if (!session || session.role !== "admin") {
+  let session;
+  try {
+    session = await requireAdminSession();
+  } catch {
     return { error: "Unauthorized." };
   }
 
@@ -185,6 +187,7 @@ export async function uploadAttendanceAction(
 
     revalidatePath("/admin/dashboard");
     revalidatePath("/admin/attendance");
+    revalidatePath("/admin/payroll-attendance");
     revalidatePath("/admin/upload");
 
     const message = `Imported ${imported} record(s)${skipped > 0 ? `, skipped ${skipped} duplicate(s)` : ""}.`;
