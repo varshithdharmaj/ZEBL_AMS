@@ -20,6 +20,7 @@ export type EmployeePeriodMetrics = {
   shortfallMinutes: number;
   otMinutes: number;
   leaveDays: number;
+  lopDays: number;
   absentDays: number;
   lateCount: number;
   recommendedDeduction: string | null;
@@ -72,7 +73,8 @@ export function computeEmployeePeriodMetrics(
   records: DailyAttendanceInput[],
   settings: PayrollSettingsSnapshot,
   employeeShift: string | null | undefined,
-  approvedLeaveDays: number
+  approvedLeaveDays: number,
+  approvedLopDays: number = 0
 ): EmployeePeriodMetrics {
   const rules = resolveShiftPayrollRules(settings, employeeShift);
   const workingDays = records.length;
@@ -117,6 +119,7 @@ export function computeEmployeePeriodMetrics(
     shortfallMinutes,
     otMinutes,
     leaveDays: approvedLeaveDays,
+    lopDays: approvedLopDays,
     absentDays,
     lateCount,
     recommendedDeduction,

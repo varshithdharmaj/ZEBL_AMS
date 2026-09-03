@@ -512,6 +512,7 @@ model LeaveRequest {
   startDate               DateTime             @map("start_date")
   endDate                 DateTime             @map("end_date")
   days                    Float                @default(0)
+  lopDays                 Float                @default(0) @map("lop_days")
   reason                  String
   status                  LeaveRequestStatus   @default(pending)
   workflowStatus          LeaveWorkflowStatus  @default(pending_approval) @map("workflow_status")
@@ -985,6 +986,7 @@ model PayrollAttendanceSummary {
   shortfallMinutes     Int               @default(0) @map("shortfall_minutes")
   otMinutes            Int               @default(0) @map("ot_minutes")
   leaveDays            Float             @default(0) @map("leave_days")
+  lopDays              Float             @default(0) @map("lop_days")
   absentDays           Int               @default(0) @map("absent_days")
   lateCount            Int               @default(0) @map("late_count")
   recommendedDeduction String?           @map("recommended_deduction")

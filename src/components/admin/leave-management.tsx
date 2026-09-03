@@ -16,6 +16,7 @@ type Leave = {
   startDate: Date;
   endDate: Date;
   days: number;
+  lopDays: number;
   reason: string;
   status: string;
   workflowStatus: LeaveWorkflowStatus;

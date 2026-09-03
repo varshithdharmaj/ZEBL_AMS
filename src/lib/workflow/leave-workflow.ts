@@ -199,6 +199,7 @@ async function finalizeApproval(
   actor: WorkflowActor
 ): Promise<void> {
   const days = leave.days > 0 ? leave.days : countLeaveDays(leave.startDate, leave.endDate);
+  const payableDays = Math.max(0, days - (leave.lopDays ?? 0));
 
   if (!isValidLeaveType(leave.leaveType)) {
     throw new WorkflowError("Invalid leave type on request.");
@@ -215,17 +216,21 @@ async function finalizeApproval(
         { id: leave.employeeId, joiningDate: leave.employee.joiningDate, isActive: leave.employee.isActive },
         policy
       );
-      await consumeElFifo(tx, {
-        employeeId: leave.employeeId,
-        days,
-        leaveRequestId: leave.id,
-        createdBy: actor.email,
-      });
-    } else {
+      // A fully-LOP request (payableDays === 0) consumes no lots — consumeElFifo
+      // would throw on a zero-day request, and there's nothing to deduct anyway.
+      if (payableDays > 0) {
+        await consumeElFifo(tx, {
+          employeeId: leave.employeeId,
+          days: payableDays,
+          leaveRequestId: leave.id,
+          createdBy: actor.email,
+        });
+      }
+    } else if (payableDays > 0) {
       await deductLeaveForApproval({
         employeeId: leave.employeeId,
         leaveType: leave.leaveType,
-        days,
+        days: payableDays,
         leaveRequestId: leave.id,
         createdBy: actor.email,
         tx,
@@ -264,9 +269,14 @@ export async function createLeaveWorkflow(params: {
   startDate: Date;
   endDate: Date;
   days: number;
+  lopDays?: number;
   reason: string;
   actor: WorkflowActor;
 }): Promise<{ leaveId: number }> {
+  const lopDays = params.lopDays ?? 0;
+
+  // Routing is about total duration impact, not who ends up paying for it —
+  // deliberately still keyed on the full requested days, not the payable subset.
   const chain = await buildApprovalChain({
     employeeId: params.employeeId,
     leaveDays: params.days,
@@ -281,6 +291,7 @@ export async function createLeaveWorkflow(params: {
         startDate: params.startDate,
         endDate: params.endDate,
         days: params.days,
+        lopDays,
         reason: params.reason,
         workflowStatus: LeaveWorkflowStatus.pending_approval,
         status: workflowToLeaveStatus(LeaveWorkflowStatus.pending_approval),
@@ -318,6 +329,7 @@ export async function createLeaveWorkflow(params: {
         metadata: {
           workflowStatus: LeaveWorkflowStatus.pending_approval,
           stepCount: steps.length,
+          lopDays,
           operation: "submit",
         },
       },
@@ -637,6 +649,7 @@ export async function cancelWorkflow(
   }
 
   const days = leave.days > 0 ? leave.days : countLeaveDays(leave.startDate, leave.endDate);
+  const payableDays = Math.max(0, days - (leave.lopDays ?? 0));
   if (!isValidLeaveType(leave.leaveType)) {
     throw new WorkflowError("Invalid leave type on request.");
   }
@@ -648,17 +661,20 @@ export async function cancelWorkflow(
 
     try {
       if (leave.leaveType === "EL") {
+        // No-ops for a fully-LOP request: finalizeApproval never wrote
+        // LeaveConsumption rows for it, and restoreElForCancellation already
+        // returns early when there are none (src/lib/leave/el-fifo.ts).
         await restoreElForCancellation(tx, {
           employeeId: leave.employeeId,
           leaveRequestId: leave.id,
           createdBy: actor.email,
           reason: trimmed,
         });
-      } else {
+      } else if (payableDays > 0) {
         await restoreLeaveBalanceForCancellation({
           employeeId: leave.employeeId,
           leaveType: leave.leaveType as LeaveType,
-          days,
+          days: payableDays,
           leaveRequestId: leave.id,
           createdBy: actor.email,
           reason: trimmed,
@@ -687,7 +703,7 @@ export async function cancelWorkflow(
           from: LeaveWorkflowStatus.approved,
           to: LeaveWorkflowStatus.cancelled,
           reason: trimmed,
-          daysRestored: days,
+          daysRestored: payableDays,
         },
       },
       tx
@@ -735,6 +751,7 @@ export async function getLeaveWorkflowDto(leaveId: number) {
     startDate: leave.startDate,
     endDate: leave.endDate,
     days: leave.days,
+    lopDays: leave.lopDays,
     reason: leave.reason,
     workflowStatus: leave.workflowStatus,
     status: leave.status,

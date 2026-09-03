@@ -14,6 +14,7 @@ export type PendingApprovalItem = {
     startDate: Date;
     endDate: Date;
     days: number;
+    lopDays: number;
     reason: string;
     workflowStatus: LeaveWorkflowStatus;
     version: number;
