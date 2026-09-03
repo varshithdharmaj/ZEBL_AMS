@@ -18,7 +18,6 @@ const prisma = new PrismaClient();
 const CONTENT = `# Company Leave Policy
 
 **Policy Version:** 1.1
-**Effective From:** 03 Sep 2026
 
 ## Leave Cycle
 
