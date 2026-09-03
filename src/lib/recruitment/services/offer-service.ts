@@ -1,6 +1,7 @@
 import { Prisma } from "@/generated/prisma/client";
 import { OfferStatus, CandidateStatus } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
+import { nextOfferNumberSequenceValue } from "@/lib/db-sequence";
 import type { SessionUser } from "@/lib/session";
 import {
   RecruitmentPermissionService,
@@ -64,13 +65,10 @@ type SendOfferLetterEmailFn = (
 async function fetchNextOfferNumber(): Promise<string> {
   const year = new Date().getFullYear();
   try {
-    const result = await prisma.$queryRaw<{ nextval: bigint | number }[]>`SELECT nextval('offer_number_seq')`;
-    const nextVal = result[0]?.nextval;
-    if (nextVal != null) {
-      return `OFFER-${year}-${String(nextVal).padStart(4, "0")}`;
-    }
+    const nextVal = await nextOfferNumberSequenceValue(prisma);
+    return `OFFER-${year}-${String(nextVal).padStart(4, "0")}`;
   } catch (_err) {
-    // Fallback if sequence is not present
+    // Fallback if the sequence/counter table is not present
   }
   const rand = Math.floor(1000 + Math.random() * 9000);
   return `OFFER-${year}-${rand}`;

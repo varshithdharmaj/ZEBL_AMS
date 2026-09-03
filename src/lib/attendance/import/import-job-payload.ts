@@ -1,15 +1,23 @@
 import { gunzipSync, gzipSync } from "node:zlib";
+import { formatTimeCell } from "./cell-utils";
 import type { AttendanceImportRow, AttendanceReportType } from "./types";
 
 /** Rows processed per committed DB transaction during job import. */
 export const IMPORT_CHUNK_SIZE = 15;
 
-/** Bump when serialized row shape changes. */
-export const ATTENDANCE_IMPORT_PARSER_VERSION = "1";
+/**
+ * Bump when serialized row shape changes.
+ * v2: inTime/outTime are canonicalized to "HH:mm" strings before JSON serialization
+ * (previously passed through raw, which let JS Date cells for Excel time-only values
+ * survive JSON.stringify as ISO strings anchored to the 1899-12-30 epoch).
+ */
+export const ATTENDANCE_IMPORT_PARSER_VERSION = "2";
 
-type SerializedImportRow = Omit<AttendanceImportRow, "attendanceDate" | "source"> & {
+type SerializedImportRow = Omit<AttendanceImportRow, "attendanceDate" | "source" | "inTime" | "outTime"> & {
   attendanceDate?: string;
   source: AttendanceReportType;
+  inTime: string | null;
+  outTime: string | null;
 };
 
 type PayloadEnvelope = {
@@ -17,13 +25,23 @@ type PayloadEnvelope = {
   rows: SerializedImportRow[];
 };
 
+/**
+ * Canonicalize inTime/outTime to "HH:mm" (or null) *before* they cross the JSON
+ * serialization boundary. `AttendanceImportRow.inTime`/`outTime` are `unknown` and may
+ * still be a JS `Date` at this point (SheetJS represents an Excel time-only cell as a
+ * Date anchored to the 1899-12-30 epoch). JSON has no Date type — JSON.stringify would
+ * silently rewrite such a Date as its ISO string via `Date.prototype.toJSON()`, and
+ * nothing on the read side would know to reconstruct it. Canonicalizing here means the
+ * payload only ever carries a plain string (or null), so no Date-identity assumption is
+ * needed on deserialize.
+ */
 function serializeRow(row: AttendanceImportRow): SerializedImportRow {
   return {
     employeeCode: row.employeeCode,
     employeeName: row.employeeName,
     shift: row.shift,
-    inTime: row.inTime,
-    outTime: row.outTime,
+    inTime: formatTimeCell(row.inTime),
+    outTime: formatTimeCell(row.outTime),
     workDuration: row.workDuration,
     ot: row.ot,
     status: row.status,

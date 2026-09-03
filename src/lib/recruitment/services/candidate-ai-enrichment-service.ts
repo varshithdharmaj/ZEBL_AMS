@@ -12,6 +12,7 @@ import {
 import { RecruitmentScopeEngine } from "@/lib/recruitment/permissions/recruitment-scope-engine";
 import { RecruitmentDomainError } from "@/lib/recruitment/shared/errors";
 import { withRecruitmentTransaction } from "@/lib/recruitment/shared/transaction";
+import { withDbLock } from "@/lib/db-lock";
 import { createAfterCommitBuffer } from "@/lib/recruitment/shared/after-commit";
 import { RecruitmentEventFactory } from "@/lib/recruitment/events/factory";
 import { prismaTimelineProjectionRepository } from "@/lib/recruitment/repositories/prisma-timeline-repository";
@@ -272,13 +273,8 @@ export function createCandidateAiEnrichmentService(
 
       const events = createAfterCommitBuffer();
       try {
-        const insightId = await withRecruitmentTransaction(async (tx) => {
-          await tx.$executeRaw`
-            SELECT pg_advisory_xact_lock(
-              hashtext(${`ai-enrich:${input.candidateId}`})
-            )
-          `;
-
+        const insightId = await withRecruitmentTransaction(async (tx) =>
+          withDbLock(tx, `ai-enrich:${input.candidateId}`, async () => {
           if (!input.force) {
             const reusableId = await findReusable();
             if (reusableId) {
@@ -353,7 +349,8 @@ export function createCandidateAiEnrichmentService(
           }
 
           return { id, reused: false as const };
-        });
+          })
+        );
 
         await events.flush();
         if (insightId.reused) {

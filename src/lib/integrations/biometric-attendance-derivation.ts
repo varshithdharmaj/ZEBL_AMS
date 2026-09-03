@@ -10,6 +10,7 @@ import {
   totalWorkedMinutesFromSessions,
 } from "@/lib/attendance/session-duration";
 import { prisma } from "@/lib/prisma";
+import { withDbLock } from "@/lib/db-lock";
 import { resolveDatabasePoolMax } from "@/lib/prisma-pool";
 import { startOfDay } from "@/lib/utils";
 
@@ -190,9 +191,10 @@ export async function deriveAttendanceForEmployeeDate(
   const runInTransaction = async (tx: Tx) => {
     const dateParts = getISTDateParts(attendanceDate);
 
-    // 1. PostgreSQL advisory lock for serialized concurrency per (employeeId, attendanceDate)
+    // 1. Serialize concurrent derivation per (employeeId, attendanceDate) —
+    // pg_advisory_xact_lock on PostgreSQL, GET_LOCK/RELEASE_LOCK on MySQL.
     const lockKey = `biometric_derivation_${employeeId}_${dateParts.dateString}`;
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+    return withDbLock(tx, lockKey, async () => {
 
     // 2. Fetch all BiometricPunch records for this employee on this attendance date
     // Compute IST day range: from 00:00:00 IST to 23:59:59.999 IST (converted to UTC for query)
@@ -349,6 +351,7 @@ export async function deriveAttendanceForEmployeeDate(
           ? { remarks: "Biometric Device Ingestion" }
           : {}),
       },
+    });
     });
   };
 

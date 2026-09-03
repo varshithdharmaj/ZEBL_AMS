@@ -1,12 +1,22 @@
 import { prisma } from "@/lib/prisma";
+import { getDbDriver } from "@/lib/db-driver";
 
 let ensurePromise: Promise<void> | null = null;
 
 /**
  * Ensures attendance_import_jobs exists when migrate deploy could not run
  * (e.g. build network cannot reach the DB). Idempotent.
+ *
+ * The DDL below (`CREATE TYPE ... AS ENUM`, `information_schema.tables WHERE
+ * table_schema = 'public'`, `BYTEA`, `TIMESTAMP(3)` column syntax) is
+ * PostgreSQL-specific and would fail outright against MySQL. It's also
+ * unnecessary there: prisma-mysql/schema.prisma is applied through
+ * `prisma migrate deploy`/`db push` only, with no equivalent build-time
+ * network gap to self-heal around, so this is a deliberate no-op under
+ * DB_DRIVER=mysql rather than a ported implementation.
  */
 export async function ensureAttendanceImportJobSchema(): Promise<void> {
+  if (getDbDriver() === "mysql") return;
   if (!ensurePromise) {
     ensurePromise = applySchema().catch((error: unknown) => {
       ensurePromise = null;

@@ -121,11 +121,15 @@ export async function getHrCommandCenterData() {
  * Semantics match buildAbsenceSnapshotFromRecords (null department → "Unassigned", ≥2, top 5).
  */
 async function getAbsenceSnapshot(today: Date, tomorrow: Date) {
-  const rows = await prisma.$queryRaw<Array<{ department: string; absent_count: number }>>(
+  // COUNT(*) is intentionally left uncast: `::int` is PostgreSQL-only shorthand
+  // (MySQL has no `::` cast operator). Both dialects' drivers can hand back
+  // COUNT(*) as a bigint/string rather than a plain number, so it's normalized
+  // with Number(...) below instead — that works identically on either engine.
+  const rows = await prisma.$queryRaw<Array<{ department: string; absent_count: bigint | number }>>(
     Prisma.sql`
       SELECT
         COALESCE(e.department, 'Unassigned') AS department,
-        COUNT(*)::int AS absent_count
+        COUNT(*) AS absent_count
       FROM attendance_records a
       INNER JOIN employees e ON e.id = a.employee_id
       WHERE a.attendance_date >= ${today}
@@ -136,7 +140,7 @@ async function getAbsenceSnapshot(today: Date, tomorrow: Date) {
   );
 
   return buildAbsenceSnapshotFromDeptCounts(
-    rows.map((r) => ({ department: r.department, absentCount: r.absent_count }))
+    rows.map((r) => ({ department: r.department, absentCount: Number(r.absent_count) }))
   );
 }
 
