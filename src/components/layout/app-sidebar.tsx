@@ -85,7 +85,7 @@ function groupedNavForRole(
     case "hr":
       return [
         {
-          group: "Core Workforce",
+          group: "People",
           items: [
             { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
             { href: "/admin/employees", label: "Employees", icon: Users },
@@ -143,6 +143,7 @@ function groupedNavForRole(
             { href: "/admin/settings", label: "System Settings", icon: Settings },
             { href: "/admin/payroll-settings", label: "Payroll Settings", icon: Settings },
             { href: "/admin/attendance-settings", label: "Attendance Settings", icon: CalendarClock },
+            { href: "/admin/shift-settings", label: "Shift Settings", icon: ClipboardList },
             { href: "/admin/leave-settings", label: "Leave Settings", icon: CalendarDays },
             ...(showRecruitmentNav
               ? [
