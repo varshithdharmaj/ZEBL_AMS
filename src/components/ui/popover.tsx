@@ -57,7 +57,7 @@ export function Popover({
           aria-modal="false"
           aria-labelledby={titleId}
           className={cn(
-            "absolute z-40 mt-2 w-[min(100vw-1.5rem,22rem)] rounded-xl border border-border bg-popover p-3 text-sm shadow-elevated",
+            "absolute z-50 mt-2 w-[min(100vw-1.5rem,22rem)] overflow-hidden rounded-xl border border-border/60 bg-background/80 p-3 text-sm text-foreground shadow-elevated backdrop-blur-2xl",
             align === "end" ? "right-0" : "left-0",
             contentClassName
           )}

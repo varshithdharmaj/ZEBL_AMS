@@ -42,7 +42,7 @@ export function Sheet({
     <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
       <button
         type="button"
-        className="absolute inset-0 bg-slate-900/40"
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
         aria-label="Close panel"
         onClick={onClose}
       />
@@ -50,7 +50,7 @@ export function Sheet({
         ref={panelRef}
         tabIndex={-1}
         className={cn(
-          "relative ml-auto flex h-full w-full max-w-lg flex-col border-border bg-card shadow-xl outline-none",
+          "relative ml-auto flex h-full w-full max-w-lg flex-col border-border bg-background/80 shadow-xl outline-none backdrop-blur-2xl",
           "animate-in slide-in-from-right duration-200",
           side === "left" && "mr-auto ml-0 slide-in-from-left"
         )}
