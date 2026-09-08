@@ -4,7 +4,7 @@ export const convertEmployeeSchema = z.object({
   offerId: z.string().trim().min(1, "Offer ID is required."),
   employeeCode: z.string().trim().min(1, "Employee code is required."),
   name: z.string().trim().min(1, "Name is required."),
-  email: z.string().trim().email("Invalid email address.").optional().nullable(),
+  email: z.string().trim().email("Invalid email format.").optional().nullable(),
   phone: z.string().trim().optional().nullable(),
   department: z.string().trim().min(1, "Department is required."),
   designation: z.string().trim().min(1, "Designation is required."),
@@ -19,6 +19,6 @@ export const convertEmployeeSchema = z.object({
 });
 
 export const employeeAccountSchema = z.object({
-  email: z.string().trim().email("Invalid email address."),
+  email: z.string().trim().email("Invalid email format."),
   password: z.string().min(8, "Password must be at least 8 characters."),
 });
