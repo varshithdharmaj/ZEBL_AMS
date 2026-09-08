@@ -17,8 +17,6 @@ const prisma = new PrismaClient();
 
 const CONTENT = `# Company Leave Policy
 
-**Policy Version:** 1.1
-
 ## Leave Cycle
 
 The leave cycle runs from the 26th of one month to the 25th of the next

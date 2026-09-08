@@ -85,11 +85,12 @@ async function applyBalanceDeltaAtomic(
     return;
   }
 
-  // manual_adjustment / expiry: signed delta (may go negative — e.g. the SL
-  // year-end lapse passes a negative amount here to zero out unused SL).
+  // manual_adjustment / opening_balance / expiry: signed delta (may go negative
+  // — e.g. the SL year-end lapse passes a negative amount here to zero out
+  // unused SL, or an opening-balance "set to" import lowers a balance).
   // Unlike "deduction" this is not conditionally guarded against a
-  // concurrent balance change — acceptable because expiry/manual_adjustment
-  // fire far less often and are not expected to race with themselves.
+  // concurrent balance change — acceptable because expiry/manual_adjustment/
+  // opening_balance fire far less often and are not expected to race with themselves.
   await tx.employeeLeaveBalance.update({
     where: { employeeId },
     data: { [field]: { increment: amount } },
@@ -106,12 +107,23 @@ export async function recordLeaveTransactionInTx(
     reason?: string;
     createdBy?: string;
     leaveRequestId?: number;
+    importBatchId?: number;
   }
 ): Promise<void> {
-  const { employeeId, leaveType, transactionType, amount, reason, createdBy, leaveRequestId } =
-    params;
+  const {
+    employeeId,
+    leaveType,
+    transactionType,
+    amount,
+    reason,
+    createdBy,
+    leaveRequestId,
+    importBatchId,
+  } = params;
 
-  if (amount === 0 && transactionType !== "manual_adjustment") {
+  const isSignedType = transactionType === "manual_adjustment" || transactionType === "opening_balance";
+
+  if (amount === 0 && !isSignedType) {
     throw new Error("Transaction amount must be non-zero.");
   }
 
@@ -125,11 +137,11 @@ export async function recordLeaveTransactionInTx(
         employeeId,
         leaveType,
         transactionType,
-        amount:
-          transactionType === "manual_adjustment" ? amount : Math.abs(amount),
+        amount: isSignedType ? amount : Math.abs(amount),
         reason: reason ?? null,
         createdBy: createdBy ?? null,
         leaveRequestId: leaveRequestId ?? null,
+        importBatchId: importBatchId ?? null,
       },
     });
   } catch (error) {
@@ -348,7 +360,7 @@ export async function getLeaveBalanceSummaries(
     prisma.leaveTransaction.findMany({
       where: {
         employeeId,
-        transactionType: "manual_adjustment",
+        transactionType: { in: ["manual_adjustment", "opening_balance"] },
       },
       select: {
         leaveType: true,
@@ -479,7 +491,7 @@ export async function getLeaveBalanceSummariesForEmployees(
     prisma.leaveTransaction.findMany({
       where: {
         employeeId: { in: employeeIds },
-        transactionType: "manual_adjustment",
+        transactionType: { in: ["manual_adjustment", "opening_balance"] },
       },
       select: {
         employeeId: true,
@@ -639,6 +651,63 @@ export async function adminAdjustLeaveBalance(params: {
 }
 
 /**
+ * "Set to" (absolute) balance edit for CL/SL, implemented as diff-then-delta
+ * on top of adminAdjustLeaveBalance's underlying primitives. Used by both the
+ * per-employee HR correction form (transactionType defaults to
+ * "manual_adjustment") and the bulk opening-balance importer (which passes
+ * transactionType: "opening_balance" + importBatchId). A zero delta is a
+ * no-op — this is what makes re-running the same import idempotent.
+ */
+export async function adminSetLeaveBalance(params: {
+  employeeId: number;
+  leaveType: Exclude<LeaveType, "EL">;
+  targetBalance: number;
+  reason: string;
+  createdBy: string;
+  transactionType?: "manual_adjustment" | "opening_balance";
+  importBatchId?: number;
+  tx?: TxClient;
+}): Promise<{ delta: number; skipped: boolean }> {
+  const {
+    employeeId,
+    leaveType,
+    targetBalance,
+    reason,
+    createdBy,
+    transactionType = "manual_adjustment",
+    importBatchId,
+    tx,
+  } = params;
+
+  const run = async (client: TxClient): Promise<{ delta: number; skipped: boolean }> => {
+    const balance = await getOrCreateLeaveBalanceRow(employeeId, client);
+    const field = leaveTypeToBalanceField(leaveType);
+    const delta = targetBalance - balance[field];
+
+    if (delta === 0) {
+      return { delta: 0, skipped: true };
+    }
+
+    await recordLeaveTransactionInTx(client, {
+      employeeId,
+      leaveType,
+      transactionType,
+      amount: delta,
+      reason,
+      createdBy,
+      importBatchId,
+    });
+
+    return { delta, skipped: false };
+  };
+
+  if (tx) {
+    return run(tx);
+  }
+  return prisma.$transaction(run);
+}
+
+/**
  * Seeds optional initial CL/SL balances on employee creation. EL is deliberately
  * excluded — an initial EL balance must be seeded as a lot (see
  * seedInitialElLot in el-fifo.ts) so it participates in FIFO/expiry correctly.
@@ -688,6 +757,7 @@ export async function getLeaveTransactionHistory(employeeId: number, limit = 100
     amount: number;
     reason: string;
     updatedBy: string;
+    importBatchId: number | null;
   };
 
   const rows: HistoryRow[] = transactions.map((tx) => ({
@@ -703,6 +773,7 @@ export async function getLeaveTransactionHistory(employeeId: number, limit = 100
           : tx.amount,
     reason: tx.reason ?? "—",
     updatedBy: tx.createdBy ?? "system",
+    importBatchId: tx.importBatchId,
   }));
 
   for (const req of requests) {
@@ -715,6 +786,7 @@ export async function getLeaveTransactionHistory(employeeId: number, limit = 100
         amount: -req.days,
         reason: req.reason,
         updatedBy: req.reviewedBy ?? "HR",
+        importBatchId: null,
       });
     }
   }

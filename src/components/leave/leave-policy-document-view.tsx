@@ -1,8 +1,4 @@
-import { formatDate } from "@/lib/utils";
-
 type Doc = {
-  version: string;
-  effectiveFrom: Date;
   content: string;
 };
 
@@ -70,9 +66,6 @@ export function LeavePolicyDocumentView({ document }: { document: Doc | null }) 
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
-        Version {document.version} · Effective from {formatDate(document.effectiveFrom)}
-      </p>
       <div className="space-y-3">{blocks}</div>
     </div>
   );

@@ -10,6 +10,7 @@ type HistoryRow = {
   amount: number;
   reason: string;
   updatedBy: string;
+  importBatchId?: number | null;
 };
 
 function formatType(t: string) {
@@ -28,7 +29,14 @@ export function LeaveHistoryTab({ history }: { history: HistoryRow[] }) {
           <DataTableCell>
             <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium">{row.leaveType}</span>
           </DataTableCell>
-          <DataTableCell className="text-muted-foreground">{formatType(row.transactionType)}</DataTableCell>
+          <DataTableCell className="text-muted-foreground">
+            {formatType(row.transactionType)}
+            {row.importBatchId != null && (
+              <span className="ml-1.5 rounded-md bg-muted px-1.5 py-0.5 text-[0.6875rem] font-medium text-muted-foreground">
+                Batch #{row.importBatchId}
+              </span>
+            )}
+          </DataTableCell>
           <DataTableCell
             className={
               row.amount < 0 ? "font-medium text-danger tabular-nums" : "font-medium text-success tabular-nums"
