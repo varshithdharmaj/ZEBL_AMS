@@ -3,6 +3,7 @@ import { CATEGORY_LABEL } from "@/lib/attendance/day-labels";
 import { cn, formatDate, minutesToHours } from "@/lib/utils";
 import type { AttendanceDayCategory } from "@/lib/attendance/day-classification";
 import type { ClassifiedAttendanceRecord } from "@/lib/attendance/history-classification";
+import { RegularisedBadge } from "@/components/attendance/regularisation-audit-badge";
 
 // Mirrors the Heatmap's own category colors (attendance-heatmap.tsx) so the same
 // attendance state never reads differently between the two surfaces.
@@ -20,17 +21,30 @@ export const CATEGORY_BADGE_CLASS: Record<AttendanceDayCategory, string> = {
   WEEKLY_OFF: "bg-slate-100 text-slate-500 ring-1 ring-slate-200 dark:bg-slate-800/60 dark:text-slate-400 dark:ring-slate-700",
   INSUFFICIENT_DATA:
     "bg-amber-50 text-amber-800 ring-1 ring-amber-600/20 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-400/20",
+  REGULARISED:
+    "bg-purple-100 text-purple-800 ring-1 ring-purple-300 dark:bg-purple-950/40 dark:text-purple-300 dark:ring-purple-400/20",
 };
 
-function CategoryBadge({ category }: { category: AttendanceDayCategory }) {
+function CategoryBadge({ record }: { record: ClassifiedAttendanceRecord }) {
+  if (record.category === "REGULARISED") {
+    return (
+      <RegularisedBadge
+        detail={record.activeRegularization}
+        currentCheckIn={record.checkIn}
+        currentCheckOut={record.checkOut}
+        currentWorkedMinutes={record.workedMinutes}
+      />
+    );
+  }
+
   return (
     <span
       className={cn(
         "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium tracking-tight",
-        CATEGORY_BADGE_CLASS[category]
+        CATEGORY_BADGE_CLASS[record.category]
       )}
     >
-      {CATEGORY_LABEL[category]}
+      {CATEGORY_LABEL[record.category]}
     </span>
   );
 }
@@ -77,7 +91,7 @@ export function AttendanceHistoryTableRows({ records }: { records: ClassifiedAtt
           </DataTableCell>
           <DataTableCell className="tabular-nums">{minutesToHours(record.breakMinutes)}</DataTableCell>
           <DataTableCell>
-            <CategoryBadge category={record.category} />
+            <CategoryBadge record={record} />
           </DataTableCell>
         </DataTableRow>
       ))}

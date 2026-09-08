@@ -1,8 +1,25 @@
+import type { RegularizationRequestType } from "@/generated/prisma/client";
 import { getHolidaysForRange, getApprovedLeaveForEmployeeRange } from "@/lib/leave/leave-calendar";
 import { getAttendanceSettings, getDateOverridesForRange } from "@/lib/attendance/attendance-settings";
 import { getEffectiveAttendanceDayType, type AttendanceDayCategory, type AttendanceRatioTier } from "@/lib/attendance/day-classification";
 import { hasRemarkKeyword } from "@/lib/attendance/hero-status";
+import { resolveEmployeeShift, isLateCheckIn } from "@/lib/attendance/shift-lookup";
 import { isSameDay, startOfDay } from "@/lib/utils";
+
+/** The regularisation request currently applied to a day, as selected by callers
+ *  (getAttendanceRecords / getEmployeeAttendanceHistory) via the `activeRegularization`
+ *  relation — carries the HR-facing provenance detail (reason, review, pre-correction
+ *  snapshot) that the classifier itself never needs but consumers of the classified
+ *  record (badges, diff views) do. */
+export type ActiveRegularizationDetail = {
+  reason: string;
+  reviewComment: string | null;
+  requestType: RegularizationRequestType;
+  requestedCheckIn: string | null;
+  requestedCheckOut: string | null;
+  snapshotBefore: unknown;
+  reviewedAt: Date | null;
+};
 
 export type AttendanceHistoryRecordInput = {
   id: number;
@@ -13,10 +30,20 @@ export type AttendanceHistoryRecordInput = {
   overtimeMinutes: number;
   breakMinutes: number;
   remarks: string | null;
+  /** True when `remarks` is an internal/technical tag rather than a human-authored
+   *  note. Threaded straight through to the classifier (see day-classification.ts). */
+  remarksSystemGenerated?: boolean;
   /** Raw upload-time status, kept only for callers still on the legacy field (e.g. the
    *  admin employee-profile attendance tab) — not used by the canonical classification
    *  below. New consumers should read `category`/`ratioTier` instead. */
   status: string;
+  /** AttendanceRecord.activeRegularizationId — non-null when an approved HR correction
+   *  governs this day. Threaded straight through to the classifier (see day-classification.ts). */
+  activeRegularizationId?: number | null;
+  /** Populated only when the caller's Prisma query includes the `activeRegularization`
+   *  relation (getAttendanceRecords, getEmployeeAttendanceHistory) — passed through
+   *  untouched by classifyAttendanceRecords below (see the `...record` spread). */
+  activeRegularization?: ActiveRegularizationDetail | null;
 };
 
 export type ClassifiedAttendanceRecord = AttendanceHistoryRecordInput & {
@@ -44,12 +71,16 @@ export async function classifyAttendanceRecords(
 ): Promise<ClassifiedAttendanceRecord[]> {
   if (records.length === 0) return [];
 
-  const [holidays, approvedLeave, settings, overrides] = await Promise.all([
+  const [holidays, approvedLeave, settings, overrides, shift] = await Promise.all([
     getHolidaysForRange(rangeStart, rangeEnd),
     getApprovedLeaveForEmployeeRange(employeeId, rangeStart, rangeEnd),
     getAttendanceSettings(),
     getDateOverridesForRange(rangeStart, rangeEnd),
+    resolveEmployeeShift(employeeId),
   ]);
+  // This employee's assigned shift overrides the org-wide default when set (and still
+  // active) — see shift-lookup.ts. Falls back to the global setting when unassigned.
+  const expectedWorkMinutes = shift?.expectedWorkMinutes ?? settings.expectedWorkMinutes;
 
   return records.map((record) => {
     const date = startOfDay(record.attendanceDate);
@@ -66,12 +97,14 @@ export async function classifyAttendanceRecords(
         workedMinutes: record.workedMinutes,
         overtimeMinutes: record.overtimeMinutes,
         remarks: record.remarks,
+        remarksSystemGenerated: record.remarksSystemGenerated ?? false,
+        activeRegularizationId: record.activeRegularizationId ?? null,
       },
       holiday: holiday ? { name: holiday.name } : null,
       approvedLeave: leave ? { leaveType: leave.leaveType } : null,
       weeklySchedule: settings,
       dateOverride: override?.type ?? null,
-      expectedWorkMinutes: settings.expectedWorkMinutes,
+      expectedWorkMinutes,
     });
 
     // Imports/regularisation may set an explicit overtimeMinutes; biometric-derived and
@@ -81,16 +114,27 @@ export async function classifyAttendanceRecords(
     const overtimeMinutes =
       record.overtimeMinutes > 0
         ? record.overtimeMinutes
-        : Math.max(0, record.workedMinutes - settings.expectedWorkMinutes);
+        : Math.max(0, record.workedMinutes - expectedWorkMinutes);
+
+    // HR already reviewed and approved this day's times — never surface a late-arrival
+    // or early-checkout penalty tag on top of an approved correction, regardless of
+    // what the stored remark happens to say.
+    const isRegularised = day.category === "REGULARISED";
+
+    // Real shift-timing-based late detection when a shift is assigned; the remark-text
+    // heuristic remains the fallback for employees with no shift assigned (or when the
+    // assigned shift no longer resolves — see resolveEmployeeShift).
+    const late =
+      !isRegularised && (shift ? isLateCheckIn(record.checkIn, shift) : hasRemarkKeyword(day.remark, "late"));
 
     return {
       ...record,
       overtimeMinutes,
       category: day.category,
       ratioTier: day.ratioTier,
-      expectedWorkMinutes: settings.expectedWorkMinutes,
-      late: hasRemarkKeyword(day.remark, "late"),
-      earlyCheckout: hasRemarkKeyword(day.remark, "early"),
+      expectedWorkMinutes,
+      late,
+      earlyCheckout: !isRegularised && hasRemarkKeyword(day.remark, "early"),
       hasLeaveConflict: day.hasLeaveConflict,
     };
   });

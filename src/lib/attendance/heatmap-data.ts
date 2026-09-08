@@ -3,6 +3,7 @@ import { getAttendanceSettings, getDateOverridesForRange } from "@/lib/attendanc
 import { getHolidaysForRange, getApprovedLeaveForEmployeeRange } from "@/lib/leave/leave-calendar";
 import { getEmployeeAttendanceRecordsForRange } from "@/lib/attendance/employee-attendance-year-cache";
 import { getEffectiveAttendanceDayType, type AttendanceDayResult } from "@/lib/attendance/day-classification";
+import { resolveEmployeeShift } from "@/lib/attendance/shift-lookup";
 import { getAttendanceCycleWindow } from "@/lib/attendance/attendance-cycle";
 import { resolveHeatmapStartDate } from "@/lib/attendance/heatmap-start-date";
 
@@ -12,8 +13,9 @@ export type AttendanceHeatmapMonth = {
   prevMonthKey: string;
   nextMonthKey: string;
   days: AttendanceDayResult[];
-  /** Same org-wide setting passed to the classifier for every day this month — surfaced
-   *  so the UI can show "of Xh expected" without re-fetching or re-deriving it. */
+  /** This employee's assigned shift's expected minutes (org-wide default when
+   *  unassigned) — same value passed to the classifier for every day this month.
+   *  Surfaced so the UI can show "of Xh expected" without re-fetching or re-deriving it. */
   expectedWorkMinutes: number;
   /** The active 25th-to-25th attendance cycle containing today — the heatmap highlights
    *  this as a band over the full year view (see AttendanceHeatmap's cycle overlay). */
@@ -62,13 +64,15 @@ export async function getEmployeeAttendanceHeatmapData(
     new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate() + 1)
   );
 
-  const [records, holidays, approvedLeave, settings, overrides] = await Promise.all([
+  const [records, holidays, approvedLeave, settings, overrides, shift] = await Promise.all([
     getEmployeeAttendanceRecordsForRange(employeeId, startDate, endExclusive),
     getHolidaysForRange(startDate, endDate),
     getApprovedLeaveForEmployeeRange(employeeId, startDate, endDate),
     getAttendanceSettings(),
     getDateOverridesForRange(startDate, endDate),
+    resolveEmployeeShift(employeeId),
   ]);
+  const expectedWorkMinutes = shift?.expectedWorkMinutes ?? settings.expectedWorkMinutes;
 
   const days: AttendanceDayResult[] = [];
   const currentDate = new Date(startDate);
@@ -97,13 +101,15 @@ export async function getEmployeeAttendanceHeatmapData(
             workedMinutes: attendanceRecord.workedMinutes,
             overtimeMinutes: attendanceRecord.overtimeMinutes,
             remarks: attendanceRecord.remarks,
+            remarksSystemGenerated: attendanceRecord.remarksSystemGenerated,
+            activeRegularizationId: attendanceRecord.activeRegularizationId,
           }
           : null,
         holiday: holiday ? { name: holiday.name } : null,
         approvedLeave: leave ? { leaveType: leave.leaveType } : null,
         weeklySchedule: settings,
         dateOverride: override?.type ?? null,
-        expectedWorkMinutes: settings.expectedWorkMinutes,
+        expectedWorkMinutes,
       })
     );
 
@@ -118,7 +124,7 @@ export async function getEmployeeAttendanceHeatmapData(
     prevMonthKey: monthKey(addMonths(referenceMonth, -1)),
     nextMonthKey: monthKey(addMonths(referenceMonth, 1)),
     days,
-    expectedWorkMinutes: settings.expectedWorkMinutes,
+    expectedWorkMinutes,
     cycleStartDate: cycleWindow.startDate,
     cycleEndDate: cycleWindow.endDate,
   };

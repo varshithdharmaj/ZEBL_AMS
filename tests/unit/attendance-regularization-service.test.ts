@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Prisma } from "@/generated/prisma/client";
 
 const writeAuditLog = vi.fn(async () => undefined);
@@ -108,6 +108,11 @@ const hrActor: RegularizationActor = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Fixtures below use a fixed attendanceDate (2026-08-20) — pin "today" to the same
+  // date so the 7-day regularisation window check doesn't drift and fail as real
+  // calendar time passes.
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date(2026, 7, 20));
   attendanceRecordFindUnique.mockResolvedValue(null);
   employeeFindUnique.mockResolvedValue({ name: "Jane Doe" });
   holidayFindUnique.mockResolvedValue(null);
@@ -115,6 +120,10 @@ beforeEach(() => {
   leaveRequestFindFirst.mockResolvedValue(null);
   payrollSettingsFindUnique.mockResolvedValue({ regularizationWindowDays: 7 });
   transaction.mockImplementation(async (cb: (tx: unknown) => unknown) => cb(makeTx()));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("submitRegularizationRequest", () => {

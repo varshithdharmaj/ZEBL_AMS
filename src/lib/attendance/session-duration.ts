@@ -30,6 +30,19 @@ export function sessionDurationMinutes(
   return outMins >= inMins ? outMins - inMins : 24 * 60 - inMins + outMins;
 }
 
+/** `time` shifted forward by `minutesToAdd`, wrapping past midnight (mod 24h). Null in, null out. */
+export function addMinutesToTimeString(
+  time: string | null | undefined,
+  minutesToAdd: number
+): string | null {
+  const base = parseTimeToMinutes(time);
+  if (base === null) return null;
+  const wrapped = (((base + minutesToAdd) % (24 * 60)) + 24 * 60) % (24 * 60);
+  const hours = Math.floor(wrapped / 60);
+  const minutes = wrapped % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
 /** Open-session elapsed minutes from check-in to `asOf` (local clock). */
 export function openSessionElapsedMinutes(
   checkIn: string,
@@ -93,16 +106,18 @@ export function totalWorkedMinutesFromSessions(
 /**
  * Total break minutes: gaps between one session's checkout and the next
  * session's checkin, for consecutive completed sessions on the same day.
+ *
+ * Assumes `sessions` is already in true chronological order (callers fetch by
+ * `orderBy: [{ id: "asc" }]`, i.e. insertion order) — it is NOT re-sorted here by
+ * checkIn time-of-day, because a bare "HH:mm" string sorts wrong once a shift's
+ * sessions cross midnight (e.g. a 00:15 second session would sort before a 23:50
+ * first session).
  */
 export function totalBreakMinutesFromSessions(sessions: SessionLike[]): number {
-  const sorted = [...sessions].sort(
-    (a, b) => (parseTimeToMinutes(a.checkIn) ?? 0) - (parseTimeToMinutes(b.checkIn) ?? 0)
-  );
-
   let total = 0;
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const current = sorted[i];
-    const next = sorted[i + 1];
+  for (let i = 0; i < sessions.length - 1; i++) {
+    const current = sessions[i];
+    const next = sessions[i + 1];
     if (!current.checkOut) continue;
 
     const gap = sessionDurationMinutes(current.checkOut, next.checkIn);

@@ -43,13 +43,19 @@ export class EmailNotificationChannel implements NotificationChannelHandler {
   }): Promise<ChannelDeliveryResult> {
     const transport = getTransporter();
     if (!transport) {
-      if (process.env.NODE_ENV === "development") {
-        console.info(
-          `[notifications] SMTP not configured — skipping email to ${notification.recipient}: ${notification.subject}`
-        );
-        return { success: true, providerMessageId: "dev-skip" };
-      }
-      return { success: false, error: "SMTP is not configured" };
+      // Never fabricate a "sent" result — an unconfigured SMTP_HOST means the email
+      // was NOT delivered, in dev or prod alike. Returning failure here routes through
+      // the normal markNotificationFailed path (notification-queue.ts), so the queue
+      // row's status/lastError/attempts honestly reflect what happened instead of
+      // masking it behind a fake success.
+      console.warn(
+        `[EmailChannel] SMTP_HOST not configured. Notification email skipped/queued.`,
+        { recipient: notification.recipient, subject: notification.subject, type: notification.type }
+      );
+      return {
+        success: false,
+        error: "SMTP_HOST is not configured — email skipped (not delivered)",
+      };
     }
 
     try {

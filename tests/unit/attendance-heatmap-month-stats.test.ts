@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { AttendanceDayResult } from "@/lib/attendance/day-classification";
 import {
   buildHeatmapMonthStats,
+  buildHeatmapCycleStats,
   buildMonthWeekRanges,
   buildCycleWeekSpan,
   monthKeyFromDate,
+  cycleKeyFromDate,
 } from "@/lib/attendance/heatmap-month-stats";
 import { aggregateAttendanceForRange } from "@/lib/attendance/aggregate-range";
 import type { ClassifiedAttendanceRecord } from "@/lib/attendance/history-classification";
@@ -65,6 +67,39 @@ describe("buildHeatmapMonthStats", () => {
     ]);
     expect(stats.get("2026-01")!.attendancePercent).toBeNull();
     expect(stats.get("2026-01")!.averageWorkedMinutes).toBeNull();
+  });
+});
+
+describe("cycleKeyFromDate", () => {
+  it("groups a date before the 25th with the previous month's 25th", () => {
+    expect(cycleKeyFromDate(new Date(2026, 6, 20))).toBe("2026-06-25");
+  });
+
+  it("groups a date on/after the 25th with this month's 25th", () => {
+    expect(cycleKeyFromDate(new Date(2026, 6, 26))).toBe("2026-07-25");
+  });
+});
+
+describe("buildHeatmapCycleStats", () => {
+  it("groups days spanning a calendar-month boundary into the same cycle", () => {
+    // Both dates fall in the same 25 Jun – 25 Jul cycle, even though they're in
+    // different calendar months — unlike buildHeatmapMonthStats, which would split them.
+    const stats = buildHeatmapCycleStats([
+      day("2026-06-28", "PRESENT", "target", 480),
+      day("2026-07-05", "PRESENT", "near_target", 360),
+      day("2026-07-26", "ABSENT"), // next cycle (25 Jul – 25 Aug)
+    ]);
+
+    const juneCycle = stats.get("2026-06-25");
+    expect(juneCycle).toBeTruthy();
+    expect(juneCycle!.presentDays).toBe(2);
+    expect(juneCycle!.excellentDays).toBe(1);
+    expect(juneCycle!.belowTargetDays).toBe(1);
+
+    const julyCycle = stats.get("2026-07-25");
+    expect(julyCycle).toBeTruthy();
+    expect(julyCycle!.absentDays).toBe(1);
+    expect(julyCycle!.presentDays).toBe(0);
   });
 });
 

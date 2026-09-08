@@ -1,5 +1,7 @@
 import { minutesToHours } from "@/lib/utils";
 import type { AttendanceDayCategory, AttendanceDayResult } from "@/lib/attendance/day-classification";
+import { isLateCheckIn } from "@/lib/attendance/shift-lookup";
+import type { ShiftSummary } from "@/lib/shifts";
 
 export type HeroTone = "success" | "info" | "warning" | "danger" | "neutral";
 
@@ -64,16 +66,26 @@ function inProgressWorkedFields(day: AttendanceDayResult, expectedWorkMinutes: n
  */
 export function getHeroStatus(
   day: AttendanceDayResult,
-  opts: { isToday: boolean; expectedWorkMinutes: number }
+  opts: { isToday: boolean; expectedWorkMinutes: number; shift?: ShiftSummary | null }
 ): HeroStatus {
+  // HR already reviewed and approved this day's times — never show a late-arrival,
+  // early-checkout, or short-hours penalty badge on top of an approved correction.
+  const isRegularised = day.category === "REGULARISED";
+
+  // Real shift-timing-based late detection when a shift is assigned; the remark-text
+  // heuristic remains the fallback for employees with no shift assigned.
   const badges: HeroBadges = {
-    late: hasRemarkKeyword(day.remark, "late"),
-    earlyCheckout: hasRemarkKeyword(day.remark, "early"),
+    late:
+      !isRegularised &&
+      (opts.shift ? isLateCheckIn(day.checkIn, opts.shift) : hasRemarkKeyword(day.remark, "late")),
+    earlyCheckout: !isRegularised && hasRemarkKeyword(day.remark, "early"),
     overtime: day.overtimeMinutes > 0,
     // Only meaningful once the day is over — a low ratio mid-day just means the day
     // isn't finished yet, not that it will end up short.
     shortHours:
-      Boolean(day.checkOut) && (day.ratioTier === "very_low" || day.ratioTier === "partial"),
+      !isRegularised &&
+      Boolean(day.checkOut) &&
+      (day.ratioTier === "very_low" || day.ratioTier === "partial"),
     leaveConflict: day.hasLeaveConflict,
   };
 
@@ -186,6 +198,20 @@ export function getHeroStatus(
         tone: isPossiblyOnBreak ? "info" : "success",
         isLiveInProgress: false,
         isPossiblyOnBreak,
+        checkInTime: day.checkIn,
+        checkOutTime: day.checkOut,
+        actionHint: null,
+        badges,
+        ...completedWorkedFields(day),
+      };
+    case "REGULARISED":
+      return {
+        category: day.category,
+        label: "Regularised",
+        subLabel: "Corrected by HR",
+        tone: "success",
+        isLiveInProgress: false,
+        isPossiblyOnBreak: false,
         checkInTime: day.checkIn,
         checkOutTime: day.checkOut,
         actionHint: null,

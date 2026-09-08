@@ -17,6 +17,10 @@ vi.mock("@/lib/attendance/attendance-settings", () => ({
   getDateOverridesForRange: vi.fn(),
 }));
 
+vi.mock("@/lib/attendance/shift-lookup", () => ({
+  resolveEmployeeShift: vi.fn().mockResolvedValue(null),
+}));
+
 import { getHolidaysForRange, getApprovedLeaveForEmployeeRange } from "@/lib/leave/leave-calendar";
 import { getAttendanceSettings, getDateOverridesForRange } from "@/lib/attendance/attendance-settings";
 

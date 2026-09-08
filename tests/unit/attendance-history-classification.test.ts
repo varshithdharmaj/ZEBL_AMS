@@ -4,6 +4,7 @@ const getHolidaysForRange = vi.fn();
 const getApprovedLeaveForEmployeeRange = vi.fn();
 const getAttendanceSettings = vi.fn();
 const getDateOverridesForRange = vi.fn();
+const resolveEmployeeShift = vi.fn();
 
 vi.mock("@/lib/leave/leave-calendar", () => ({
   getHolidaysForRange: (...args: unknown[]) => getHolidaysForRange(...args),
@@ -13,6 +14,18 @@ vi.mock("@/lib/leave/leave-calendar", () => ({
 vi.mock("@/lib/attendance/attendance-settings", () => ({
   getAttendanceSettings: (...args: unknown[]) => getAttendanceSettings(...args),
   getDateOverridesForRange: (...args: unknown[]) => getDateOverridesForRange(...args),
+}));
+
+vi.mock("@/lib/attendance/shift-lookup", () => ({
+  resolveEmployeeShift: (...args: unknown[]) => resolveEmployeeShift(...args),
+  isLateCheckIn: (checkIn: string | null, shift: { startTime: string; graceMinutes: number } | null) => {
+    if (!checkIn || !shift) return false;
+    const toMin = (t: string) => {
+      const [h, m] = t.split(":").map(Number);
+      return h * 60 + m;
+    };
+    return toMin(checkIn) > toMin(shift.startTime) + shift.graceMinutes;
+  },
 }));
 
 import { classifyAttendanceRecords, dateSpanOf, type AttendanceHistoryRecordInput } from "@/lib/attendance/history-classification";
@@ -52,6 +65,7 @@ function setupLookups(overrides: {
   getApprovedLeaveForEmployeeRange.mockResolvedValue(overrides.leave ?? []);
   getAttendanceSettings.mockResolvedValue(schedule);
   getDateOverridesForRange.mockResolvedValue(overrides.dateOverrides ?? []);
+  resolveEmployeeShift.mockResolvedValue(null);
 }
 
 // 2026-07-20 = Monday (working by default per `schedule`).
@@ -141,6 +155,53 @@ describe("classifyAttendanceRecords", () => {
       monday
     );
     expect(result.category).toBe("INSUFFICIENT_DATA");
+  });
+
+  it("uses the employee's assigned shift's expectedWorkMinutes instead of the org-wide default", async () => {
+    setupLookups();
+    resolveEmployeeShift.mockResolvedValue({
+      id: 1,
+      name: "Night Shift",
+      startTime: "20:00",
+      endTime: "05:00",
+      graceMinutes: 10,
+      expectedWorkMinutes: 420,
+      isActive: true,
+    });
+    const [result] = await classifyAttendanceRecords(
+      1,
+      [rec({ id: 9, attendanceDate: monday, checkIn: "20:00", checkOut: "03:00", workedMinutes: 420 })],
+      monday,
+      monday
+    );
+    expect(result.expectedWorkMinutes).toBe(420);
+    expect(result.ratioTier).toBe("target");
+  });
+
+  it("flags late arrival from real shift timing (start + grace), overriding the remark heuristic, when a shift is assigned", async () => {
+    setupLookups();
+    resolveEmployeeShift.mockResolvedValue({
+      id: 1,
+      name: "Morning Shift",
+      startTime: "09:00",
+      endTime: "18:00",
+      graceMinutes: 10,
+      expectedWorkMinutes: 480,
+      isActive: true,
+    });
+    const [onTime, late] = await classifyAttendanceRecords(
+      1,
+      [
+        rec({ id: 10, attendanceDate: monday, checkIn: "09:09", checkOut: "18:00", workedMinutes: 471, remarks: "late arrival noted" }),
+        rec({ id: 11, attendanceDate: monday, checkIn: "09:11", checkOut: "18:00", workedMinutes: 469 }),
+      ],
+      monday,
+      monday
+    );
+    // Within grace despite a misleading remark — real shift timing wins.
+    expect(onTime.late).toBe(false);
+    // Past grace with no remark at all — still caught because it's computed, not text-matched.
+    expect(late.late).toBe(true);
   });
 
   it("matches each record to its own date's holiday/leave/override, not a neighbor's", async () => {

@@ -12,7 +12,11 @@ export const weeklyScheduleSchema = z.object({
   fridayWorking: checkboxBoolean,
   saturdayWorking: checkboxBoolean,
   sundayWorking: checkboxBoolean,
-  expectedWorkMinutes: z.coerce.number().int().min(60).max(900),
+  expectedWorkMinutes: z.coerce
+    .number()
+    .int()
+    .min(60, "Expected work minutes must be between 60 and 900.")
+    .max(900, "Expected work minutes must be between 60 and 900."),
 });
 
 export const dateOverrideCreateSchema = z.object({

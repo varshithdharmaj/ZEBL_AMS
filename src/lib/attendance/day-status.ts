@@ -9,6 +9,7 @@ import {
   getEffectiveAttendanceDayType,
   type AttendanceDayResult,
 } from "@/lib/attendance/day-classification";
+import { resolveEmployeeShift } from "@/lib/attendance/shift-lookup";
 import type { AttendanceOverrideType } from "@/generated/prisma/client";
 
 export type AttendanceRecordInput = {
@@ -45,19 +46,23 @@ export async function getAttendanceDayStatus(params: {
   const dayStart = startOfDay(params.date);
   const dayEnd = endOfDay(params.date);
 
-  const [holidays, approvedLeave, settings, overrides] = params.calendar
-    ? [
-        params.calendar.holidays,
-        params.calendar.approvedLeave,
-        params.calendar.settings,
-        params.calendar.overrides,
-      ]
-    : await Promise.all([
-        getHolidaysForRange(dayStart, dayEnd),
-        getApprovedLeaveForEmployeeRange(params.employeeId, dayStart, dayEnd),
-        getAttendanceSettings(),
-        getDateOverridesForRange(dayStart, dayEnd),
-      ]);
+  const [[holidays, approvedLeave, settings, overrides], shift] = await Promise.all([
+    params.calendar
+      ? Promise.resolve([
+          params.calendar.holidays,
+          params.calendar.approvedLeave,
+          params.calendar.settings,
+          params.calendar.overrides,
+        ] as const)
+      : Promise.all([
+          getHolidaysForRange(dayStart, dayEnd),
+          getApprovedLeaveForEmployeeRange(params.employeeId, dayStart, dayEnd),
+          getAttendanceSettings(),
+          getDateOverridesForRange(dayStart, dayEnd),
+        ]),
+    resolveEmployeeShift(params.employeeId),
+  ]);
+  const expectedWorkMinutes = shift?.expectedWorkMinutes ?? settings.expectedWorkMinutes;
 
   const holiday = holidays.find((h) => isSameDay(h.holidayDate, dayStart)) ?? null;
   const leave =
@@ -73,10 +78,10 @@ export async function getAttendanceDayStatus(params: {
     approvedLeave: leave ? { leaveType: leave.leaveType } : null,
     weeklySchedule: settings,
     dateOverride: override?.type ?? null,
-    expectedWorkMinutes: settings.expectedWorkMinutes,
+    expectedWorkMinutes,
   });
 
-  return { day, expectedWorkMinutes: settings.expectedWorkMinutes };
+  return { day, expectedWorkMinutes };
 }
 
 /**

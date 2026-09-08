@@ -66,6 +66,20 @@ export async function getNotificationCenterItems(
         createdAt: new Date(),
       });
     }
+
+    const pendingRegularizations = await prisma.attendanceRegularizationRequest.count({
+      where: { status: "pending" },
+    });
+    if (pendingRegularizations > 0) {
+      items.push({
+        id: "pending-regularizations",
+        title: "Attendance Regularisation",
+        description: `${pendingRegularizations} attendance regularisation request(s) pending approval`,
+        href: "/admin/attendance/regularization",
+        severity: "warning",
+        createdAt: new Date(),
+      });
+    }
   }
 
   return items;

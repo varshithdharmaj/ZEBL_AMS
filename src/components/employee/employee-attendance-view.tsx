@@ -94,8 +94,8 @@ export async function EmployeeAttendanceView({
           accent="amber"
         />
         <DashboardCard
-          label="Overtime"
-          value={minutesToHours(summary.overtimeMinutes)}
+          label="Break"
+          value={minutesToHours(summary.breakMinutes)}
           hint="In range"
           icon={Timer}
           accent="violet"

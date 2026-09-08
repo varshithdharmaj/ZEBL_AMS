@@ -9,8 +9,8 @@ import { getLeaveBalanceSummaries } from "@/lib/leave";
 import { getEmployeeAttendanceHeatmapData, type AttendanceHeatmapMonth } from "@/lib/attendance/heatmap-data";
 import { getAttendanceDayStatus, findHeatmapDayStatus } from "@/lib/attendance/day-status";
 import { getHeroStatus, type HeroStatus } from "@/lib/attendance/hero-status";
+import { resolveEmployeeShift } from "@/lib/attendance/shift-lookup";
 import { startOfDay, toISODate } from "@/lib/utils";
-import { prisma } from "@/lib/prisma";
 
 export async function EmployeeDashboard({
   employeeId,
@@ -29,7 +29,7 @@ export async function EmployeeDashboard({
   endDate?: string;
   heatmapMonth?: string;
 }) {
-  const [data, balances, heatmap, employee] = await Promise.all([
+  const [data, balances, heatmap, shift] = await Promise.all([
     getEmployeeDashboardData(employeeId, selectedDate, startDate, endDate),
     // Same accrual-before-read path as /employee/leaves so remaining days match.
     getLeaveBalanceSummaries(employeeId, { processAccruals: true }),
@@ -41,7 +41,7 @@ export async function EmployeeDashboard({
         return null;
       }
     ),
-    prisma.employee.findUnique({ where: { id: employeeId }, select: { shift: true } }),
+    resolveEmployeeShift(employeeId),
   ]);
 
   const isToday = data.selectedDate === toISODate(startOfDay());
@@ -57,7 +57,7 @@ export async function EmployeeDashboard({
     const reused = findHeatmapDayStatus(heatmap, selectedDayDate);
     if (reused) {
       expectedWorkMinutes = reused.expectedWorkMinutes;
-      heroStatus = getHeroStatus(reused.day, { isToday, expectedWorkMinutes });
+      heroStatus = getHeroStatus(reused.day, { isToday, expectedWorkMinutes, shift });
     } else {
       const result = await getAttendanceDayStatus({
         employeeId,
@@ -71,7 +71,7 @@ export async function EmployeeDashboard({
         },
       });
       expectedWorkMinutes = result.expectedWorkMinutes;
-      heroStatus = getHeroStatus(result.day, { isToday, expectedWorkMinutes });
+      heroStatus = getHeroStatus(result.day, { isToday, expectedWorkMinutes, shift });
     }
   } catch (e) {
     console.error("[employee-dashboard] hero status failed:", e);
@@ -105,7 +105,7 @@ export async function EmployeeDashboard({
           profilePhotoUrl={profilePhotoUrl}
           displayDate={displayDate}
           dateIso={data.selectedDate}
-          shift={employee?.shift ?? null}
+          shift={shift?.name ?? null}
           heroStatus={heroStatus}
           defaultStart={data.selectedStart}
           defaultEnd={data.selectedEnd}

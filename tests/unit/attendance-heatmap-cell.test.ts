@@ -108,6 +108,48 @@ describe("buildTooltipText", () => {
     expect(text).toContain("Holiday: Festival");
   });
 
+  it("hides system-generated ingestion/derivation tags from the remarks line", () => {
+    const text = buildTooltipText(
+      baseDay({
+        category: "PRESENT",
+        ratioTier: "target",
+        workedMinutes: 480,
+        remark: "Biometric Device Ingestion",
+        remarkIsSystemGenerated: true,
+      }),
+      480
+    );
+    expect(text).not.toContain("Biometric Device Ingestion");
+    expect(text).not.toContain("Remarks:");
+  });
+
+  it("still surfaces a human-authored remark", () => {
+    const text = buildTooltipText(
+      baseDay({
+        category: "PRESENT",
+        ratioTier: "target",
+        workedMinutes: 480,
+        remark: "Left early for appointment",
+        remarkIsSystemGenerated: false,
+      }),
+      480
+    );
+    expect(text).toContain("Remarks: Left early for appointment");
+  });
+
+  it("points to HR for an insufficient-data day instead of showing a raw remark", () => {
+    const text = buildTooltipText(
+      baseDay({
+        category: "INSUFFICIENT_DATA",
+        remark: "Biometric Device Ingestion",
+        remarkIsSystemGenerated: true,
+      }),
+      480
+    );
+    expect(text).not.toContain("Biometric Device Ingestion");
+    expect(text).toContain("Reach out to HR if this looks incorrect");
+  });
+
   it("surfaces an approved-leave conflict note when attendance exists on a leave day", () => {
     const text = buildTooltipText(
       baseDay({ category: "PRESENT", ratioTier: "target", workedMinutes: 480, hasLeaveConflict: true }),
