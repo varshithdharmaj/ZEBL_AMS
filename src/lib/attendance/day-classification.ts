@@ -20,7 +20,8 @@ export type AttendanceDayCategory =
   | "PRESENT"
   | "INSUFFICIENT_DATA"
   | "WORKED_ON_WEEKLY_OFF"
-  | "WORKED_ON_HOLIDAY";
+  | "WORKED_ON_HOLIDAY"
+  | "REGULARISED";
 
 export type AttendanceRatioTier = "very_low" | "partial" | "near_target" | "target" | "overtime";
 
@@ -28,7 +29,12 @@ export type AttendanceRatioTier = "very_low" | "partial" | "near_target" | "targ
  *  shared by the Heatmap, History, and aggregate KPIs so "was this a worked day" is
  *  answered the same way everywhere. */
 export function isWorkedDayCategory(category: AttendanceDayCategory): boolean {
-  return category === "PRESENT" || category === "WORKED_ON_WEEKLY_OFF" || category === "WORKED_ON_HOLIDAY";
+  return (
+    category === "PRESENT" ||
+    category === "WORKED_ON_WEEKLY_OFF" ||
+    category === "WORKED_ON_HOLIDAY" ||
+    category === "REGULARISED"
+  );
 }
 
 /**
@@ -59,23 +65,40 @@ export function isTargetOrBetterTier(ratioTier: AttendanceRatioTier | null): boo
  * Requires the day to be checked out — a still-open session's ratio is provisional
  * (it will keep climbing until check-out), so it must never be judged "short" while
  * still in progress. Mirrors the rule hero-status.ts already applies to its own badge.
+ *
+ * REGULARISED is deliberately excluded: HR already reviewed and approved this day's
+ * times, so it must never be penalised as "short hours" even if the approved
+ * worked-minutes figure happens to fall under the expected-hours ratio. It's still
+ * counted as Present (isWorkedDayCategory) — just not tiered into short/excellent,
+ * the same way an in-progress open day is present-but-untiered.
  */
 export function isBelowTargetPresentDay(
   category: AttendanceDayCategory,
   ratioTier: AttendanceRatioTier | null,
   checkOut: string | null
 ): boolean {
-  return isWorkedDayCategory(category) && Boolean(checkOut) && isShortHoursTier(ratioTier);
+  return (
+    isWorkedDayCategory(category) &&
+    category !== "REGULARISED" &&
+    Boolean(checkOut) &&
+    isShortHoursTier(ratioTier)
+  );
 }
 
 /** Worked day at/above expected hours (heatmap Excellent / target-met KPI). Same
- *  checked-out requirement as isBelowTargetPresentDay, for the same reason. */
+ *  checked-out requirement (and REGULARISED exclusion) as isBelowTargetPresentDay,
+ *  for the same reasons. */
 export function isExcellentPresentDay(
   category: AttendanceDayCategory,
   ratioTier: AttendanceRatioTier | null,
   checkOut: string | null
 ): boolean {
-  return isWorkedDayCategory(category) && Boolean(checkOut) && isTargetOrBetterTier(ratioTier);
+  return (
+    isWorkedDayCategory(category) &&
+    category !== "REGULARISED" &&
+    Boolean(checkOut) &&
+    isTargetOrBetterTier(ratioTier)
+  );
 }
 
 export type AttendanceDayInput = {
@@ -86,6 +109,14 @@ export type AttendanceDayInput = {
     workedMinutes: number;
     overtimeMinutes: number;
     remarks: string | null;
+    /** True when `remarks` is an internal/technical tag (e.g. "Biometric Device
+     *  Ingestion", "Live check-in") rather than a human-authored note — consumers
+     *  must never surface such a remark to the employee. */
+    remarksSystemGenerated?: boolean;
+    /** Non-null when an HR-approved regularisation is the active source of this day's
+     *  derived attendance (AttendanceRecord.activeRegularizationId) — takes priority
+     *  over the usual PRESENT/WORKED_ON_* classification. */
+    activeRegularizationId?: number | null;
   } | null;
   holiday: { name: string } | null;
   approvedLeave: { leaveType: string } | null;
@@ -105,6 +136,7 @@ export type AttendanceDayResult = {
   checkIn: string | null;
   checkOut: string | null;
   remark: string | null;
+  remarkIsSystemGenerated?: boolean;
   holidayName: string | null;
   leaveType: string | null;
   /** Approved leave overlaps a date with real attendance — surfaced, never hidden (Rule 3). */
@@ -146,6 +178,7 @@ export function getEffectiveAttendanceDayType(input: AttendanceDayInput): Attend
     checkIn: attendanceRecord?.checkIn ?? null,
     checkOut: attendanceRecord?.checkOut ?? null,
     remark: attendanceRecord?.remarks ?? null,
+    remarkIsSystemGenerated: attendanceRecord?.remarksSystemGenerated ?? false,
     holidayName: holiday?.name ?? null,
     leaveType: approvedLeave?.leaveType ?? null,
   };
@@ -164,6 +197,13 @@ export function getEffectiveAttendanceDayType(input: AttendanceDayInput): Attend
     const ratio =
       expectedWorkMinutes > 0 ? Math.round((workedMinutes / expectedWorkMinutes) * 100) : 0;
     const ratioTier = getRatioTier(ratio);
+
+    // An HR-approved regularisation is the source of truth for this day — surface it
+    // as its own category regardless of schedule type, so it's never mistaken for an
+    // ordinary punch-derived PRESENT/WORKED_ON_* day.
+    if (attendanceRecord!.activeRegularizationId != null) {
+      return { ...base, category: "REGULARISED", ratio, ratioTier, hasLeaveConflict };
+    }
 
     if (scheduleType === "weekly_off") {
       return { ...base, category: "WORKED_ON_WEEKLY_OFF", ratio, ratioTier, hasLeaveConflict };

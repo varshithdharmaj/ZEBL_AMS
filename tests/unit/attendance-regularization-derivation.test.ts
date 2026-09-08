@@ -5,8 +5,15 @@ import {
 } from "@/lib/integrations/biometric-attendance-derivation";
 import { prisma } from "@/lib/prisma";
 
+const getAttendanceSettings = vi.fn();
+vi.mock("@/lib/attendance/attendance-settings", () => ({
+  getAttendanceSettings: (...args: unknown[]) => getAttendanceSettings(...args),
+}));
+
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    employee: { findUnique: vi.fn().mockResolvedValue(null) },
+    shift: { findMany: vi.fn().mockResolvedValue([]) },
     biometricPunch: { findMany: vi.fn() },
     attendanceRecord: {
       findUnique: vi.fn(),
@@ -37,6 +44,7 @@ beforeEach(() => {
   vi.mocked(prisma.$executeRaw).mockResolvedValue(1 as any);
   vi.mocked(prisma.attendanceSession.createMany).mockResolvedValue({ count: 0 } as any);
   vi.mocked(prisma.attendanceSession.deleteMany).mockResolvedValue({ count: 0 } as any);
+  getAttendanceSettings.mockResolvedValue({ expectedWorkMinutes: 480 });
 });
 
 describe("approved regularisation overrides re-derivation from raw punches", () => {
@@ -106,6 +114,37 @@ describe("approved regularisation overrides re-derivation from raw punches", () 
 
     expect(prisma.attendanceSession.createMany).toHaveBeenLastCalledWith({
       data: [{ attendanceId: 99, checkIn: "09:00", checkOut: null, workedMinutes: 0 }],
+    });
+  });
+
+  it("missing_check_in with no punches at all defaults checkOut to a full expected shift, not an open session", async () => {
+    vi.mocked(prisma.biometricPunch.findMany).mockResolvedValue([] as any);
+    vi.mocked(prisma.attendanceRecord.findUnique).mockResolvedValue({
+      id: 60,
+      remarks: "HR Regularised",
+      activeRegularizationId: 601,
+    } as any);
+    vi.mocked(prisma.attendanceRegularizationRequest.findUnique).mockResolvedValue({
+      status: "approved",
+      requestType: "missing_check_in",
+      requestedCheckIn: "09:00",
+      requestedCheckOut: null,
+    } as any);
+
+    await deriveAttendanceForEmployeeDate(employeeId, attendanceDate);
+
+    expect(prisma.attendanceSession.createMany).toHaveBeenLastCalledWith({
+      data: [{ attendanceId: 60, checkIn: "09:00", checkOut: "17:00", workedMinutes: 480 }],
+    });
+    expect(prisma.attendanceRecord.update).toHaveBeenLastCalledWith({
+      where: { id: 60 },
+      data: expect.objectContaining({
+        checkIn: "09:00",
+        checkOut: "17:00",
+        workedMinutes: 480,
+        status: expect.any(String),
+        remarks: "HR Regularised",
+      }),
     });
   });
 

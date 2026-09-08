@@ -4,12 +4,15 @@ import {
   isPresentDay,
   type AttendanceDayResult,
 } from "@/lib/attendance/day-classification";
+import { getAttendanceCycleWindow, formatAttendanceCycleLabel } from "@/lib/attendance/attendance-cycle";
 
 export type HeatmapMonthStats = {
+  /** Group key: a calendar-month key ("2026-07") in Month mode, a cycle key
+   *  (the cycle's opening-25th date, "2026-06-25") in Cycle mode. */
   monthKey: string;
   year: number;
   monthIndex: number;
-  /** e.g. "Jul 2026" */
+  /** e.g. "Jul 2026" (Month mode) or "25 Jun 2026 – 25 Jul 2026" (Cycle mode) */
   label: string;
   /**
    * Canonical Present: any attended/worked day.
@@ -54,19 +57,37 @@ export function monthLabelFromKey(monthKey: string): string {
   return date.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
 }
 
-/** Aggregate per-calendar-month stats from the already-loaded heatmap day list. */
-export function buildHeatmapMonthStats(days: AttendanceDayResult[]): Map<string, HeatmapMonthStats> {
+/** The 25th-to-25th attendance cycle containing `date`, keyed by its opening 25th
+ *  (e.g. "2026-06-25") — unlike month keys, this never aligns to calendar-month
+ *  boundaries, so a day near month-start/end groups with the cycle it actually
+ *  belongs to rather than the calendar month it happens to fall in. */
+export function cycleKeyFromDate(date: Date): string {
+  const { startDate } = getAttendanceCycleWindow(date);
+  return `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}-${String(startDate.getDate()).padStart(2, "0")}`;
+}
+
+function cycleLabelFromDate(date: Date): string {
+  return formatAttendanceCycleLabel(getAttendanceCycleWindow(date));
+}
+
+/** Shared aggregator behind both `buildHeatmapMonthStats` and `buildHeatmapCycleStats` —
+ *  identical per-day counting logic, differing only in how a day maps to its group key/label. */
+function buildHeatmapGroupStats(
+  days: AttendanceDayResult[],
+  keyFor: (date: Date) => string,
+  labelFor: (date: Date) => string
+): Map<string, HeatmapMonthStats> {
   const map = new Map<string, MutableMonthStats>();
 
   for (const day of days) {
-    const key = monthKeyFromDate(day.date);
+    const key = keyFor(day.date);
     let stats = map.get(key);
     if (!stats) {
       stats = {
         monthKey: key,
         year: day.date.getFullYear(),
         monthIndex: day.date.getMonth(),
-        label: monthLabelFromKey(key),
+        label: labelFor(day.date),
         presentDays: 0,
         excellentDays: 0,
         belowTargetDays: 0,
@@ -117,6 +138,18 @@ export function buildHeatmapMonthStats(days: AttendanceDayResult[]): Map<string,
   }
 
   return result;
+}
+
+/** Aggregate per-calendar-month stats from the already-loaded heatmap day list. */
+export function buildHeatmapMonthStats(days: AttendanceDayResult[]): Map<string, HeatmapMonthStats> {
+  return buildHeatmapGroupStats(days, monthKeyFromDate, (date) => monthLabelFromKey(monthKeyFromDate(date)));
+}
+
+/** Aggregate per-25th-to-25th-cycle stats from the already-loaded heatmap day list —
+ *  the Cycle alternative to `buildHeatmapMonthStats`, grouping by attendance cycle
+ *  instead of calendar month. */
+export function buildHeatmapCycleStats(days: AttendanceDayResult[]): Map<string, HeatmapMonthStats> {
+  return buildHeatmapGroupStats(days, cycleKeyFromDate, cycleLabelFromDate);
 }
 
 /**

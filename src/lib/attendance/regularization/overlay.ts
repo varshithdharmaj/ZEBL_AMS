@@ -1,4 +1,5 @@
 import type { RegularizationRequestType } from "@/generated/prisma/enums";
+import { addMinutesToTimeString } from "@/lib/attendance/session-duration";
 
 /**
  * Pure session-list transform for an approved regularisation. Shared by the
@@ -30,21 +31,34 @@ const FULL_DAY_TYPES: RegularizationRequestType[] = [
   "device_failure",
 ];
 
+/** org-wide AttendanceSettings.expectedWorkMinutes default (see prisma/schema.prisma). */
+export const DEFAULT_EXPECTED_WORK_MINUTES = 480;
+
 export function applyRegularizationOverlay(
   baseSessions: OverlaySession[],
-  correction: OverlayInput
+  correction: OverlayInput,
+  expectedWorkMinutes: number = DEFAULT_EXPECTED_WORK_MINUTES
 ): OverlaySession[] {
   const { requestType, requestedCheckIn, requestedCheckOut } = correction;
 
+  // The single-check-in request types ("missing check-in", "attendance missing",
+  // "device failure") never collect a checkout from the employee — leaving it null
+  // used to produce a permanently open session (0 worked minutes, day never reads as
+  // complete). Default to a full expected shift from the approved check-in instead,
+  // unless HR/employee explicitly captured a partial-day checkout.
+  function effectiveCheckOut(checkIn: string): string | null {
+    return requestedCheckOut ?? addMinutesToTimeString(checkIn, expectedWorkMinutes);
+  }
+
   if (FULL_DAY_TYPES.includes(requestType)) {
     if (!requestedCheckIn) return [];
-    return [{ checkIn: requestedCheckIn, checkOut: requestedCheckOut ?? null }];
+    return [{ checkIn: requestedCheckIn, checkOut: effectiveCheckOut(requestedCheckIn) }];
   }
 
   if (requestType === "missing_check_in" || requestType === "incorrect_check_in") {
     if (!requestedCheckIn) return baseSessions;
     if (baseSessions.length === 0) {
-      return [{ checkIn: requestedCheckIn, checkOut: null }];
+      return [{ checkIn: requestedCheckIn, checkOut: effectiveCheckOut(requestedCheckIn) }];
     }
     const [first, ...rest] = baseSessions;
     return [{ ...first, checkIn: requestedCheckIn }, ...rest];

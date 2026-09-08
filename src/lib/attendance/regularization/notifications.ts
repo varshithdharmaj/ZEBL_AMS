@@ -3,11 +3,30 @@ import "server-only";
 import { NotificationChannel, NotificationType } from "@/generated/prisma/enums";
 import { enqueueNotification } from "@/lib/notifications/notification-queue";
 import { getHrRecipients } from "@/lib/notifications/recipient-resolver";
+import { processNotificationQueue } from "@/lib/notifications/worker";
 import { logger } from "@/lib/observability/logger";
 
 function failureReason(error: unknown): string {
   if (error instanceof Error) return error.name || "Error";
   return "unknown";
+}
+
+/**
+ * Fire-and-forget queue drain, called right after enqueuing so regularisation emails
+ * don't sit waiting for the next cron tick of /api/notifications/process. Deliberately
+ * not awaited by callers and never throws — a failure here must never fail or roll
+ * back the regularisation request/decision that triggered it. Safe to run concurrently
+ * with the cron-triggered drain: claimDueNotificationIds (queue-lock.ts) claims rows
+ * with `FOR UPDATE SKIP LOCKED`, so overlapping drains just split the batch instead of
+ * double-sending.
+ */
+function triggerImmediateQueueDrain(context: string): void {
+  void processNotificationQueue({ limit: 10 }).catch((error) => {
+    logger.warn("attendance.regularization.immediate_drain_failed", {
+      context,
+      reason: failureReason(error),
+    });
+  });
 }
 
 /** Queued only, after commit — never blocks/rolls back the submission transaction. */
@@ -41,7 +60,10 @@ export async function queueRegularizationSubmittedAlert(input: {
       entityId: String(input.requestId),
       reason: failureReason(error),
     });
+    return;
   }
+
+  triggerImmediateQueueDrain("regularization_submitted");
 }
 
 /** Queued only, after commit — approve/reject decision notice to the employee. */
@@ -76,5 +98,8 @@ export async function queueRegularizationDecisionNotice(input: {
       entityId: String(input.requestId),
       reason: failureReason(error),
     });
+    return;
   }
+
+  triggerImmediateQueueDrain("regularization_decision");
 }

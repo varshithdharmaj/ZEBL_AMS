@@ -24,7 +24,18 @@ export const getEmployeeAttendanceRecordsForYear = cache(
       },
       orderBy: { attendanceDate: "asc" },
       include: {
-        sessions: { orderBy: [{ checkIn: "asc" }, { id: "asc" }] },
+        sessions: { orderBy: [{ id: "asc" }] },
+        activeRegularization: {
+          select: {
+            reason: true,
+            reviewComment: true,
+            requestType: true,
+            requestedCheckIn: true,
+            requestedCheckOut: true,
+            snapshotBefore: true,
+            reviewedAt: true,
+          },
+        },
       },
     });
   }
