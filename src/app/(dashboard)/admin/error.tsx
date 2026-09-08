@@ -17,7 +17,7 @@ export default function AdminError({
 
   return (
     <div className="mx-auto max-w-lg space-y-4 p-8">
-      <ErrorAlert message="Something went wrong loading this admin page. Try again or sign out and back in." />
+      <ErrorAlert message="Something went wrong loading this admin page. Please try again or sign out and back in." />
       {error.digest && (
         <p className="text-xs text-muted-foreground">Reference: {error.digest}</p>
       )}

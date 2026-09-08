@@ -28,10 +28,10 @@ export function ConversionSuccessDialog({
           </div>
           <div className="space-y-2">
             <DialogTitle className="text-lg font-bold text-slate-900">
-              Conversion Successful!
+              Candidate Converted
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 max-w-xs">
-              {employeeName} has been successfully converted into an employee and added to the HRMS database.
+              {employeeName} is now an employee.
             </DialogDescription>
           </div>
 

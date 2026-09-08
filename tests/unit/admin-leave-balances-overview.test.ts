@@ -187,7 +187,7 @@ describe("getLeaveBalanceSummariesForEmployees", () => {
     expect(prisma.leaveTransaction.findMany).toHaveBeenCalledWith({
       where: {
         employeeId: { in: [1, 2] },
-        transactionType: "manual_adjustment",
+        transactionType: { in: ["manual_adjustment", "opening_balance"] },
       },
       select: {
         employeeId: true,

@@ -217,7 +217,7 @@ export async function replyToTicketAction(
     revalidatePath(`/employee/tickets/${ticketId}`);
     revalidatePath("/employee/tickets");
 
-    return { success: "Reply added successfully" };
+    return { success: "Reply added successfully." };
   } catch (error) {
     if (error instanceof PermissionError) {
       return { error: "You don't have permission to reply to this ticket" };

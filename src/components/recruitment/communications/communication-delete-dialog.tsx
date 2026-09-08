@@ -19,7 +19,7 @@ export function CommunicationDeleteDialog({
     <AlertDialog
       isOpen={open}
       onOpenChange={onOpenChange}
-      title="Delete draft?"
+      title="Delete Draft"
       description={
         subject
           ? `“${subject}” will be soft-deleted and hidden from the drafts list.`
