@@ -15,6 +15,7 @@ export const CATEGORY_LABEL: Record<AttendanceDayCategory, string> = {
   INSUFFICIENT_DATA: "Insufficient data",
   WORKED_ON_WEEKLY_OFF: "Worked on weekly off",
   WORKED_ON_HOLIDAY: "Worked on holiday",
+  REGULARISED: "Regularised",
 };
 
 /** CSS custom properties — resolve against light/dark theme tokens in globals.css. */
@@ -53,6 +54,10 @@ export const CATEGORY_COLOR: Record<AttendanceDayCategory, string> = {
   HOLIDAY: HEATMAP_COLOR.holiday,
   WEEKLY_OFF: HEATMAP_COLOR.weeklyOff,
   INSUFFICIENT_DATA: HEATMAP_COLOR.insufficient,
+  // Reuses the worked-day swatch — REGULARISED is still a worked day for heatmap
+  // intensity purposes; it's distinguished from ordinary PRESENT only via the
+  // dedicated badge on the History table (CATEGORY_BADGE_CLASS), not the heatmap.
+  REGULARISED: HEATMAP_COLOR.present,
 };
 
 /** True when the tier maps to the Excellent (target-met) swatch. */
@@ -79,4 +84,19 @@ export const RATIO_TIER_LABEL: Record<AttendanceRatioTier, string> = {
   near_target: "Near target",
   target: "Target hours",
   overtime: "Overtime",
+};
+
+/**
+ * Single, mutually-exclusive tier tag for a worked day — exactly one of these three
+ * ever applies to a given ratioTier, so callers (the heatmap tooltip) must pick from
+ * this map alone rather than combining it with a second tier label (e.g. RATIO_TIER_LABEL
+ * above); stacking both previously let contradictory-reading pairs like "Below target ·
+ * Near target" appear on the same tooltip.
+ */
+export const TIER_TAG_LABEL: Record<AttendanceRatioTier, string> = {
+  very_low: "Below target",
+  partial: "Below target",
+  near_target: "Near target",
+  target: "Excellent",
+  overtime: "Excellent",
 };

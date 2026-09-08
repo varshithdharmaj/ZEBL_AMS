@@ -7,6 +7,7 @@ import { AttendanceShiftCell } from "@/components/attendance/attendance-shift-ce
 import { SectionCard } from "@/components/ui/section-card";
 import { DataTable, DataTableRow, DataTableCell } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
+import { RegularisedBadge } from "@/components/attendance/regularisation-audit-badge";
 import { getAttendanceRecords } from "@/lib/data";
 import {
   getOperationalShiftFilterOption,
@@ -150,7 +151,18 @@ export default async function AdminAttendancePage({
                   {formatOvertimeDisplay(record.overtimeMinutes)}
                 </DataTableCell>
                 <DataTableCell className="align-top max-w-[14rem] text-sm text-muted-foreground">
-                  {record.remarks?.trim() ? record.remarks : "—"}
+                  {record.activeRegularizationId != null || record.remarks === "HR Regularised" ? (
+                    <RegularisedBadge
+                      detail={record.activeRegularization}
+                      currentCheckIn={record.checkIn}
+                      currentCheckOut={record.checkOut}
+                      currentWorkedMinutes={record.workedMinutes}
+                    />
+                  ) : !record.remarksSystemGenerated && record.remarks?.trim() ? (
+                    record.remarks
+                  ) : (
+                    "—"
+                  )}
                 </DataTableCell>
               </DataTableRow>
             ))

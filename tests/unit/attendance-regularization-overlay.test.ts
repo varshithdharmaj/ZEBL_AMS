@@ -5,13 +5,53 @@ import {
 } from "@/lib/attendance/regularization/overlay";
 
 describe("applyRegularizationOverlay", () => {
-  it("missing_check_in on a zero-session day creates one open session", () => {
+  it("missing_check_in on a zero-session day defaults checkOut to a full expected shift from check-in", () => {
+    const result = applyRegularizationOverlay(
+      [],
+      {
+        requestType: "missing_check_in",
+        requestedCheckIn: "09:00",
+        requestedCheckOut: null,
+      },
+      480
+    );
+    expect(result).toEqual([{ checkIn: "09:00", checkOut: "17:00" }]);
+  });
+
+  it("missing_check_in defaults to 480 minutes when expectedWorkMinutes is not passed", () => {
     const result = applyRegularizationOverlay([], {
       requestType: "missing_check_in",
       requestedCheckIn: "09:00",
       requestedCheckOut: null,
     });
-    expect(result).toEqual([{ checkIn: "09:00", checkOut: null }]);
+    expect(result).toEqual([{ checkIn: "09:00", checkOut: "17:00" }]);
+  });
+
+  it("does not override an explicitly requested (partial-day) checkOut", () => {
+    const result = applyRegularizationOverlay(
+      [],
+      {
+        requestType: "missing_check_in",
+        requestedCheckIn: "09:00",
+        requestedCheckOut: "13:00",
+      },
+      480
+    );
+    expect(result).toEqual([{ checkIn: "09:00", checkOut: "13:00" }]);
+  });
+
+  it("attendance_missing/device_failure default checkOut the same way when none was requested", () => {
+    const result = applyRegularizationOverlay(
+      [{ checkIn: "09:00", checkOut: "10:00" }],
+      {
+        requestType: "device_failure",
+        requestedCheckIn: "22:00",
+        requestedCheckOut: null,
+      },
+      480
+    );
+    // 22:00 + 8h wraps past midnight — sessionDurationMinutes treats out < in as overnight.
+    expect(result).toEqual([{ checkIn: "22:00", checkOut: "06:00" }]);
   });
 
   it("missing_check_in overrides only the earliest session's checkIn, keeps its checkOut and later sessions untouched", () => {

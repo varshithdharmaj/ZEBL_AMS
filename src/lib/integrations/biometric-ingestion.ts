@@ -2,9 +2,11 @@ import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   deriveAttendanceForAffectedGroups,
-  getISTDateParts,
+  getShiftDayParts,
   type AffectedEmployeeDateGroup,
 } from "@/lib/integrations/biometric-attendance-derivation";
+import { getShiftMap, resolveEmployeeShift } from "@/lib/attendance/shift-lookup";
+import type { ShiftSummary } from "@/lib/shifts";
 
 import {
   ESSL_TABLE_NAME_REGEX,
@@ -70,11 +72,18 @@ export async function ingestBiometricPunches(
     select: {
       id: true,
       employeeCode: true,
+      shift: true,
     },
   });
 
   const employeeIdMap = new Map<string, number>(
     employees.map((emp) => [emp.employeeCode, emp.id])
+  );
+  // Shift governs which calendar day a punch is bucketed under (see getShiftDayParts) —
+  // resolved once per batch, not per event.
+  const shiftMap = await getShiftMap();
+  const employeeShiftMap = new Map<number, ShiftSummary | null>(
+    employees.map((emp) => [emp.id, emp.shift ? shiftMap.get(emp.shift) ?? null : null])
   );
 
   // 3. Query existing biometric punch idempotency keys
@@ -180,7 +189,7 @@ export async function ingestBiometricPunches(
   // groups whose punches were all duplicates this call — see comment above.
   if (affectedGroupSource.length > 0) {
     const affectedGroups: AffectedEmployeeDateGroup[] = affectedGroupSource.map((r) => {
-      const parts = getISTDateParts(r.punchedAt);
+      const parts = getShiftDayParts(r.punchedAt, employeeShiftMap.get(r.employeeId) ?? null);
       return {
         employeeId: r.employeeId,
         attendanceDate: parts.attendanceDate,
@@ -228,8 +237,9 @@ export async function backfillBiometricPunchesForEmployee(
     data: { employeeId },
   });
 
+  const shift = await resolveEmployeeShift(employeeId);
   const affectedGroups: AffectedEmployeeDateGroup[] = orphanPunches.map((p) => {
-    const parts = getISTDateParts(p.punchedAt);
+    const parts = getShiftDayParts(p.punchedAt, shift);
     return { employeeId, attendanceDate: parts.attendanceDate, dateString: parts.dateString };
   });
 

@@ -9,11 +9,35 @@ import {
   sessionDurationMinutes,
   totalWorkedMinutesFromSessions,
 } from "@/lib/attendance/session-duration";
+import { getAttendanceSettings } from "@/lib/attendance/attendance-settings";
+import { resolveEmployeeShift, shiftCrossesMidnight, shiftDayOffset } from "@/lib/attendance/shift-lookup";
+import type { ShiftSummary } from "@/lib/shifts";
 import { prisma } from "@/lib/prisma";
 import { resolveDatabasePoolMax } from "@/lib/prisma-pool";
 import { startOfDay } from "@/lib/utils";
 
 type Tx = Prisma.TransactionClient;
+
+/**
+ * Like `getISTDateParts`, but for an employee whose assigned shift crosses midnight
+ * (e.g. Night Shift 20:00->05:00), rebases the date onto the *shift day* the punch
+ * belongs to instead of its own raw calendar day — see `shiftDayOffset` for the rule.
+ * A 05:10 punch that's really the tail end of last night's shift comes back dated
+ * "yesterday", matching the 23:50 check-in it pairs with. No-op for a non-crossing
+ * shift or an unassigned employee.
+ */
+export function getShiftDayParts(
+  date: Date,
+  shift: ShiftSummary | null
+): ReturnType<typeof getISTDateParts> {
+  const parts = getISTDateParts(date);
+  const offsetDays = shiftDayOffset(parts.timeString, shift);
+  if (offsetDays === 0) return parts;
+  // IST has a fixed UTC+5:30 offset (no DST), so subtracting whole days in real time is
+  // safe here — the punch's actual clock time is unaffected, only its date bucket.
+  const shiftedDate = new Date(date.getTime() - offsetDays * 24 * 60 * 60 * 1000);
+  return { ...getISTDateParts(shiftedDate), timeString: parts.timeString };
+}
 
 /**
  * Format a Date into its IST date components and time string.
@@ -96,7 +120,12 @@ async function applyOverlayToRecord(
   baseSessions: OverlaySession[],
   correction: OverlayInput
 ): Promise<void> {
-  const overlaid = applyRegularizationOverlay(baseSessions, correction);
+  // Full shift length for single-check-in corrections that never captured a checkout
+  // (see applyRegularizationOverlay) — org-wide AttendanceSettings.expectedWorkMinutes,
+  // 480 (8h) by default. Read via plain `prisma`, not `tx`: a settings lookup doesn't
+  // need this transaction's isolation, and getAttendanceSettings is request-memoized.
+  const { expectedWorkMinutes } = await getAttendanceSettings();
+  const overlaid = applyRegularizationOverlay(baseSessions, correction, expectedWorkMinutes);
 
   await tx.attendanceSession.deleteMany({ where: { attendanceId: recordId } });
 
@@ -128,6 +157,7 @@ async function applyOverlayToRecord(
       workDuration: durationLabel(workedMinutes),
       status,
       remarks: "HR Regularised",
+      remarksSystemGenerated: true,
     },
   });
 }
@@ -157,6 +187,7 @@ export async function applyApprovedRegularization(
       attendanceDate: dateParts.attendanceDate,
       status: "Absent",
       remarks: "HR Regularised",
+      remarksSystemGenerated: true,
       activeRegularizationId: request.id,
     },
     update: {
@@ -194,10 +225,24 @@ export async function deriveAttendanceForEmployeeDate(
     const lockKey = `biometric_derivation_${employeeId}_${dateParts.dateString}`;
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
 
-    // 2. Fetch all BiometricPunch records for this employee on this attendance date
-    // Compute IST day range: from 00:00:00 IST to 23:59:59.999 IST (converted to UTC for query)
+    // 1b. This employee's assigned shift — governs which calendar day a punch is
+    // bucketed under (see getShiftDayParts). Uses their *current* assignment; there is
+    // no historical shift-effective-dating, so a mid-history shift change is applied
+    // retroactively to all of their punch history.
+    const shift = await resolveEmployeeShift(employeeId);
+    const crossesMidnight = shiftCrossesMidnight(
+      shift ?? { startTime: "00:00", endTime: "00:00" }
+    );
+
+    // 2. Fetch all BiometricPunch records that could belong to this *shift day*.
+    // For an ordinary (non-crossing) shift that's just this one IST calendar day. For a
+    // midnight-crossing shift (Night/US Shift), the tail end of this shift day's punches
+    // (the early-morning checkout) land on the *next* calendar day's raw timestamp, so
+    // the fetch window widens to include it — see getShiftDayParts for the bucketing rule
+    // that decides which of the two calendar days each punch actually belongs to.
     const dayStartUtc = new Date(Date.UTC(dateParts.year, dateParts.month - 1, dateParts.day, 0, 0, 0) - (5 * 60 + 30) * 60 * 1000);
-    const dayEndUtc = new Date(dayStartUtc.getTime() + 24 * 60 * 60 * 1000 - 1);
+    const windowDays = crossesMidnight ? 2 : 1;
+    const dayEndUtc = new Date(dayStartUtc.getTime() + windowDays * 24 * 60 * 60 * 1000 - 1);
 
     const punches = await tx.biometricPunch.findMany({
       where: {
@@ -210,9 +255,9 @@ export async function deriveAttendanceForEmployeeDate(
       orderBy: [{ punchedAt: "asc" }, { id: "asc" }],
     });
 
-    // Filter punches strictly belonging to this IST attendance date
+    // Filter punches strictly belonging to this shift day (see getShiftDayParts).
     const dayPunches = punches.filter(
-      (p) => getISTDateParts(p.punchedAt).dateString === dateParts.dateString
+      (p) => getShiftDayParts(p.punchedAt, shift).dateString === dateParts.dateString
     );
 
     // Approved regularisation, if any, always wins over late-arriving raw
@@ -264,6 +309,7 @@ export async function deriveAttendanceForEmployeeDate(
           overtimeMinutes: 0,
           status: "Absent",
           remarks: "Biometric Device Ingestion",
+          remarksSystemGenerated: true,
         },
         select: { id: true, remarks: true },
       });
@@ -318,10 +364,13 @@ export async function deriveAttendanceForEmployeeDate(
       return;
     }
 
-    // 7. Recalculate daily totals and status on AttendanceRecord
+    // 7. Recalculate daily totals and status on AttendanceRecord.
+    // Ordered by id (= insertion order = true chronological punch order), not checkIn —
+    // a bare "HH:mm" string sorts wrong once a shift day's sessions cross midnight (e.g.
+    // a 00:15 second session would sort before a 23:50 first session).
     const sessions = await tx.attendanceSession.findMany({
       where: { attendanceId: record.id },
-      orderBy: [{ checkIn: "asc" }, { id: "asc" }],
+      orderBy: [{ id: "asc" }],
     });
 
     const completed = sessions.filter((s) => s.checkOut !== null);
@@ -346,7 +395,7 @@ export async function deriveAttendanceForEmployeeDate(
         workDuration: durationLabel(workedMinutes),
         status,
         ...(record.remarks === null || record.remarks === "Live check-in"
-          ? { remarks: "Biometric Device Ingestion" }
+          ? { remarks: "Biometric Device Ingestion", remarksSystemGenerated: true }
           : {}),
       },
     });

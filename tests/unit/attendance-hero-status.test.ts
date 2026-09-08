@@ -177,6 +177,31 @@ describe("getHeroStatus — required states", () => {
     expect(status.badges.late).toBe(true);
   });
 
+  it("when a shift is assigned, late is computed from start time + grace instead of remarks text", () => {
+    const shift = {
+      id: 1,
+      name: "Morning Shift",
+      startTime: "09:00",
+      endTime: "18:00",
+      graceMinutes: 10,
+      expectedWorkMinutes: 480,
+      isActive: true,
+    };
+    const withinGrace = getHeroStatus(
+      baseDay({ category: "PRESENT", checkIn: "09:09", checkOut: "18:00", workedMinutes: 471, remark: "late arrival noted" }),
+      { isToday: true, expectedWorkMinutes: 480, shift }
+    );
+    // Real timing beats a misleading remark.
+    expect(withinGrace.badges.late).toBe(false);
+
+    const pastGrace = getHeroStatus(
+      baseDay({ category: "PRESENT", checkIn: "09:11", checkOut: "18:00", workedMinutes: 469 }),
+      { isToday: true, expectedWorkMinutes: 480, shift }
+    );
+    // Computed, not text-matched — no remark needed.
+    expect(pastGrace.badges.late).toBe(true);
+  });
+
   it("early checkout is surfaced as a badge from remarks text", () => {
     const status = getHeroStatus(
       baseDay({

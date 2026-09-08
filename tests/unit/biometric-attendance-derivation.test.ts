@@ -1,15 +1,31 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getISTDateParts,
+  getShiftDayParts,
   deriveAttendanceForEmployeeDate,
 } from "@/lib/integrations/biometric-attendance-derivation";
 import { ingestBiometricPunches } from "@/lib/integrations/biometric-ingestion";
 import { prisma } from "@/lib/prisma";
+import type { ShiftSummary } from "@/lib/shifts";
+
+const nightShift: ShiftSummary = {
+  id: 1,
+  name: "Night Shift",
+  startTime: "20:00",
+  endTime: "05:00",
+  graceMinutes: 10,
+  expectedWorkMinutes: 480,
+  isActive: true,
+};
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     employee: {
       findMany: vi.fn(),
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
+    shift: {
+      findMany: vi.fn().mockResolvedValue([]),
     },
     biometricPunch: {
       findMany: vi.fn(),
@@ -67,6 +83,33 @@ describe("Biometric IST Timezone Helpers", () => {
 
     expect(parts.dateString).toBe("2027-01-01");
     expect(parts.timeString).toBe("00:15");
+  });
+});
+
+describe("getShiftDayParts — night shift punch bucketing", () => {
+  it("buckets an evening check-in on its own calendar date (unchanged)", () => {
+    // 20:15 IST on Aug 17 = 14:45 UTC
+    const parts = getShiftDayParts(new Date("2026-08-17T14:45:00.000Z"), nightShift);
+    expect(parts.dateString).toBe("2026-08-17");
+    expect(parts.timeString).toBe("20:15");
+  });
+
+  it("buckets an early-morning checkout onto the PREVIOUS calendar date (the shift it closes out)", () => {
+    // 05:10 IST on Aug 18 = 23:40 UTC on Aug 17
+    const parts = getShiftDayParts(new Date("2026-08-17T23:40:00.000Z"), nightShift);
+    expect(parts.dateString).toBe("2026-08-17");
+    expect(parts.timeString).toBe("05:10");
+  });
+
+  it("leaves a non-crossing shift's punches on their own calendar date", () => {
+    const morningShift: ShiftSummary = { ...nightShift, name: "Morning Shift", startTime: "09:00", endTime: "18:00" };
+    const parts = getShiftDayParts(new Date("2026-08-17T03:30:00.000Z"), morningShift); // 09:00 IST
+    expect(parts.dateString).toBe("2026-08-17");
+  });
+
+  it("is a no-op for an unassigned employee (null shift)", () => {
+    const parts = getShiftDayParts(new Date("2026-08-17T23:40:00.000Z"), null);
+    expect(parts.dateString).toBe("2026-08-18"); // its own raw IST date, unchanged
   });
 });
 
@@ -322,6 +365,74 @@ describe("Biometric Attendance Derivation Logic", () => {
         { attendanceId: 99, checkIn: "18:00", checkOut: null, workedMinutes: 0 },
       ],
     });
+  });
+
+  it("20. Night Shift: an evening check-in and next-morning checkout merge into ONE session on the shift's start date, not two broken days", async () => {
+    const employeeId = 421;
+    // Deriving for Aug 17 — the check-in's own calendar date.
+    const attendanceDate = new Date("2026-08-17T00:00:00.000Z");
+
+    vi.mocked(prisma.employee.findUnique).mockResolvedValue({ shift: "Night Shift" } as any);
+    vi.mocked(prisma.shift.findMany).mockResolvedValue([nightShift] as any);
+
+    // Check-in 23:50 IST Aug 17 (18:20 UTC) and checkout 05:10 IST Aug 18 (23:40 UTC Aug 17).
+    // Both must be fetched (the window widens for a crossing shift) and paired together.
+    vi.mocked(prisma.biometricPunch.findMany).mockResolvedValue([
+      { id: 1, punchedAt: new Date("2026-08-17T18:20:00.000Z") }, // 23:50 IST Aug 17
+      { id: 2, punchedAt: new Date("2026-08-17T23:40:00.000Z") }, // 05:10 IST Aug 18
+    ] as any);
+
+    vi.mocked(prisma.attendanceRecord.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.attendanceRecord.create).mockResolvedValue({
+      id: 77,
+      remarks: "Biometric Device Ingestion",
+    } as any);
+    vi.mocked(prisma.attendanceSession.findMany).mockResolvedValue([
+      { id: 601, attendanceId: 77, checkIn: "23:50", checkOut: "05:10", workedMinutes: 320 },
+    ] as any);
+
+    await deriveAttendanceForEmployeeDate(employeeId, attendanceDate);
+
+    // One session spanning midnight, not a lone open check-in on Aug 17 and an
+    // orphan checkout-only row on Aug 18.
+    expect(prisma.attendanceSession.createMany).toHaveBeenCalledWith({
+      data: [{ attendanceId: 77, checkIn: "23:50", checkOut: "05:10", workedMinutes: 320 }],
+    });
+    expect(prisma.attendanceRecord.update).toHaveBeenCalledWith({
+      where: { id: 77 },
+      data: expect.objectContaining({
+        checkIn: "23:50",
+        checkOut: "05:10",
+        workedMinutes: 320,
+      }),
+    });
+  });
+
+  it("21. Night Shift: deriving the NEXT calendar day (Aug 18, no evening punches of its own) finds nothing and self-heals away a stale orphan record left by the old per-calendar-day bug", async () => {
+    const employeeId = 421;
+    const attendanceDate = new Date("2026-08-18T00:00:00.000Z");
+
+    vi.mocked(prisma.employee.findUnique).mockResolvedValue({ shift: "Night Shift" } as any);
+    vi.mocked(prisma.shift.findMany).mockResolvedValue([nightShift] as any);
+
+    // Same two punches as the previous test — both belong to shift-day Aug 17, none to Aug 18.
+    vi.mocked(prisma.biometricPunch.findMany).mockResolvedValue([
+      { id: 1, punchedAt: new Date("2026-08-17T18:20:00.000Z") }, // 23:50 IST Aug 17
+      { id: 2, punchedAt: new Date("2026-08-17T23:40:00.000Z") }, // 05:10 IST Aug 18
+    ] as any);
+
+    // A stale orphan record for Aug 18 from before this fix (checkout-only, biometric-derived).
+    vi.mocked(prisma.attendanceRecord.findUnique).mockResolvedValue({
+      id: 88,
+      remarks: "Biometric Device Ingestion",
+      activeRegularizationId: null,
+    } as any);
+
+    await deriveAttendanceForEmployeeDate(employeeId, attendanceDate);
+
+    expect(prisma.attendanceSession.deleteMany).toHaveBeenCalledWith({ where: { attendanceId: 88 } });
+    expect(prisma.attendanceRecord.delete).toHaveBeenCalledWith({ where: { id: 88 } });
+    expect(prisma.attendanceRecord.create).not.toHaveBeenCalled();
   });
 
   it("19. Resending already-ingested punches (all reported as duplicate) still re-derives attendance, repairing a stuck record", async () => {
