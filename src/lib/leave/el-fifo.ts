@@ -132,22 +132,39 @@ export async function adminAdjustElBalance(params: {
   adjustment: number;
   reason: string;
   createdBy: string;
+  /** Backdates the new lot + its expiry — used by the opening-balance importer
+   *  so migrated EL reflects when it was actually earned, not "now". */
+  accrualDate?: Date;
+  transactionType?: "manual_adjustment" | "opening_balance";
+  importBatchId?: number;
+  tx?: TxClient;
 }): Promise<void> {
-  const { employeeId, adjustment, reason, createdBy } = params;
+  const {
+    employeeId,
+    adjustment,
+    reason,
+    createdBy,
+    accrualDate: accrualDateParam,
+    transactionType = "manual_adjustment",
+    importBatchId,
+    tx,
+  } = params;
   if (adjustment === 0) {
     throw new Error("Adjustment amount cannot be zero.");
   }
 
-  await prisma.$transaction(async (tx) => {
+  const run = async (tx: TxClient) => {
     await getOrCreateLeaveBalanceRow(employeeId, tx);
 
     if (adjustment > 0) {
       const policy = await getLeavePolicySettings();
-      const accrualDate = new Date();
+      const accrualDate = accrualDateParam ?? new Date();
+      // Not eligibility-gated: this operates directly on lots, so it's how
+      // opening-balance imports intentionally bypass the 1-year EL rule.
       const lot = await tx.elAccrualLot.create({
         data: {
           employeeId,
-          cycleKey: `manual-${Date.now()}`,
+          cycleKey: `manual-${employeeId}-${Date.now()}`,
           accrualDate,
           amount: adjustment,
           remaining: adjustment,
@@ -158,11 +175,12 @@ export async function adminAdjustElBalance(params: {
         data: {
           employeeId,
           leaveType: "EL",
-          transactionType: "manual_adjustment",
+          transactionType,
           amount: adjustment,
           reason,
           createdBy,
           elAccrualLotId: lot.id,
+          importBatchId: importBatchId ?? null,
         },
       });
       await tx.employeeLeaveBalance.update({
@@ -207,17 +225,65 @@ export async function adminAdjustElBalance(params: {
       data: {
         employeeId,
         leaveType: "EL",
-        transactionType: "manual_adjustment",
+        transactionType,
         amount: adjustment,
         reason,
         createdBy,
+        importBatchId: importBatchId ?? null,
       },
     });
     await tx.employeeLeaveBalance.update({
       where: { employeeId },
       data: { elBalance: { decrement: abs } },
     });
+  };
+
+  if (tx) {
+    await run(tx);
+  } else {
+    await prisma.$transaction(run);
+  }
+}
+
+/**
+ * "Set to" (absolute) EL balance edit, implemented as diff-then-delta on top
+ * of adminAdjustElBalance. Used by both the per-employee HR correction form
+ * (transactionType defaults to "manual_adjustment") and the bulk
+ * opening-balance importer (transactionType: "opening_balance" + importBatchId
+ * + an optional historical accrualDate). A zero delta is a no-op — this is
+ * what makes re-running the same import idempotent.
+ */
+export async function adminSetElBalance(params: {
+  employeeId: number;
+  targetBalance: number;
+  reason: string;
+  createdBy: string;
+  accrualDate?: Date;
+  transactionType?: "manual_adjustment" | "opening_balance";
+  importBatchId?: number;
+  tx?: TxClient;
+}): Promise<{ delta: number; skipped: boolean }> {
+  const { employeeId, targetBalance, reason, createdBy, accrualDate, transactionType, importBatchId, tx } =
+    params;
+
+  const balance = await getOrCreateLeaveBalanceRow(employeeId, tx);
+  const delta = targetBalance - balance.elBalance;
+  if (delta === 0) {
+    return { delta: 0, skipped: true };
+  }
+
+  await adminAdjustElBalance({
+    employeeId,
+    adjustment: delta,
+    reason,
+    createdBy,
+    accrualDate,
+    transactionType,
+    importBatchId,
+    tx,
   });
+
+  return { delta, skipped: false };
 }
 
 /** Seeds an optional initial EL balance on employee creation as a real (lot-backed) accrual. */
