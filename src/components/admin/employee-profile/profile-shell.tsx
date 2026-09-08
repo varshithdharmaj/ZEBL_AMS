@@ -12,6 +12,7 @@ import { LeaveHistoryTab } from "@/components/admin/employee-profile/leave-histo
 import type { EmployeeStatus } from "@/lib/employee-types";
 import type { LeaveBalanceSummary } from "@/lib/leave";
 import type { ManagerSummary } from "@/lib/org-types";
+import type { ShiftSummary } from "@/lib/shifts";
 import type { AppUserRole } from "@/lib/roles";
 import type { AccountStatus, AuthProvider } from "@/generated/prisma/enums";
 import { AccountManagementTab } from "@/components/admin/employee-profile/account-management-tab";
@@ -104,6 +105,7 @@ export function EmployeeProfileShell({
   defaultStart,
   defaultEnd,
   managerCandidates,
+  shifts,
   overviewStats,
   currentUserId,
   currentUserRole,
@@ -116,6 +118,7 @@ export function EmployeeProfileShell({
   defaultStart: string;
   defaultEnd: string;
   managerCandidates: ManagerSummary[];
+  shifts: ShiftSummary[];
   overviewStats: {
     pendingLeaves: number;
     approvedLeavesYtd: number;
@@ -173,7 +176,7 @@ export function EmployeeProfileShell({
           <OverviewTab employee={employee} stats={overviewStats} />
         )}
         {activeTab === "basic" && (
-          <BasicInfoTab employee={employee} managerCandidates={managerCandidates} />
+          <BasicInfoTab employee={employee} managerCandidates={managerCandidates} shifts={shifts} />
         )}
         {activeTab === "attendance" && (
           <AttendanceTab

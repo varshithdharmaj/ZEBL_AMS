@@ -15,6 +15,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { Offer } from "@/generated/prisma/client";
+import { DEPARTMENTS } from "@/lib/employee-types";
 
 export interface OfferFormApplicationOption {
   id: string;
@@ -29,18 +30,7 @@ export interface OfferFormApplicationOption {
   hasApprovedDecision?: boolean;
 }
 
-/**
- * Healthcare RCM Preset Constants
- */
-const DEPARTMENT_PRESETS = [
-  "Medical Coding",
-  "Billing & Collections",
-  "Accounts Receivable (AR)",
-  "Client Operations",
-  "Software Engineering",
-  "HR & Talent",
-  "Finance & Compliance",
-];
+const DEPARTMENT_PRESETS: string[] = [...DEPARTMENTS];
 
 const LOCATION_PRESETS = ["Hyderabad"];
 

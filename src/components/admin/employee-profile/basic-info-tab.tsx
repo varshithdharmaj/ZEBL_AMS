@@ -8,24 +8,31 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SectionCard } from "@/components/ui/section-card";
 import { ErrorAlert } from "@/components/ui/error-alert";
-import { EMPLOYEE_SHIFT_ASSIGNMENT_OPTIONS } from "@/lib/attendance-shift";
-import { EMPLOYEE_STATUSES } from "@/lib/employee-types";
+import { EMPLOYEE_STATUSES, DEPARTMENTS } from "@/lib/employee-types";
 import { ManagerAssignmentFields } from "@/components/admin/employee-profile/manager-assignment";
 import type { ProfileEmployee } from "@/components/admin/employee-profile/profile-shell";
 import type { ManagerSummary } from "@/lib/org-types";
+import type { ShiftSummary } from "@/lib/shifts";
 
 const initialState: ActionState = {};
 
 export function BasicInfoTab({
   employee,
   managerCandidates,
+  shifts,
 }: {
   employee: ProfileEmployee;
   managerCandidates: ManagerSummary[];
+  shifts: ShiftSummary[];
 }) {
   const [state, formAction, pending] = useActionState(updateEmployeeProfileAction, initialState);
   const [status, setStatus] = useState(employee.employeeStatus);
   const [shift, setShift] = useState(employee.shift ?? "");
+  const [department, setDepartment] = useState<string>(
+    employee.department && (DEPARTMENTS as readonly string[]).includes(employee.department)
+      ? employee.department
+      : DEPARTMENTS[0]
+  );
 
   return (
     <SectionCard title="Basic information" description="Employee profile details">
@@ -33,6 +40,7 @@ export function BasicInfoTab({
         <input type="hidden" name="id" value={employee.id} />
         <input type="hidden" name="employeeStatus" value={status} />
         <input type="hidden" name="shift" value={shift} />
+        <input type="hidden" name="department" value={department} />
         {state.error && <ErrorAlert message={state.error} />}
         {state.success && (
           <p className="rounded-lg border border-success/20 bg-success-muted px-4 py-3 text-sm text-success">
@@ -101,8 +109,19 @@ export function BasicInfoTab({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="department">Department</Label>
-            <Input id="department" name="department" defaultValue={employee.department ?? ""} />
+            <Label>Department</Label>
+            <Select value={department} onValueChange={setDepartment}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DEPARTMENTS.map((d) => (
+                  <SelectItem key={d} value={d}>
+                    {d}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="designation">Designation</Label>
@@ -127,15 +146,14 @@ export function BasicInfoTab({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none__">Not set</SelectItem>
-                {EMPLOYEE_SHIFT_ASSIGNMENT_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.label}>
-                    {opt.label}
+                {shifts.map((s) => (
+                  <SelectItem key={s.id} value={s.name}>
+                    {s.name} ({s.startTime}–{s.endTime})
                   </SelectItem>
                 ))}
-                {shift &&
-                  !EMPLOYEE_SHIFT_ASSIGNMENT_OPTIONS.some((o) => o.label === shift) && (
-                    <SelectItem value={shift}>{shift}</SelectItem>
-                  )}
+                {shift && !shifts.some((s) => s.name === shift) && (
+                  <SelectItem value={shift}>{shift}</SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>

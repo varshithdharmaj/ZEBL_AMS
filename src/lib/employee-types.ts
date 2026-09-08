@@ -1,6 +1,17 @@
 export const EMPLOYEE_STATUSES = ["Active", "Inactive", "Resigned", "Terminated"] as const;
 export type EmployeeStatus = (typeof EMPLOYEE_STATUSES)[number];
 
+export const DEPARTMENTS = [
+  "Medical Coding",
+  "Billing & Collections",
+  "Accounts Receivable (AR)",
+  "Client Operations",
+  "Software Engineering",
+  "HR & Talent",
+  "Finance & Compliance",
+] as const;
+export type Department = (typeof DEPARTMENTS)[number];
+
 export function isValidEmployeeStatus(value: string): value is EmployeeStatus {
   return EMPLOYEE_STATUSES.includes(value as EmployeeStatus);
 }
