@@ -154,7 +154,7 @@ describe("Approval Center façade", () => {
       const cases = await listApprovalCenterCases(session, "leave");
       expect(cases).toHaveLength(1);
       expect(cases[0]?.caseId).toBe("leave:1");
-      expect(cases[0]?.stepLabel).toBe("Manager");
+      expect(cases[0]?.stepLabel).toBe("Department Head");
     });
   });
 
