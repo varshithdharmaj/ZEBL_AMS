@@ -23,6 +23,7 @@ export function LeaveBalancesTab({
 }) {
   const [state, formAction, pending] = useActionState(adjustLeaveBalanceAction, initialState);
   const [leaveType, setLeaveType] = useState("CL");
+  const [mode, setMode] = useState<"delta" | "set">("delta");
   const [syncing, setSyncing] = useState(false);
 
   async function handleSync() {
@@ -46,12 +47,36 @@ export function LeaveBalancesTab({
         <form action={formAction} className="max-w-md space-y-4">
           <input type="hidden" name="employeeId" value={employeeId} />
           <input type="hidden" name="leaveType" value={leaveType} />
+          <input type="hidden" name="mode" value={mode} />
           {state.error && <ErrorAlert message={state.error} />}
           {state.success && (
             <p className="rounded-lg border border-success/20 bg-success-muted px-4 py-3 text-sm text-success">
               {state.success}
             </p>
           )}
+          <div className="space-y-2">
+            <Label>Mode</Label>
+            <div className="inline-flex rounded-lg border border-border p-0.5">
+              <button
+                type="button"
+                onClick={() => setMode("delta")}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  mode === "delta" ? "bg-foreground text-background" : "text-muted-foreground"
+                }`}
+              >
+                Add/Deduct
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("set")}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  mode === "set" ? "bg-foreground text-background" : "text-muted-foreground"
+                }`}
+              >
+                Set to
+              </button>
+            </div>
+          </div>
           <div className="space-y-2">
             <Label>Leave type</Label>
             <Select value={leaveType} onValueChange={setLeaveType}>
@@ -67,10 +92,17 @@ export function LeaveBalancesTab({
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="adjustment">Amount (+ add / − deduct)</Label>
-            <Input id="adjustment" name="adjustment" type="number" step="0.5" required />
-          </div>
+          {mode === "set" ? (
+            <div className="space-y-2">
+              <Label htmlFor="target">New balance</Label>
+              <Input id="target" name="target" type="number" step="0.5" min="0" required />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="adjustment">Amount (+ add / − deduct)</Label>
+              <Input id="adjustment" name="adjustment" type="number" step="0.5" required />
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="note">Reason</Label>
             <Input id="note" name="note" required placeholder="Reason for adjustment" />

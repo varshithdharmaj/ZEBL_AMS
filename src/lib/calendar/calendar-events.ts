@@ -11,12 +11,15 @@ import { mapLeaveToGraphEvent } from "@/lib/calendar/calendar-mapper";
 import type { CalendarSyncResult, LeaveCalendarContext } from "@/lib/calendar/calendar-types";
 import { getIntegrationSettings } from "@/lib/integrations/integration-settings";
 
-async function resolveLeaveContext(leaveRequestId: number): Promise<LeaveCalendarContext | null> {
+async function resolveLeaveContext(
+  leaveRequestId: number
+): Promise<LeaveCalendarContext | null | undefined> {
   const leave = await prisma.leaveRequest.findUnique({
     where: { id: leaveRequestId },
     include: { employee: { include: { user: true } } },
   });
-  if (!leave) return null;
+  // undefined = leave request no longer exists; null = exists but unusable (e.g. no email)
+  if (!leave) return undefined;
 
   const email =
     leave.employee.user?.email ??
@@ -44,7 +47,7 @@ async function updateLeaveCalendarState(
     error?: string;
   }
 ) {
-  await prisma.leaveRequest.update({
+  const updated = await prisma.leaveRequest.updateMany({
     where: { id: leaveRequestId },
     data: {
       externalCalendarEventId: data.externalCalendarEventId ?? undefined,
@@ -52,6 +55,11 @@ async function updateLeaveCalendarState(
       calendarLastSyncedAt: new Date(),
     },
   });
+  if (updated.count === 0) {
+    // Leave request no longer exists (e.g. deleted after the job was queued) -
+    // nothing to update, but still audit that the job resolved.
+    return;
+  }
 
   await writeAuditLog({
     entityType: "leave_request",
@@ -83,6 +91,10 @@ export async function syncApprovedLeaveToCalendar(
   }
 
   const ctx = await resolveLeaveContext(leaveRequestId);
+  if (ctx === undefined) {
+    // Leave request was deleted after this job was queued - nothing to sync.
+    return { success: true, operation: "create", status: CalendarSyncStatus.skipped };
+  }
   if (!ctx) {
     await updateLeaveCalendarState(leaveRequestId, {
       calendarSyncStatus: CalendarSyncStatus.failed,
