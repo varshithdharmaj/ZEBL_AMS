@@ -16,7 +16,7 @@ export const uploadDocumentSchema = uploadDocumentMetaSchema;
 
 export const renameDocumentSchema = z.object({
   id: z.string().trim().min(1, "Document ID is required."),
-  fileName: z.string().trim().min(1, "File name must be at least 1 character."),
+  fileName: z.string().trim().min(1, "File name is required."),
 });
 
 export const documentIdSchema = z.object({

@@ -3,12 +3,13 @@
 import { revalidatePath } from "next/cache";
 import {
   adminAdjustLeaveBalance,
+  adminSetLeaveBalance,
   getLeaveBalanceSummaries,
   getLeaveBalanceSummariesForEmployees,
   getLeaveTransactionHistory,
   processPendingLeaveAccruals,
 } from "@/lib/leave";
-import { adminAdjustElBalance } from "@/lib/leave/el-fifo";
+import { adminAdjustElBalance, adminSetElBalance } from "@/lib/leave/el-fifo";
 import { runElAccrualForEmployeeId } from "@/lib/leave/el-accrual-engine";
 import { isValidLeaveType } from "@/lib/leave-types";
 import { prisma } from "@/lib/prisma";
@@ -30,13 +31,45 @@ export async function adjustLeaveBalanceAction(
 
     const employeeId = parseInt(String(formData.get("employeeId")), 10);
     const leaveType = String(formData.get("leaveType") ?? "").trim();
-    const adjustment = parseFloat(String(formData.get("adjustment")));
+    const mode = String(formData.get("mode") ?? "delta").trim();
     const reason = String(formData.get("note") ?? formData.get("reason") ?? "").trim();
 
     if (!employeeId || !isValidLeaveType(leaveType)) {
       return { error: "Invalid employee or leave type." };
     }
 
+    if (mode === "set") {
+      const target = parseFloat(String(formData.get("target")));
+      if (Number.isNaN(target) || target < 0) {
+        return { error: "Enter a valid non-negative balance." };
+      }
+
+      const result =
+        leaveType === "EL"
+          ? await adminSetElBalance({
+              employeeId,
+              targetBalance: target,
+              reason: reason || "Manual HR correction",
+              createdBy: session.email,
+            })
+          : await adminSetLeaveBalance({
+              employeeId,
+              leaveType,
+              targetBalance: target,
+              reason: reason || "Manual HR correction",
+              createdBy: session.email,
+            });
+
+      revalidatePath("/admin/leaves");
+      revalidatePath(`/admin/employees/${employeeId}`);
+      revalidatePath("/employee/leaves");
+      revalidatePath("/employee/dashboard");
+      return result.skipped
+        ? { success: `${leaveType} is already ${target} — no change.` }
+        : { success: `${leaveType} set to ${target}.` };
+    }
+
+    const adjustment = parseFloat(String(formData.get("adjustment")));
     if (Number.isNaN(adjustment) || adjustment === 0) {
       return { error: "Enter a non-zero adjustment (+ add / − deduct)." };
     }

@@ -28,10 +28,7 @@ export function ActiveSessionsList({
 
   if (rows.length === 0) {
     return (
-      <EmptyState
-        title="No active sessions"
-        description="There are no devices currently signed in."
-      />
+      <EmptyState title="No active sessions" />
     );
   }
 

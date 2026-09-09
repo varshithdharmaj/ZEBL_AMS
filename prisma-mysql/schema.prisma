@@ -431,6 +431,10 @@ model AttendanceRecord {
   overtimeMinutes Int                 @default(0) @map("overtime_minutes")
   status          String
   remarks         String?
+  /// True when `remarks` is an internal/technical tag written by an ingestion or
+  /// derivation pipeline (e.g. "Biometric Device Ingestion", "Live check-in") rather
+  /// than a human-authored note — such remarks must never be shown to the employee.
+  remarksSystemGenerated Boolean      @default(false) @map("remarks_system_generated")
   createdAt       DateTime            @db.DateTime(3) @default(now()) @map("created_at")
   updatedAt       DateTime            @db.DateTime(3) @updatedAt @map("updated_at")
   sessions        AttendanceSession[]
@@ -529,6 +533,7 @@ model LeaveRequest {
   startDate               DateTime             @db.DateTime(3) @map("start_date")
   endDate                 DateTime             @db.DateTime(3) @map("end_date")
   days                    Float                @default(0)
+  lopDays                 Float                @default(0) @map("lop_days")
   reason                  String
   status                  LeaveRequestStatus   @default(pending)
   workflowStatus          LeaveWorkflowStatus  @default(pending_approval) @map("workflow_status")
@@ -568,7 +573,7 @@ model LeaveApprovalStep {
   approverRole    ApproverRole       @map("approver_role")
   status          ApprovalStepStatus @default(pending)
   actedAt         DateTime?          @db.DateTime(3) @map("acted_at")
-  actedByUserId   String?            @map("acted_by_user_id") @db.VarChar(30)
+  actedByUserId   String?            @map("acted_by_user_id")
   comment         String?
   createdAt       DateTime           @db.DateTime(3) @default(now()) @map("created_at")
   updatedAt       DateTime           @db.DateTime(3) @updatedAt @map("updated_at")
@@ -587,7 +592,7 @@ model ApprovalToken {
   approvalStepId Int                 @map("approval_step_id")
   approvalStep   LeaveApprovalStep   @relation(fields: [approvalStepId], references: [id], onDelete: Cascade)
   approverId     Int?                @map("approver_id")
-  approverUserId String?             @map("approver_user_id") @db.VarChar(30)
+  approverUserId String?             @map("approver_user_id")
   action         ApprovalTokenAction
   tokenHash      String              @unique @map("token_hash")
   status         ApprovalTokenStatus @default(active)
@@ -620,18 +625,20 @@ model EmployeeLeaveBalance {
 }
 
 model LeaveTransaction {
-  id              Int           @id @default(autoincrement())
-  employeeId      Int           @map("employee_id")
-  employee        Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  leaveType       String        @map("leave_type")
-  transactionType String        @map("transaction_type")
+  id              Int                      @id @default(autoincrement())
+  employeeId      Int                      @map("employee_id")
+  employee        Employee                 @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType       String                   @map("leave_type")
+  transactionType String                   @map("transaction_type")
   amount          Float
   reason          String?
-  createdBy       String?       @map("created_by")
-  leaveRequestId  Int?          @map("leave_request_id")
-  elAccrualLotId  Int?          @map("el_accrual_lot_id")
-  elAccrualLot    ElAccrualLot? @relation(fields: [elAccrualLotId], references: [id])
-  createdAt       DateTime      @db.DateTime(3) @default(now()) @map("created_at")
+  createdBy       String?                  @map("created_by")
+  leaveRequestId  Int?                     @map("leave_request_id")
+  elAccrualLotId  Int?                     @map("el_accrual_lot_id")
+  elAccrualLot    ElAccrualLot?            @relation(fields: [elAccrualLotId], references: [id])
+  importBatchId   Int?                     @map("import_batch_id")
+  importBatch     LeaveBalanceImportBatch? @relation(fields: [importBatchId], references: [id])
+  createdAt       DateTime                 @db.DateTime(3) @default(now()) @map("created_at")
 
   /// MySQL-only. Populated by a VIRTUAL GENERATED column added in
   /// prisma-mysql/manual-migrations/0001_virtual_columns.sql:
@@ -645,6 +652,7 @@ model LeaveTransaction {
   @@unique([leaveRequestId, transactionType])
   @@index([employeeId, leaveType])
   @@index([elAccrualLotId])
+  @@index([importBatchId])
   /// (leave_request_id, transaction_type) is now a plain @@unique above:
   /// MySQL (like Postgres) treats every NULL as distinct in a unique index,
   /// so rows with leave_request_id = NULL never collide — no partial-index
@@ -654,6 +662,25 @@ model LeaveTransaction {
   /// same way (the condition depends on transaction_type, not nullability of
   /// a key column) — that one is systemAccrualKey above.
   @@map("leave_transactions")
+}
+
+/// One row per HR bulk "opening balance" migration run (e.g. importing legacy
+/// Excel-tracked leave balances). Every LeaveTransaction written by that run
+/// links back here via importBatchId, so a whole migration can be audited or
+/// investigated as a unit rather than only by loosely matching timestamp/reason text.
+model LeaveBalanceImportBatch {
+  id           Int      @id @default(autoincrement())
+  fileName     String   @map("file_name")
+  totalRows    Int      @map("total_rows")
+  appliedCount Int      @default(0) @map("applied_count")
+  skippedCount Int      @default(0) @map("skipped_count")
+  errorCount   Int      @default(0) @map("error_count")
+  createdBy    String   @map("created_by")
+  createdAt    DateTime @db.DateTime(3) @default(now()) @map("created_at")
+
+  transactions LeaveTransaction[]
+
+  @@map("leave_balance_import_batches")
 }
 
 /// Global, single-row (id fixed at 1) Leave Settings configuration for the
@@ -746,6 +773,25 @@ model Holiday {
   createdAt   DateTime @db.DateTime(3) @default(now()) @map("created_at")
 
   @@map("holidays")
+}
+
+/// Shift master data, configured by Super Admin. `Employee.shift` stores the
+/// assigned shift's `name` as free text (no FK) — deactivating or renaming a
+/// shift here does not retroactively touch existing employee assignments.
+model Shift {
+  id                  Int      @id @default(autoincrement())
+  name                String   @unique
+  /// 24h "HH:mm" local time
+  startTime           String   @map("start_time")
+  /// 24h "HH:mm" local time
+  endTime             String   @map("end_time")
+  graceMinutes        Int      @default(0) @map("grace_minutes")
+  expectedWorkMinutes Int      @default(480) @map("expected_work_minutes")
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @db.DateTime(3) @default(now()) @map("created_at")
+  updatedAt           DateTime @db.DateTime(3) @updatedAt @map("updated_at")
+
+  @@map("shifts")
 }
 
 model Notification {
@@ -1015,6 +1061,7 @@ model PayrollAttendanceSummary {
   shortfallMinutes     Int               @default(0) @map("shortfall_minutes")
   otMinutes            Int               @default(0) @map("ot_minutes")
   leaveDays            Float             @default(0) @map("leave_days")
+  lopDays              Float             @default(0) @map("lop_days")
   absentDays           Int               @default(0) @map("absent_days")
   lateCount            Int               @default(0) @map("late_count")
   recommendedDeduction String?           @map("recommended_deduction")
@@ -1817,7 +1864,7 @@ model CandidateChatMessage {
   authorUserId   String    @map("author_user_id") @db.VarChar(30)
   author         User      @relation("CandidateChatAuthor", fields: [authorUserId], references: [id], onDelete: Cascade)
   isPinned       Boolean   @default(false) @map("is_pinned")
-  promotedNoteId String?   @map("promoted_note_id") @db.VarChar(30)
+  promotedNoteId String?   @map("promoted_note_id")
   createdAt      DateTime  @db.DateTime(3) @default(now()) @map("created_at")
   deletedAt      DateTime? @db.DateTime(3) @map("deleted_at")
 
@@ -1853,7 +1900,7 @@ model TalentPoolEntry {
   candidateId         String    @map("candidate_id") @db.VarChar(30)
   candidate           Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   reason              String?
-  sourceApplicationId String?   @map("source_application_id") @db.VarChar(30)
+  sourceApplicationId String?   @map("source_application_id")
   enteredAt           DateTime  @db.DateTime(3) @default(now()) @map("entered_at")
   exitedAt            DateTime? @db.DateTime(3) @map("exited_at")
   createdByUserId     String?   @map("created_by_user_id") @db.VarChar(30)
@@ -1875,7 +1922,7 @@ model CandidateAiInsight {
   confidence       Float?
   modelId          String?         @map("model_id")
   createdByUserId  String?         @map("created_by_user_id") @db.VarChar(30)
-  reviewedByUserId String?         @map("reviewed_by_user_id") @db.VarChar(30)
+  reviewedByUserId String?         @map("reviewed_by_user_id")
   reviewedAt       DateTime?       @db.DateTime(3) @map("reviewed_at")
   createdAt        DateTime        @db.DateTime(3) @default(now()) @map("created_at")
 
@@ -1899,7 +1946,7 @@ model IntakeItem {
   candidate              Candidate?       @relation(fields: [candidateId], references: [id], onDelete: SetNull)
   jobOpeningId           String?          @map("job_opening_id") @db.VarChar(30)
   jobOpening             JobOpening?      @relation(fields: [jobOpeningId], references: [id], onDelete: SetNull)
-  duplicateOfCandidateId String?          @map("duplicate_of_candidate_id") @db.VarChar(30)
+  duplicateOfCandidateId String?          @map("duplicate_of_candidate_id")
   duplicateConfidence    Float?           @map("duplicate_confidence")
   errorMessage           String?          @map("error_message")
   createdByUserId        String?          @map("created_by_user_id") @db.VarChar(30)
@@ -1973,12 +2020,12 @@ model PublicApplicationSubmission {
 
   // --- Dedup signal (mirrors IntakeItem's duplicate fields; kept separate
   // per PublicApplicationSubmission not being IntakeItem) ---
-  duplicateOfCandidateId String? @map("duplicate_of_candidate_id") @db.VarChar(30)
+  duplicateOfCandidateId String? @map("duplicate_of_candidate_id")
   duplicateConfidence    Float?  @map("duplicate_confidence")
 
   // --- Resolution outcome (set only at successful submit) ---
-  resolvedCandidateId   String? @map("resolved_candidate_id") @db.VarChar(30)
-  resolvedApplicationId String? @map("resolved_application_id") @db.VarChar(30)
+  resolvedCandidateId   String? @map("resolved_candidate_id")
+  resolvedApplicationId String? @map("resolved_application_id")
   referenceCode         String? @map("reference_code")
 
   // --- Token/lifecycle (signature itself is never stored — see token-service.ts) ---
@@ -2244,8 +2291,8 @@ model Offer {
 
   // Offer letter generation & delivery
   letterGeneratedAt       DateTime? @db.DateTime(3) @map("letter_generated_at")
-  letterGeneratedByUserId String?   @map("letter_generated_by_user_id") @db.VarChar(30)
-  letterSentByUserId      String?   @map("letter_sent_by_user_id") @db.VarChar(30)
+  letterGeneratedByUserId String?   @map("letter_generated_by_user_id")
+  letterSentByUserId      String?   @map("letter_sent_by_user_id")
 
   revisions          OfferRevision[]
   conversionSnapshot EmployeeConversionSnapshot?

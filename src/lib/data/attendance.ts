@@ -7,6 +7,7 @@ import { aggregateAttendanceForRange } from "@/lib/attendance/aggregate-range";
 import { classifyAttendanceRecords, dateSpanOf } from "@/lib/attendance/history-classification";
 import { totalBreakMinutesFromSessions } from "@/lib/attendance/session-duration";
 import { getEmployeeAttendanceRecordsForRange } from "@/lib/attendance/employee-attendance-year-cache";
+import { getShiftMap, isLateCheckIn } from "@/lib/attendance/shift-lookup";
 import {
   startOfDay,
   endOfDay,
@@ -55,7 +56,7 @@ export async function getEmployeeDashboardData(
         attendanceDate: { gte: selectedDate, lt: dayEndExclusive },
       },
       include: {
-        sessions: { orderBy: [{ checkIn: "asc" }, { id: "asc" }] },
+        sessions: { orderBy: [{ id: "asc" }] },
       },
     }),
     // Year-cached range load — shares DB work with YTD heatmap in the same request.
@@ -145,6 +146,9 @@ export async function getEmployeeAttendanceSummary(
     },
     orderBy: { attendanceDate: "desc" },
     take: RANGE_RECORD_LIMIT,
+    include: {
+      sessions: { orderBy: [{ id: "asc" }] },
+    },
   });
 
   const classifiedRecords = await classifyAttendanceRecords(
@@ -168,6 +172,7 @@ export async function getEmployeeAttendanceSummary(
     shortHoursCount: aggregate.shortHoursCount,
     insufficientDataCount: aggregate.insufficientDataCount,
     overtimeMinutes: aggregate.overtimeMinutes,
+    breakMinutes: aggregate.breakMinutes,
     attendancePercent: aggregate.attendancePercent,
     lastAttendanceDate: lastRecord?.attendanceDate ?? null,
     records: classifiedRecords,
@@ -247,12 +252,10 @@ export async function getAttendanceRecords(params: {
   }
 
   if (params.late) {
-    where.OR = [
-      { remarks: { contains: "late", mode: "insensitive" } },
-      {
-        AND: [{ status: "Short Hours" }, { checkIn: { not: null } }],
-      },
-    ];
+    // Real filtering happens after fetch (see below) using each employee's assigned
+    // shift's start time + grace period — this DB-level clause only narrows the
+    // candidate set to rows that could possibly be late.
+    where.checkIn = { not: null };
   }
 
   if (params.earlyExit) {
@@ -286,35 +289,62 @@ export async function getAttendanceRecords(params: {
         ? [{ workedMinutes: sortDir }, { attendanceDate: "desc" }]
         : [{ attendanceDate: sortDir }, { employee: { name: "asc" } }];
 
-  const [records, total] = await Promise.all([
-    prisma.attendanceRecord.findMany({
-      where,
-      include: {
-        employee: {
-          select: {
-            id: true,
-            name: true,
-            employeeCode: true,
-            department: true,
-            designation: true,
-            shift: true,
-          },
-        },
+  const include = {
+    employee: {
+      select: {
+        id: true,
+        name: true,
+        employeeCode: true,
+        department: true,
+        designation: true,
+        shift: true,
       },
-      orderBy,
-      skip,
-      take: pageSize,
-    }),
-    prisma.attendanceRecord.count({ where }),
+    },
+    activeRegularization: {
+      select: {
+        snapshotBefore: true,
+        reason: true,
+        reviewComment: true,
+        requestType: true,
+        requestedCheckIn: true,
+        requestedCheckOut: true,
+        reviewedAt: true,
+      },
+    },
+  } satisfies Prisma.AttendanceRecordInclude;
+
+  if (!params.late) {
+    const [records, total] = await Promise.all([
+      prisma.attendanceRecord.findMany({ where, include, orderBy, skip, take: pageSize }),
+      prisma.attendanceRecord.count({ where }),
+    ]);
+
+    return { records, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+  }
+
+  // Real late detection is per-employee (their assigned shift's start + grace), which
+  // Prisma can't express as a single WHERE clause across a varying threshold — so the
+  // DB query above only narrows to rows with a check-in, and filtering happens here.
+  // Bounded by whatever date/period filter the caller already applied upstream.
+  const [candidates, shiftMap] = await Promise.all([
+    prisma.attendanceRecord.findMany({ where, include, orderBy, take: 5000 }),
+    getShiftMap(),
   ]);
 
-  return {
-    records,
-    total,
-    page,
-    pageSize,
-    totalPages: Math.ceil(total / pageSize),
-  };
+  const lateRecords = candidates.filter((record) => {
+    const shift = record.employee.shift ? shiftMap.get(record.employee.shift) ?? null : null;
+    if (shift) return isLateCheckIn(record.checkIn, shift);
+    // No shift assigned — fall back to the old approximate signal.
+    return (
+      (record.remarks?.toLowerCase().includes("late") ?? false) ||
+      (record.status === "Short Hours" && record.checkIn != null)
+    );
+  });
+
+  const total = lateRecords.length;
+  const records = lateRecords.slice(skip, skip + pageSize);
+
+  return { records, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
 }
 
 export async function getEmployeeAttendanceHistory(
@@ -343,7 +373,18 @@ export async function getEmployeeAttendanceHistory(
       skip,
       take: PAGE_SIZE,
       include: {
-        sessions: { orderBy: [{ checkIn: "asc" }, { id: "asc" }] },
+        sessions: { orderBy: [{ id: "asc" }] },
+        activeRegularization: {
+          select: {
+            reason: true,
+            reviewComment: true,
+            requestType: true,
+            requestedCheckIn: true,
+            requestedCheckOut: true,
+            snapshotBefore: true,
+            reviewedAt: true,
+          },
+        },
       },
     }),
     prisma.attendanceRecord.count({ where }),

@@ -39,6 +39,7 @@ describe("aggregateAttendanceForRange — empty range", () => {
       shortHoursCount: 0,
       insufficientDataCount: 0,
       overtimeMinutes: 0,
+      breakMinutes: 0,
       attendancePercent: 0,
     });
   });

@@ -204,7 +204,7 @@ export async function submitRegularizationRequest(params: {
 
   const record = await prisma.attendanceRecord.findUnique({
     where: { employeeId_attendanceDate: { employeeId, attendanceDate: dateParts.attendanceDate } },
-    include: { sessions: { orderBy: [{ checkIn: "asc" }, { id: "asc" }] } },
+    include: { sessions: { orderBy: [{ id: "asc" }] } },
   });
   const baseSessions: OverlaySession[] =
     record?.sessions.map((s) => ({ checkIn: s.checkIn, checkOut: s.checkOut })) ?? [];

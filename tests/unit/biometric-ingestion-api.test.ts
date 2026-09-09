@@ -15,6 +15,10 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     employee: {
       findMany: vi.fn(),
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
+    shift: {
+      findMany: vi.fn().mockResolvedValue([]),
     },
     biometricPunch: {
       findMany: vi.fn(),

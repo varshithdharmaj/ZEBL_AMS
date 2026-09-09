@@ -19,6 +19,7 @@ export type AttendanceRangeAggregate = {
   shortHoursCount: number;
   insufficientDataCount: number;
   overtimeMinutes: number;
+  breakMinutes: number;
   attendancePercent: number;
 };
 
@@ -40,6 +41,7 @@ export function aggregateAttendanceForRange(
   ).length;
   const insufficientDataCount = records.filter((r) => r.category === "INSUFFICIENT_DATA").length;
   const overtimeMinutes = records.reduce((sum, r) => sum + r.overtimeMinutes, 0);
+  const breakMinutes = records.reduce((sum, r) => sum + r.breakMinutes, 0);
   const attendancePercent = workingDays > 0 ? Math.round((presentDays / workingDays) * 100) : 0;
 
   return {
@@ -49,13 +51,15 @@ export function aggregateAttendanceForRange(
     shortHoursCount,
     insufficientDataCount,
     overtimeMinutes,
+    breakMinutes,
     attendancePercent,
   };
 }
 
 /** Invariant helper for tests: Present partitions into Excellent + Short hours —
- *  holds for fully checked-out days; a still-open (in-progress) present day is
- *  intentionally excluded from both buckets, so it won't hold if one is present. */
+ *  holds for fully checked-out days; a still-open (in-progress) present day, or a
+ *  REGULARISED day (HR-approved, deliberately never tiered short/excellent), is
+ *  intentionally excluded from both buckets, so it won't hold if either is present. */
 export function assertPresentPartition(aggregate: AttendanceRangeAggregate): boolean {
   return aggregate.presentDays === aggregate.excellentDays + aggregate.shortHoursCount;
 }

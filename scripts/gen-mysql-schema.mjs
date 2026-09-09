@@ -9,6 +9,19 @@ const OUT = "prisma-mysql/schema.prisma";
 const src = fs.readFileSync(SRC, "utf8").replace(/\r\n/g, "\n");
 const lines = src.split("\n");
 
+// Names that are genuinely FK scalars (appear in some `@relation(fields: [...])`
+// elsewhere in the schema) — as opposed to a field that merely happens to be
+// named "*Id" (correlationId, tenantId, credentialId, modelId, threadId,
+// microsoftTenantId, externalCalendarEventId, polymorphic entityId, ...),
+// which must NOT be capped at VarChar(30) since those hold external/free-form
+// identifiers that can exceed it.
+const fkFieldNames = new Set();
+for (const m of src.matchAll(/fields:\s*\[([^\]]*)\]/g)) {
+  for (const name of m[1].split(",").map((s) => s.trim()).filter(Boolean)) {
+    fkFieldNames.add(name);
+  }
+}
+
 const out = [];
 let inDatasource = false;
 let inGeneratorClient = false;
@@ -72,9 +85,18 @@ for (let i = 0; i < lines.length; i++) {
       line = `${indent}${name}${gap1}${type}${gap2}${rest} @db.VarChar(30)`.trimEnd();
     }
 
-    // String foreign-key columns (camelCase name ending in "Id") -> @db.VarChar(30)
-    // so FK column definitions line up with the VarChar(30) cuid PKs above.
-    else if ((type === "String" || type === "String?") && /Id$/.test(name) && !rest.includes("@db.")) {
+    // String foreign-key columns (name referenced by some @relation(fields: [...]))
+    // -> @db.VarChar(30) so FK column definitions line up with the VarChar(30)
+    // cuid PKs above. Deliberately NOT just "name ends in Id" — plenty of
+    // fields are named "*Id" without being an internal cuid FK (correlationId,
+    // tenantId, credentialId, modelId, threadId, microsoftTenantId,
+    // externalCalendarEventId, polymorphic entityId, ...) and capping those at
+    // 30 chars would silently truncate/reject legitimate external identifiers.
+    else if (
+      (type === "String" || type === "String?") &&
+      fkFieldNames.has(name) &&
+      !rest.includes("@db.")
+    ) {
       line = `${indent}${name}${gap1}${type}${gap2}${rest} @db.VarChar(30)`.trimEnd();
     }
 

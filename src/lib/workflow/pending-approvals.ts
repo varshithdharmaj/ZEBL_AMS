@@ -9,6 +9,7 @@ const pendingLeaveSelect = {
   id: true,
   leaveType: true,
   days: true,
+  lopDays: true,
   startDate: true,
   endDate: true,
   employeeId: true,

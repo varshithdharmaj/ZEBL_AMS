@@ -23,7 +23,7 @@ export function validateComposeForm(
       return { ok: false, error: "Recipient email is required." };
     }
     if (!EMAIL_RE.test(form.recipientEmail.trim())) {
-      return { ok: false, error: "Recipient email is invalid." };
+      return { ok: false, error: "Invalid recipient email." };
     }
   }
 

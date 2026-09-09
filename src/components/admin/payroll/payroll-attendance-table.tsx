@@ -27,6 +27,7 @@ export type PayrollTableRow = {
   shortfallMinutes: number;
   otMinutes: number;
   leaveDays: number;
+  lopDays: number;
   absentDays: number;
   lateCount: number;
   recommendedDeduction: string | null;
@@ -108,6 +109,7 @@ export function PayrollAttendanceTable({ rows }: { rows: PayrollTableRow[] }) {
         "Shortfall",
         "OT",
         "Leave",
+        "LOP",
         "Absent",
         "Late",
         "Recommended",
@@ -116,7 +118,7 @@ export function PayrollAttendanceTable({ rows }: { rows: PayrollTableRow[] }) {
     >
       {rows.length === 0 ? (
         <DataTableRow>
-          <DataTableCell colSpan={12} className="py-12 text-center text-sm text-slate-500">
+          <DataTableCell colSpan={13} className="py-12 text-center text-sm text-slate-500">
             No payroll summaries match your selected period and filters.
           </DataTableCell>
         </DataTableRow>
@@ -156,6 +158,13 @@ export function PayrollAttendanceTable({ rows }: { rows: PayrollTableRow[] }) {
               )}
             </DataTableCell>
             <DataTableCell className="tabular-nums font-medium text-slate-700 align-top">{row.leaveDays}</DataTableCell>
+            <DataTableCell className="tabular-nums align-top">
+              {row.lopDays > 0 ? (
+                <span className="font-bold text-rose-600">{row.lopDays}</span>
+              ) : (
+                <span className="text-slate-400">0</span>
+              )}
+            </DataTableCell>
             <DataTableCell className="tabular-nums align-top">
               {row.absentDays > 0 ? (
                 <span className="font-bold text-rose-600">{row.absentDays}</span>

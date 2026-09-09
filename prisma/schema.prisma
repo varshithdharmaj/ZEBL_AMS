@@ -425,6 +425,10 @@ model AttendanceRecord {
   overtimeMinutes Int                 @default(0) @map("overtime_minutes")
   status          String
   remarks         String?
+  /// True when `remarks` is an internal/technical tag written by an ingestion or
+  /// derivation pipeline (e.g. "Biometric Device Ingestion", "Live check-in") rather
+  /// than a human-authored note — such remarks must never be shown to the employee.
+  remarksSystemGenerated Boolean      @default(false) @map("remarks_system_generated")
   createdAt       DateTime            @default(now()) @map("created_at")
   updatedAt       DateTime            @updatedAt @map("updated_at")
   sessions        AttendanceSession[]
@@ -512,6 +516,7 @@ model LeaveRequest {
   startDate               DateTime             @map("start_date")
   endDate                 DateTime             @map("end_date")
   days                    Float                @default(0)
+  lopDays                 Float                @default(0) @map("lop_days")
   reason                  String
   status                  LeaveRequestStatus   @default(pending)
   workflowStatus          LeaveWorkflowStatus  @default(pending_approval) @map("workflow_status")
@@ -603,27 +608,49 @@ model EmployeeLeaveBalance {
 }
 
 model LeaveTransaction {
-  id              Int           @id @default(autoincrement())
-  employeeId      Int           @map("employee_id")
-  employee        Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  leaveType       String        @map("leave_type")
-  transactionType String        @map("transaction_type")
+  id              Int                      @id @default(autoincrement())
+  employeeId      Int                      @map("employee_id")
+  employee        Employee                 @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType       String                   @map("leave_type")
+  transactionType String                   @map("transaction_type")
   amount          Float
   reason          String?
-  createdBy       String?       @map("created_by")
-  leaveRequestId  Int?          @map("leave_request_id")
-  elAccrualLotId  Int?          @map("el_accrual_lot_id")
-  elAccrualLot    ElAccrualLot? @relation(fields: [elAccrualLotId], references: [id])
-  createdAt       DateTime      @default(now()) @map("created_at")
+  createdBy       String?                  @map("created_by")
+  leaveRequestId  Int?                     @map("leave_request_id")
+  elAccrualLotId  Int?                     @map("el_accrual_lot_id")
+  elAccrualLot    ElAccrualLot?            @relation(fields: [elAccrualLotId], references: [id])
+  importBatchId   Int?                     @map("import_batch_id")
+  importBatch     LeaveBalanceImportBatch? @relation(fields: [importBatchId], references: [id])
+  createdAt       DateTime                 @default(now()) @map("created_at")
 
   @@index([employeeId, leaveType])
   @@index([elAccrualLotId])
+  @@index([importBatchId])
   /// Partial uniques (Postgres migration — Prisma has no partial-unique DSL):
   /// - (leave_request_id, transaction_type) WHERE leave_request_id IS NOT NULL
   ///   → at most one deduction and one cancel-restore accrual per leave request
   /// - (employee_id, reason) WHERE transaction_type = 'accrual' AND leave_request_id IS NULL AND reason IS NOT NULL
   ///   → idempotent system accruals (CL/SL yearly, EL monthly)
   @@map("leave_transactions")
+}
+
+/// One row per HR bulk "opening balance" migration run (e.g. importing legacy
+/// Excel-tracked leave balances). Every LeaveTransaction written by that run
+/// links back here via importBatchId, so a whole migration can be audited or
+/// investigated as a unit rather than only by loosely matching timestamp/reason text.
+model LeaveBalanceImportBatch {
+  id           Int      @id @default(autoincrement())
+  fileName     String   @map("file_name")
+  totalRows    Int      @map("total_rows")
+  appliedCount Int      @default(0) @map("applied_count")
+  skippedCount Int      @default(0) @map("skipped_count")
+  errorCount   Int      @default(0) @map("error_count")
+  createdBy    String   @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  transactions LeaveTransaction[]
+
+  @@map("leave_balance_import_batches")
 }
 
 /// Global, single-row (id fixed at 1) Leave Settings configuration for the
@@ -716,6 +743,25 @@ model Holiday {
   createdAt   DateTime @default(now()) @map("created_at")
 
   @@map("holidays")
+}
+
+/// Shift master data, configured by Super Admin. `Employee.shift` stores the
+/// assigned shift's `name` as free text (no FK) — deactivating or renaming a
+/// shift here does not retroactively touch existing employee assignments.
+model Shift {
+  id                  Int      @id @default(autoincrement())
+  name                String   @unique
+  /// 24h "HH:mm" local time
+  startTime           String   @map("start_time")
+  /// 24h "HH:mm" local time
+  endTime             String   @map("end_time")
+  graceMinutes        Int      @default(0) @map("grace_minutes")
+  expectedWorkMinutes Int      @default(480) @map("expected_work_minutes")
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("shifts")
 }
 
 model Notification {
@@ -985,6 +1031,7 @@ model PayrollAttendanceSummary {
   shortfallMinutes     Int               @default(0) @map("shortfall_minutes")
   otMinutes            Int               @default(0) @map("ot_minutes")
   leaveDays            Float             @default(0) @map("leave_days")
+  lopDays              Float             @default(0) @map("lop_days")
   absentDays           Int               @default(0) @map("absent_days")
   lateCount            Int               @default(0) @map("late_count")
   recommendedDeduction String?           @map("recommended_deduction")

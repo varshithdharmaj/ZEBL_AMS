@@ -38,12 +38,14 @@ async function recomputePayrollSummariesForPeriodImpl(period: PayrollPeriod): Pr
       startDate: { lte: period.end },
       endDate: { gte: period.start },
     },
-    select: { employeeId: true, days: true },
+    select: { employeeId: true, days: true, lopDays: true },
   });
 
   const leaveDaysMap = new Map<number, number>();
+  const lopDaysMap = new Map<number, number>();
   for (const leave of leaveByEmployee) {
     leaveDaysMap.set(leave.employeeId, (leaveDaysMap.get(leave.employeeId) ?? 0) + leave.days);
+    lopDaysMap.set(leave.employeeId, (lopDaysMap.get(leave.employeeId) ?? 0) + leave.lopDays);
   }
 
   const recordsMap = new Map<number, typeof attendanceByEmployee>();
@@ -63,7 +65,8 @@ async function recomputePayrollSummariesForPeriodImpl(period: PayrollPeriod): Pr
           records,
           settings,
           employee.shift,
-          leaveDaysMap.get(employee.id) ?? 0
+          leaveDaysMap.get(employee.id) ?? 0,
+          lopDaysMap.get(employee.id) ?? 0
         );
 
         await prisma.payrollAttendanceSummary.upsert({
@@ -87,6 +90,7 @@ async function recomputePayrollSummariesForPeriodImpl(period: PayrollPeriod): Pr
             shortfallMinutes: metrics.shortfallMinutes,
             otMinutes: metrics.otMinutes,
             leaveDays: metrics.leaveDays,
+            lopDays: metrics.lopDays,
             absentDays: metrics.absentDays,
             lateCount: metrics.lateCount,
             recommendedDeduction: metrics.recommendedDeduction,

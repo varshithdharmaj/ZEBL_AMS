@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { AppTabs, type TabDef } from "@/components/ui/app-tabs";
 import { AdminLeaveTable } from "@/components/admin/leave-table";
 import { LeaveBalanceManager } from "@/components/admin/leave-balance-manager";
+import { Button } from "@/components/ui/button";
 import type { LeaveBalanceSummary } from "@/lib/leave";
 import { LeaveWorkflowStatus } from "@/generated/prisma/enums";
 import { TableToolbar } from "@/components/ui/table-toolbar";
@@ -16,6 +18,7 @@ type Leave = {
   startDate: Date;
   endDate: Date;
   days: number;
+  lopDays: number;
   reason: string;
   status: string;
   workflowStatus: LeaveWorkflowStatus;
@@ -86,9 +89,14 @@ export function LeaveManagement({
       {active === "requests" && <AdminLeaveTable leaves={leaves} actor={actor} />}
       {active === "balances" && (
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Open an employee profile to adjust balances. All changes are logged.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              Open an employee profile to adjust balances. All changes are logged.
+            </p>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/admin/leaves/import">Bulk import opening balances</Link>
+            </Button>
+          </div>
           <LeaveBalanceManager rows={balanceRows} />
         </div>
       )}

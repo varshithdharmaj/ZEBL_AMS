@@ -18,6 +18,7 @@ export type MyTeamLeaveRequestSummary = {
   startDate: Date;
   endDate: Date;
   days: number;
+  lopDays: number;
   workflowStatus: LeaveWorkflowStatus;
 };
 
@@ -43,6 +44,7 @@ function mapRequest(row: {
   startDate: Date;
   endDate: Date;
   days: number;
+  lopDays: number;
   workflowStatus: LeaveWorkflowStatus;
   employee: { name: string; employeeCode: string };
 }): MyTeamLeaveRequestSummary {
@@ -55,6 +57,7 @@ function mapRequest(row: {
     startDate: row.startDate,
     endDate: row.endDate,
     days: row.days,
+    lopDays: row.lopDays,
     workflowStatus: row.workflowStatus,
   };
 }
@@ -117,6 +120,7 @@ export async function getMyTeamLeaveOverview(
         startDate: true,
         endDate: true,
         days: true,
+        lopDays: true,
         workflowStatus: true,
         employee: { select: { name: true, employeeCode: true } },
       },
@@ -136,6 +140,7 @@ export async function getMyTeamLeaveOverview(
         startDate: true,
         endDate: true,
         days: true,
+        lopDays: true,
         workflowStatus: true,
         employee: { select: { name: true, employeeCode: true } },
       },

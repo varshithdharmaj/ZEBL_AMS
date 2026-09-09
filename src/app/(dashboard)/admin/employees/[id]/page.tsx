@@ -5,6 +5,7 @@ import { EmployeeProfileShell } from "@/components/admin/employee-profile/profil
 import { getEmployeeProfileLeaveData } from "@/actions/leave-balances";
 import { getEmployeeAttendanceSummary, getEmployeeById } from "@/lib/data";
 import { getManagerCandidates } from "@/lib/org";
+import { getActiveShifts } from "@/lib/shifts";
 import { defaultDateRange } from "@/lib/utils";
 import { parseDateRangeQuery } from "@/lib/date-range";
 import type { EmployeeStatus } from "@/lib/employee-types";
@@ -39,7 +40,7 @@ export default async function EmployeeProfilePage({
   const hasRange = Boolean(raw.from || raw.to || raw.start || raw.end || raw.preset);
   const { start: defaultStart, end: defaultEnd } = defaultDateRange();
 
-  const [attendance, leaveData, managerCandidates] = await Promise.all([
+  const [attendance, leaveData, managerCandidates, shifts] = await Promise.all([
     getEmployeeAttendanceSummary(
       id,
       hasRange ? range.from : undefined,
@@ -47,6 +48,7 @@ export default async function EmployeeProfilePage({
     ),
     getEmployeeProfileLeaveData(id),
     getManagerCandidates(id),
+    getActiveShifts(),
   ]);
 
   const [pendingLeaves, approvedLeavesYtd] = await Promise.all([
@@ -109,6 +111,7 @@ export default async function EmployeeProfilePage({
       defaultStart={defaultStart}
       defaultEnd={defaultEnd}
       managerCandidates={managerCandidates}
+      shifts={shifts}
       overviewStats={overviewStats}
       currentUserId={session.id}
       currentUserRole={session.role}

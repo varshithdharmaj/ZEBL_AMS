@@ -60,9 +60,11 @@ export async function recalculateDailyAttendanceTotals(
   attendanceId: number,
   tx: Tx = prisma
 ): Promise<void> {
+  // Ordered by id (= insertion order = true chronological punch order), not checkIn —
+  // a bare "HH:mm" string sorts wrong once a shift day's sessions cross midnight.
   const sessions = await tx.attendanceSession.findMany({
     where: { attendanceId },
-    orderBy: [{ checkIn: "asc" }, { id: "asc" }],
+    orderBy: [{ id: "asc" }],
   });
 
   const completed = sessions.filter((s) => s.checkOut !== null);
@@ -114,6 +116,7 @@ async function getOrCreateTodayRecord(
       overtimeMinutes: 0,
       status: "Absent",
       remarks: "Live check-in",
+      remarksSystemGenerated: true,
     },
     select: { id: true },
   });
@@ -295,7 +298,7 @@ export async function getDaySessionsForEmployee(
       attendanceDate: { gte: dayStart, lt: dayEnd },
     },
     include: {
-      sessions: { orderBy: [{ checkIn: "asc" }, { id: "asc" }] },
+      sessions: { orderBy: [{ id: "asc" }] },
     },
   });
 

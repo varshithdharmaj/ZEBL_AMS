@@ -25,7 +25,8 @@ import { SectionCard } from "@/components/ui/section-card";
 import { DataTable, DataTableRow, DataTableCell } from "@/components/ui/data-table";
 import { ErrorAlert } from "@/components/ui/error-alert";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { EMPLOYEE_STATUSES } from "@/lib/employee-types";
+import { EMPLOYEE_STATUSES, DEPARTMENTS } from "@/lib/employee-types";
+import type { ShiftSummary } from "@/lib/shifts";
 
 type Employee = {
   id: number;
@@ -43,7 +44,13 @@ type Employee = {
 
 const initialState: ActionState = {};
 
-export function EmployeeManagement({ employees }: { employees: Employee[] }) {
+export function EmployeeManagement({
+  employees,
+  shifts,
+}: {
+  employees: Employee[];
+  shifts: ShiftSummary[];
+}) {
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -148,7 +155,7 @@ export function EmployeeManagement({ employees }: { employees: Employee[] }) {
         </div>
       )}
 
-      <CreateEmployeeDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <CreateEmployeeDialog open={createOpen} onOpenChange={setCreateOpen} shifts={shifts} />
     </SectionCard>
   );
 }
@@ -156,12 +163,16 @@ export function EmployeeManagement({ employees }: { employees: Employee[] }) {
 function CreateEmployeeDialog({
   open,
   onOpenChange,
+  shifts,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  shifts: ShiftSummary[];
 }) {
   const [state, formAction, pending] = useActionState(createEmployeeAction, initialState);
   const [status, setStatus] = useState("Active");
+  const [department, setDepartment] = useState<string>(DEPARTMENTS[0]);
+  const [shift, setShift] = useState<string>(shifts[0]?.name ?? "");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -172,6 +183,8 @@ function CreateEmployeeDialog({
         </DialogHeader>
         <form action={formAction} className="space-y-4">
           <input type="hidden" name="employeeStatus" value={status} />
+          <input type="hidden" name="department" value={department} />
+          <input type="hidden" name="shift" value={shift} />
           {state.error && <ErrorAlert message={state.error} />}
           {state.success && (
             <p className="rounded-lg border border-success/20 bg-success-muted px-4 py-3 text-sm text-success">
@@ -215,12 +228,44 @@ function CreateEmployeeDialog({
               <Input id="phone" name="phone" type="tel" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="department">Department</Label>
-              <Input id="department" name="department" />
+              <Label>Department</Label>
+              <Select value={department} onValueChange={setDepartment}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DEPARTMENTS.map((d) => (
+                    <SelectItem key={d} value={d}>
+                      {d}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="designation">Designation</Label>
               <Input id="designation" name="designation" />
+            </div>
+            <div className="space-y-2">
+              <Label>Shift</Label>
+              {shifts.length > 0 ? (
+                <Select value={shift} onValueChange={setShift}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select shift" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {shifts.map((s) => (
+                      <SelectItem key={s.id} value={s.name}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No shifts configured yet — add one under Shift Settings.
+                </p>
+              )}
             </div>
           </div>
           <div className="rounded-xl border border-border bg-muted/30 p-4">

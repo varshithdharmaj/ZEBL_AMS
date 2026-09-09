@@ -4,6 +4,7 @@ import {
   openSessionElapsedMinutes,
   parseTimeToMinutes,
   sessionDurationMinutes,
+  totalBreakMinutesFromSessions,
   totalWorkedMinutesFromSessions,
 } from "@/lib/attendance/session-duration";
 
@@ -67,6 +68,40 @@ describe("parseTimeToMinutes / formatClockTime", () => {
     expect(formatClockTime("12:30")).toBe("12:30 PM");
     expect(formatClockTime("13:30")).toBe("01:30 PM");
     expect(formatClockTime("00:15")).toBe("12:15 AM");
+  });
+});
+
+describe("totalBreakMinutesFromSessions", () => {
+  it("sums gaps between consecutive same-day completed sessions", () => {
+    const total = totalBreakMinutesFromSessions([
+      { checkIn: "09:00", checkOut: "12:30", workedMinutes: 210 },
+      { checkIn: "13:30", checkOut: "17:30", workedMinutes: 240 },
+    ]);
+    expect(total).toBe(60);
+  });
+
+  it("trusts input order rather than re-sorting by checkIn time-of-day — a night shift's second session (e.g. 00:15) legitimately starts numerically before its first (23:50)", () => {
+    // Chronological order: 23:50 in -> 00:30 out (break) -> 01:00 in -> 05:00 out.
+    // A naive sort-by-checkIn would put the 01:00 session before the 23:50 one.
+    const total = totalBreakMinutesFromSessions([
+      { checkIn: "23:50", checkOut: "00:30", workedMinutes: 40 },
+      { checkIn: "01:00", checkOut: "05:00", workedMinutes: 240 },
+    ]);
+    // Break = gap from 00:30 to 01:00 = 30 minutes.
+    expect(total).toBe(30);
+  });
+
+  it("still counts the gap leading into an open (unclosed) trailing session", () => {
+    const total = totalBreakMinutesFromSessions([
+      { checkIn: "09:00", checkOut: "12:00", workedMinutes: 180 },
+      { checkIn: "13:00", checkOut: null, workedMinutes: 0 },
+    ]);
+    expect(total).toBe(60);
+  });
+
+  it("has nothing to sum for a single open session with no session after it", () => {
+    const total = totalBreakMinutesFromSessions([{ checkIn: "09:00", checkOut: null, workedMinutes: 0 }]);
+    expect(total).toBe(0);
   });
 });
 

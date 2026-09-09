@@ -8,7 +8,7 @@ export function getApproverRoleLabel(role: ApproverRole | string): string {
       return "Team Lead";
     case ApproverRole.skip_level_manager:
     case "skip_level_manager":
-      return "Manager";
+      return "Department Head";
     case ApproverRole.hr_admin:
     case "hr_admin":
       return "HR";

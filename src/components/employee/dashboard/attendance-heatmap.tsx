@@ -27,13 +27,14 @@ import {
   CATEGORY_LABEL,
   HEATMAP_COLOR,
   RATIO_TIER_COLOR,
-  RATIO_TIER_LABEL,
+  TIER_TAG_LABEL,
   heatmapCellForeground,
-  isExcellentTier,
 } from "@/lib/attendance/day-labels";
 import {
   buildHeatmapMonthStats,
+  buildHeatmapCycleStats,
   monthKeyFromDate,
+  cycleKeyFromDate,
   type HeatmapMonthStats,
 } from "@/lib/attendance/heatmap-month-stats";
 import { formatAttendanceCycleLabel } from "@/lib/attendance/attendance-cycle";
@@ -45,6 +46,13 @@ const CELL = 26;
 const GAP = 3;
 const STEP = CELL + GAP;
 const MONTH_LABEL_ROW = 18;
+
+/** Weekday rows (0=Sun..6=Sat, top to bottom) whose upward-popping tooltip (the
+ *  default) doesn't reliably fit above the row before hitting the card's own
+ *  clipped edge (SectionCard's overflow-hidden, compounded by the grid's
+ *  overflow-x-auto scroll wrapper implicitly clipping overflow-y too) — a tall
+ *  multi-line tooltip on these rows instead opens downward. */
+const TOOLTIP_FLIP_ROW_COUNT = 2;
 
 // useLayoutEffect warns "does nothing on the server" when it runs during SSR — this
 // component is server-rendered before hydration, so fall back to useEffect there (a
@@ -118,16 +126,25 @@ export function buildTooltipText(
   // report yet, and showing one would misleadingly imply a known outcome.
   if (isFuture) return `${dateLabel} · Upcoming`;
 
+  // CATEGORY_LABEL already reads "Regularised" for this category — the primary status
+  // label needs no special-casing here.
   const parts = [`${dateLabel}`, CATEGORY_LABEL[day.category]];
+  const isRegularised = day.category === "REGULARISED";
 
   if (isWorkedDayCategory(day.category)) {
-    if (day.ratioTier) {
-      parts.push(
-        isExcellentTier(day.ratioTier) ? "Excellent" : "Below target",
-        RATIO_TIER_LABEL[day.ratioTier]
-      );
+    // HR already reviewed and approved this day — never tack on a "Below target" /
+    // "Near target" / short-hours tier tag alongside "Regularised"; the tag would read
+    // as a penalty on a day that was explicitly corrected and signed off.
+    if (day.ratioTier && !isRegularised) {
+      // Exactly one tag per tier — see TIER_TAG_LABEL's own doc comment for why this
+      // must never be combined with a second, possibly-contradictory tier label.
+      parts.push(TIER_TAG_LABEL[day.ratioTier]);
     }
-    parts.push(`Worked: ${minutesToHours(day.workedMinutes)}`);
+    parts.push(
+      isRegularised
+        ? `Worked: ${minutesToHours(day.workedMinutes)} (Regularised)`
+        : `Worked: ${minutesToHours(day.workedMinutes)}`
+    );
     if (expectedWorkMinutes > 0) parts.push(`Expected: ${minutesToHours(expectedWorkMinutes)}`);
     if (day.overtimeMinutes > 0) parts.push(`Overtime: ${minutesToHours(day.overtimeMinutes)}`);
     if (day.checkIn) parts.push(`Check-in: ${day.checkIn}`);
@@ -139,7 +156,13 @@ export function buildTooltipText(
   if (day.category === "LEAVE" && day.leaveType) {
     parts.push(`Leave type: ${day.leaveType}`);
   }
-  if (day.remark) parts.push(`Remarks: ${day.remark}`);
+  // Internal ingestion/derivation tags (e.g. "Biometric Device Ingestion", "Live
+  // check-in") are plumbing, not information for the employee — only a human-authored
+  // remark is ever worth surfacing here.
+  if (day.remark && !day.remarkIsSystemGenerated) parts.push(`Remarks: ${day.remark}`);
+  if (day.category === "INSUFFICIENT_DATA") {
+    parts.push("Reach out to HR if this looks incorrect");
+  }
   if (day.hasLeaveConflict) {
     parts.push("Attendance recorded on an approved leave date.");
   }
@@ -155,6 +178,8 @@ function ContributionCell({
   isFuture,
   dimmed,
   href,
+  groupKey,
+  tooltipBelow,
   onMonthIntent,
 }: {
   day: AttendanceDayResult;
@@ -164,7 +189,13 @@ function ContributionCell({
   isFuture: boolean;
   dimmed: boolean;
   href: string;
-  onMonthIntent: (monthKey: string | null) => void;
+  /** This day's group key under the active hover mode (calendar month or attendance cycle). */
+  groupKey: string;
+  /** True for cells in the top weekday rows, where a multi-line tooltip popping
+   *  upward (the default) doesn't fit before it hits the card's own clipped edge —
+   *  see TOOLTIP_FLIP_ROW_COUNT. */
+  tooltipBelow: boolean;
+  onMonthIntent: (groupKey: string | null) => void;
 }) {
   // Upcoming dates always render as the neutral "empty" swatch — the classifier's
   // category (which may say ABSENT/LEAVE/HOLIDAY) describes a day that hasn't happened.
@@ -174,14 +205,13 @@ function ContributionCell({
     : heatmapCellForeground(isWorkedDayCategory(day.category) ? day.ratioTier : null);
   const tooltip = buildTooltipText(day, expectedWorkMinutes, isFuture);
   const dateNum = day.date.getDate();
-  const monthKey = monthKeyFromDate(day.date);
 
   return (
     <div
       className="group relative"
-      data-month={monthKey}
-      onMouseEnter={() => onMonthIntent(monthKey)}
-      onFocusCapture={() => onMonthIntent(monthKey)}
+      data-month={groupKey}
+      onMouseEnter={() => onMonthIntent(groupKey)}
+      onFocusCapture={() => onMonthIntent(groupKey)}
     >
       <Link
         href={href}
@@ -206,7 +236,10 @@ function ContributionCell({
 
       <div
         role="tooltip"
-        className="pointer-events-none invisible absolute bottom-full left-1/2 z-30 mb-2 w-max max-w-xs -translate-x-1/2 rounded-lg border border-border bg-card px-3 py-2 text-left text-xs text-foreground opacity-0 shadow-elevated transition-opacity group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100"
+        className={cn(
+          "pointer-events-none invisible absolute left-1/2 z-30 w-max max-w-xs -translate-x-1/2 rounded-lg border border-border bg-card px-3 py-2 text-left text-xs text-foreground opacity-0 shadow-elevated transition-opacity group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100",
+          tooltipBelow ? "top-full mt-2" : "bottom-full mb-2"
+        )}
       >
         {tooltip}
       </div>
@@ -516,6 +549,35 @@ function getMonthLabels(weeks: (AttendanceDayResult | null)[][]): { label: strin
   return labels;
 }
 
+function cycleShortLabel(cycleKey: string, includeYear: boolean): string {
+  const [y, m, d] = cycleKey.split("-").map(Number);
+  const date = new Date(y!, (m ?? 1) - 1, d ?? 1);
+  const monthName = date.toLocaleDateString("en-IN", { month: "short" });
+  return includeYear ? `${d} ${monthName} ${y}` : `${d} ${monthName}`;
+}
+
+/** Cycle-mode analogue of getMonthLabels — a cycle's 25th anchor rarely lands on a
+ *  week boundary, so (unlike months) a week can straddle two cycles; scanning every
+ *  day in date order (not just each week's first day) catches the transition wherever
+ *  in the week it actually falls. */
+function getCycleLabels(weeks: (AttendanceDayResult | null)[][]): { label: string; weekIndex: number; monthKey: string }[] {
+  const labels: { label: string; weekIndex: number; monthKey: string }[] = [];
+  let lastCycleKey: string | null = null;
+
+  weeks.forEach((week, weekIndex) => {
+    for (const day of week) {
+      if (!day) continue;
+      const key = cycleKeyFromDate(day.date);
+      if (key !== lastCycleKey) {
+        labels.push({ label: cycleShortLabel(key, labels.length === 0), weekIndex, monthKey: key });
+        lastCycleKey = key;
+      }
+    }
+  });
+
+  return labels;
+}
+
 export function AttendanceHeatmap({ month }: { month: AttendanceHeatmapMonth | null }) {
   const searchParams = useSearchParams();
   const selectedDate = searchParams.get("date");
@@ -523,6 +585,11 @@ export function AttendanceHeatmap({ month }: { month: AttendanceHeatmapMonth | n
 
   const [hoveredMonthKey, setHoveredMonthKey] = useState<string | null>(null);
   const [pinnedMonthKey, setPinnedMonthKey] = useState<string | null>(null);
+  /** Grouping unit for hover/pin/summary: calendar month (default) or 25th-to-25th
+   *  attendance cycle. Switching modes clears any active hover/pin so a key from one
+   *  scheme is never looked up against the other's stats map. */
+  const [groupBy, setGroupBy] = useState<"month" | "cycle">("month");
+  const groupKeyFromDate = groupBy === "month" ? monthKeyFromDate : cycleKeyFromDate;
 
   const activeMonthKey = resolveActiveMonthKey(hoveredMonthKey, pinnedMonthKey);
 
@@ -543,11 +610,20 @@ export function AttendanceHeatmap({ month }: { month: AttendanceHeatmapMonth | n
     return {
       streaks: calculateStreaks(relevantDays, today),
       weeks,
-      monthLabels: getMonthLabels(weeks),
-      monthStats: buildHeatmapMonthStats(relevantDays),
+      monthLabels: groupBy === "month" ? getMonthLabels(weeks) : getCycleLabels(weeks),
+      monthStats: groupBy === "month" ? buildHeatmapMonthStats(relevantDays) : buildHeatmapCycleStats(relevantDays),
       todayMidnight,
     };
-  }, [month, today]);
+  }, [month, today, groupBy]);
+
+  function handleGroupByChange(next: "month" | "cycle") {
+    if (next === groupBy) return;
+    setGroupBy(next);
+    // A hovered/pinned key from one scheme is meaningless against the other's stats
+    // map — start clean rather than showing a stale or mismatched summary.
+    setHoveredMonthKey(null);
+    setPinnedMonthKey(null);
+  }
 
   // Runs once, after layout, to land the viewport on the latest data instead of Jan 1.
   // Guarded by hasSetInitialScroll so later re-renders (hover, pin, selecting a
@@ -581,7 +657,7 @@ export function AttendanceHeatmap({ month }: { month: AttendanceHeatmapMonth | n
   const { streaks, weeks, monthLabels, monthStats, todayMidnight } = derived;
   const { currentStreak, bestStreak, targetDaysCount } = streaks;
   const activeStats = activeMonthKey ? monthStats.get(activeMonthKey) ?? null : null;
-  const currentMonthKey = monthKeyFromDate(today);
+  const currentMonthKey = groupKeyFromDate(today);
   const latestMonthLabel = monthLabels[monthLabels.length - 1] ?? null;
   const summaryStats =
     activeStats ??
@@ -598,9 +674,34 @@ export function AttendanceHeatmap({ month }: { month: AttendanceHeatmapMonth | n
       title="Attendance activity"
       description={`Daily working-hour effectiveness over the current year · current cycle: ${cycleLabel}`}
       action={
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Info className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          <span>Hover a month for summary · click a day to select</span>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Info className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span>Hover a {groupBy === "month" ? "month" : "cycle"} for summary · click a day to select</span>
+          </div>
+          <div
+            role="group"
+            aria-label="Group summary by"
+            className="inline-flex items-center rounded-full border border-border bg-muted/50 p-0.5 text-xs"
+          >
+            {(["month", "cycle"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                aria-pressed={groupBy === option}
+                onClick={() => handleGroupByChange(option)}
+                className={cn(
+                  "rounded-full px-2.5 py-1 font-medium capitalize transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  groupBy === option
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
         </div>
       }
     >
@@ -660,7 +761,15 @@ export function AttendanceHeatmap({ month }: { month: AttendanceHeatmapMonth | n
               </div>
 
               {[0, 1, 2, 3, 4, 5, 6].map((dayIndex) => (
-                <div key={dayIndex} className="relative z-[1] flex items-center gap-[3px]">
+                // hover:z-20/focus-within:z-20 lifts this row's whole stacking context above
+                // its neighbors (each row is its own context via relative+z-index, so equal
+                // z-index would otherwise paint in DOM order) — without it, a hovered cell's
+                // tooltip that opens into an adjacent row (e.g. the flip-below rows near the
+                // grid top) renders underneath that row's cells instead of over them.
+                <div
+                  key={dayIndex}
+                  className="relative z-[1] flex items-center gap-[3px] hover:z-20 focus-within:z-20"
+                >
                   <div className="w-8 pr-1 text-right">
                     <span className="text-[0.625rem] font-medium text-muted-foreground">
                       {WEEKDAY_LABELS[dayIndex]}
@@ -688,9 +797,8 @@ export function AttendanceHeatmap({ month }: { month: AttendanceHeatmapMonth | n
                       day.date.getMonth() === today.getMonth() &&
                       day.date.getFullYear() === today.getFullYear();
                     const isFuture = day.date > todayMidnight;
-                    const dimmed = Boolean(
-                      activeMonthKey && monthKeyFromDate(day.date) !== activeMonthKey
-                    );
+                    const dayGroupKey = groupKeyFromDate(day.date);
+                    const dimmed = Boolean(activeMonthKey && dayGroupKey !== activeMonthKey);
 
                     return (
                       <ContributionCell
@@ -702,6 +810,8 @@ export function AttendanceHeatmap({ month }: { month: AttendanceHeatmapMonth | n
                         isFuture={isFuture}
                         dimmed={dimmed}
                         href={cellHref(day)}
+                        groupKey={dayGroupKey}
+                        tooltipBelow={dayIndex < TOOLTIP_FLIP_ROW_COUNT}
                         onMonthIntent={setHoveredMonthKey}
                       />
                     );
