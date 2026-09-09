@@ -11,6 +11,7 @@ import {
   Briefcase,
   UserRound,
   BookOpen,
+  HelpCircle,
   type LucideIcon,
 } from "lucide-react";
 
@@ -33,6 +34,7 @@ const WORKSPACE_ITEMS: EmployeeNavItem[] = [
   { href: "/employee/leaves/policy", label: "Leave Policy", icon: BookOpen },
   { href: "/employee/tickets", label: "My Tickets", icon: Headset },
   { href: "/employee/settings", label: "Settings", icon: Settings },
+  { href: "/employee/help", label: "User Guide", icon: HelpCircle },
 ];
 
 const MY_TEAM_ITEMS: EmployeeNavItem[] = [
