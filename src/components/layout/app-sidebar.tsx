@@ -29,6 +29,7 @@ import {
   UserCheck,
   UserRound,
   BookOpen,
+  HelpCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { logoutAction } from "@/actions/auth";
@@ -155,6 +156,10 @@ function groupedNavForRole(
                 ]
               : []),
           ],
+        },
+        {
+          group: "Help",
+          items: [{ href: "/admin/help", label: "User Guide", icon: HelpCircle }],
         },
         // Platform & security administration — Super Admin only.
         ...(role === "super_admin"
