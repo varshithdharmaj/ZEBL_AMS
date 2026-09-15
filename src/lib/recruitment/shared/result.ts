@@ -5,6 +5,8 @@ import {
   RecruitmentDomainError,
 } from "@/lib/recruitment/shared/errors";
 import { PermissionError } from "@/lib/permissions";
+import { logger } from "@/lib/observability/logger";
+import { createCorrelationId } from "@/lib/observability/correlation";
 
 export type MappedActionState = ActionState & {
   duplicateCandidateId?: string;
@@ -41,8 +43,18 @@ export function mapUnknownToActionState(error: unknown): MappedActionState {
   if (error instanceof PermissionError) {
     return { error: error.message };
   }
-  // Avoid leaking Prisma/internal stack details to clients.
-  return { error: "Unexpected error." };
+  // Avoid leaking Prisma/internal stack details to clients. Log the real
+  // cause server-side under a correlation id, and surface just that id to
+  // the client so it can be matched to the log entry without exposing
+  // internal error content.
+  const correlationId = createCorrelationId("action-error");
+  logger.error("recruitment.action.unexpected_error", {
+    correlationId,
+    entityType: "action",
+    message: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+  });
+  return { error: `Server-side error. Ref: ${correlationId}` };
 }
 
 export function assertNever(value: never): never {
