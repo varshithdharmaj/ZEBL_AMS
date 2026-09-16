@@ -1,0 +1,23 @@
+name: HRMS Production Runner Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  runner-test:
+    runs-on: [self-hosted, Linux, X64, hrms-production]
+
+    steps:
+      - name: Check runner
+        run: |
+          echo "Runner test successful"
+          echo "User:"
+          whoami
+          echo "Server:"
+          hostname
+          echo "Node:"
+          node -v
+          echo "NPM:"
+          npm -v
+          echo "PM2:"
+          pm2 -v
