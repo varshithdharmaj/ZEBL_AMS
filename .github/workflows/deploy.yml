@@ -19,13 +19,21 @@ jobs:
         run: |
           set -e
 
-          cd /var/www/hrms
-
-          echo "=== Current production commit ==="
+          echo "=== GitHub commit being deployed ==="
           git log -1 --oneline
 
-          echo "=== Updating tracked files ==="
-          git reset --hard "$GITHUB_SHA"
+          echo "=== Copying application source ==="
+          rsync -a \
+            --exclude='.git/' \
+            --exclude='.env' \
+            --exclude='.env.*' \
+            --exclude='node_modules/' \
+            --exclude='.next/' \
+            --exclude='storage/' \
+            --exclude='db-backup/' \
+            "$GITHUB_WORKSPACE/" /var/www/hrms/
+
+          cd /var/www/hrms
 
           echo "=== Installing dependencies ==="
           npm ci
