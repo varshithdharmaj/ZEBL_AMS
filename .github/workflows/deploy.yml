@@ -1,0 +1,42 @@
+name: Deploy HRMS to Production
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, Linux, X64, hrms-production]
+
+    steps:
+      - name: Deploy HRMS
+        run: |
+          set -e
+
+          cd /var/www/hrms
+
+          echo "=== Current production commit ==="
+          git log -1 --oneline
+
+          echo "=== Fetching latest code ==="
+          git fetch origin main
+
+          echo "=== Updating production source ==="
+          git reset --hard origin/main
+
+          echo "=== Installing dependencies ==="
+          npm ci
+
+          echo "=== Building HRMS ==="
+          npm run build
+
+          echo "=== Restarting HRMS ==="
+          pm2 restart hrms
+
+          echo "=== Checking HRMS ==="
+          pm2 status hrms
+
+          echo "=== Deployment completed ==="
