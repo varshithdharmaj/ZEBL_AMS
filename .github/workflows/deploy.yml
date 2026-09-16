@@ -12,6 +12,9 @@ jobs:
     runs-on: [self-hosted, Linux, X64, hrms-production]
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Deploy HRMS
         run: |
           set -e
@@ -21,11 +24,8 @@ jobs:
           echo "=== Current production commit ==="
           git log -1 --oneline
 
-          echo "=== Fetching latest code ==="
-          git fetch origin main
-
-          echo "=== Updating production source ==="
-          git reset --hard origin/main
+          echo "=== Updating tracked files ==="
+          git reset --hard "$GITHUB_SHA"
 
           echo "=== Installing dependencies ==="
           npm ci
