@@ -1,0 +1,118 @@
+"use client";
+
+import { useActionState } from "react";
+import { withdrawLeaveAction, type WorkflowActionState } from "@/actions/workflow";
+import { DataTable, DataTableRow, DataTableCell } from "@/components/ui/data-table";
+import { ApprovalBadge } from "@/components/workflow/approval-badge";
+import { LeaveWorkflowTimeline } from "@/components/workflow/leave-workflow-timeline";
+import { Button } from "@/components/ui/button";
+import { formatLeaveDays } from "@/lib/leave-types";
+import { formatDate } from "@/lib/utils";
+import { canActOnWorkflow } from "@/lib/leave-status";
+import type { LeaveWorkflowStatus } from "@/generated/prisma/enums";
+
+type Leave = {
+  id: number;
+  leaveType: string;
+  startDate: Date;
+  endDate: Date;
+  days: number;
+  reason: string;
+  status: string;
+  workflowStatus: LeaveWorkflowStatus;
+  rejectionReason: string | null;
+  submittedAt: Date | null;
+  currentStepId: number | null;
+  createdAt: Date;
+  approvalSteps: {
+    id: number;
+    stepOrder: number;
+    approverRole: string;
+    status: string;
+    actedAt: Date | null;
+    comment: string | null;
+    approver: { name: string } | null;
+  }[];
+};
+
+const withdrawInitial: WorkflowActionState = {};
+
+export function EmployeeLeaveTable({ leaves }: { leaves: Leave[] }) {
+  const [withdrawState, withdrawAction, withdrawPending] = useActionState(
+    withdrawLeaveAction,
+    withdrawInitial
+  );
+
+  return (
+    <div className="space-y-2">
+      {withdrawState.error && (
+        <p className="text-sm text-danger">{withdrawState.error}</p>
+      )}
+      {withdrawState.success && (
+        <p className="text-sm text-success">{withdrawState.success}</p>
+      )}
+      <DataTable columns={["Type", "From", "To", "Days", "Reason", "Status", ""]}>
+        {leaves.map((leave) => {
+          const steps = leave.approvalSteps.map((s) => ({
+            id: s.id,
+            stepOrder: s.stepOrder,
+            approverRole: s.approverRole,
+            approverName: s.approver?.name ?? null,
+            status: s.status,
+            actedAt: s.actedAt,
+            comment: s.comment,
+          }));
+
+          return (
+            <DataTableRow key={leave.id}>
+              <DataTableCell>
+                <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-800">
+                  {leave.leaveType}
+                </span>
+              </DataTableCell>
+              <DataTableCell className="text-xs font-medium text-slate-700 whitespace-nowrap">{formatDate(leave.startDate)}</DataTableCell>
+              <DataTableCell className="text-xs font-medium text-slate-700 whitespace-nowrap">{formatDate(leave.endDate)}</DataTableCell>
+              <DataTableCell className="font-semibold text-slate-900 tabular-nums">{formatLeaveDays(leave.days)}</DataTableCell>
+              <DataTableCell className="text-slate-700">{leave.reason}</DataTableCell>
+              <DataTableCell>
+                <ApprovalBadge workflowStatus={leave.workflowStatus} />
+                {leave.rejectionReason && (
+                  <p className="mt-1 text-xs font-medium text-rose-600">{leave.rejectionReason}</p>
+                )}
+              </DataTableCell>
+              <DataTableCell>
+                {canActOnWorkflow(leave.workflowStatus) && (
+                  <form action={withdrawAction}>
+                    <input type="hidden" name="leaveId" value={leave.id} />
+                    <Button
+                      type="submit"
+                      size="sm"
+                      variant="outline"
+                      disabled={withdrawPending}
+                    >
+                      {withdrawPending ? "Withdrawing…" : "Withdraw"}
+                    </Button>
+                  </form>
+                )}
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-xs font-medium text-slate-500 hover:text-slate-900">
+                    Track progress
+                  </summary>
+                  <div className="mt-2 min-w-[200px]">
+                    <LeaveWorkflowTimeline
+                      workflowStatus={leave.workflowStatus}
+                      submittedAt={leave.submittedAt}
+                      rejectionReason={leave.rejectionReason}
+                      steps={steps}
+                      currentStepId={leave.currentStepId}
+                    />
+                  </div>
+                </details>
+              </DataTableCell>
+            </DataTableRow>
+          );
+        })}
+      </DataTable>
+    </div>
+  );
+}

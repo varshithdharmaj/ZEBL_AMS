@@ -1,0 +1,17 @@
+node_modules/
+.next/
+.open-next/
+.wrangler/
+.vercel/
+
+.env
+.env.*
+!.env.example
+
+/storage/
+/db-backup/
+
+src/generated/prisma/
+
+tsconfig.tsbuildinfo
+tsconfig.test.tsbuildinfo

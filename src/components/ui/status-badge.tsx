@@ -1,0 +1,48 @@
+import { cn } from "@/lib/utils";
+
+const styles: Record<string, string> = {
+  present:
+    "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-400/20",
+  absent: "bg-rose-50 text-rose-700 ring-1 ring-rose-600/20 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-400/20",
+  short:
+    "bg-amber-50 text-amber-800 ring-1 ring-amber-600/20 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-400/20",
+  pending:
+    "bg-amber-50 text-amber-800 ring-1 ring-amber-600/20 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-400/20",
+  approved:
+    "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-400/20",
+  rejected: "bg-rose-50 text-rose-700 ring-1 ring-rose-600/20 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-400/20",
+  default: "bg-slate-100 text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-600",
+  active:
+    "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-400/20",
+  inactive: "bg-slate-100 text-slate-600 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-600",
+  resigned: "bg-rose-50 text-rose-700 ring-1 ring-rose-600/20 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-400/20",
+};
+
+function resolveVariant(status: string): string {
+  const s = status.toLowerCase();
+  if (s === "present" || s === "active" || s === "current" || s === "sent" || s === "delivered") {
+    return "present";
+  }
+  if (s === "absent" || s === "resigned" || s === "revoked" || s === "failed") return "absent";
+  if (s.includes("short") || s === "expired") return "short";
+  if (s === "pending" || s === "draft" || s === "scheduled") return "pending";
+  if (s === "approved") return "approved";
+  if (s === "rejected") return "rejected";
+  if (s === "inactive" || s === "ended" || s === "logged out" || s === "logged_out") return "inactive";
+  return "default";
+}
+
+export function StatusBadge({ status, className }: { status: string; className?: string }) {
+  const variant = resolveVariant(status);
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium tracking-tight",
+        styles[variant],
+        className
+      )}
+    >
+      {status}
+    </span>
+  );
+}

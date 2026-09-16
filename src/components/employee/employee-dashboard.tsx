@@ -1,0 +1,156 @@
+import { AttendanceHero } from "@/components/employee/dashboard/attendance-hero";
+import { StatsGridSection } from "@/components/employee/dashboard/stats-grid-section";
+import { HistorySection } from "@/components/employee/dashboard/history-section";
+import { DashboardWidgets } from "@/components/employee/dashboard/dashboard-widgets";
+import { AttendanceTimeline } from "@/components/employee/attendance-timeline";
+import { AttendanceHeatmap } from "@/components/employee/dashboard/attendance-heatmap";
+import { getEmployeeDashboardData } from "@/lib/data";
+import { getLeaveBalanceSummaries } from "@/lib/leave";
+import { getEmployeeAttendanceHeatmapData, type AttendanceHeatmapMonth } from "@/lib/attendance/heatmap-data";
+import { getAttendanceDayStatus, findHeatmapDayStatus } from "@/lib/attendance/day-status";
+import { getHeroStatus, type HeroStatus } from "@/lib/attendance/hero-status";
+import { startOfDay, toISODate } from "@/lib/utils";
+import { prisma } from "@/lib/prisma";
+
+export async function EmployeeDashboard({
+  employeeId,
+  employeeName,
+  profilePhotoUrl = null,
+  selectedDate,
+  startDate,
+  endDate,
+  heatmapMonth,
+}: {
+  employeeId: number;
+  employeeName: string | null;
+  profilePhotoUrl?: string | null;
+  selectedDate?: string;
+  startDate?: string;
+  endDate?: string;
+  heatmapMonth?: string;
+}) {
+  const [data, balances, heatmap, employee] = await Promise.all([
+    getEmployeeDashboardData(employeeId, selectedDate, startDate, endDate),
+    // Same accrual-before-read path as /employee/leaves so remaining days match.
+    getLeaveBalanceSummaries(employeeId, { processAccruals: true }),
+    // Isolated so a heatmap-only failure doesn't take down the rest of an already-fetched
+    // dashboard (Hero, KPIs, history below all render fine independently of this).
+    getEmployeeAttendanceHeatmapData(employeeId, heatmapMonth).catch(
+      (e): AttendanceHeatmapMonth | null => {
+        console.error("[employee-dashboard] heatmap failed:", e);
+        return null;
+      }
+    ),
+    prisma.employee.findUnique({ where: { id: employeeId }, select: { shift: true } }),
+  ]);
+
+  const isToday = data.selectedDate === toISODate(startOfDay());
+  const selectedDayDate = new Date(data.selectedDate + "T00:00:00");
+
+  // Scoped resilience: if the richer classification fails, the rest of the dashboard
+  // (KPIs, heatmap, history, leave balances — already resolved above) still renders.
+  // Prefer the heatmap's already-classified YTD day (same classifier) to avoid a
+  // redundant ~4-query calendar wave after Promise.all.
+  let heroStatus: HeroStatus | null = null;
+  let expectedWorkMinutes: number | null = null;
+  try {
+    const reused = findHeatmapDayStatus(heatmap, selectedDayDate);
+    if (reused) {
+      expectedWorkMinutes = reused.expectedWorkMinutes;
+      heroStatus = getHeroStatus(reused.day, { isToday, expectedWorkMinutes });
+    } else {
+      const result = await getAttendanceDayStatus({
+        employeeId,
+        date: selectedDayDate,
+        attendanceRecord: {
+          checkIn: data.day.checkIn,
+          checkOut: data.day.checkOut,
+          workedMinutes: data.day.workedMinutes,
+          overtimeMinutes: data.day.overtimeMinutes,
+          remarks: data.day.remarks,
+        },
+      });
+      expectedWorkMinutes = result.expectedWorkMinutes;
+      heroStatus = getHeroStatus(result.day, { isToday, expectedWorkMinutes });
+    }
+  } catch (e) {
+    console.error("[employee-dashboard] hero status failed:", e);
+  }
+
+  const firstName = employeeName?.split(" ")[0] ?? "there";
+  const displayDate = new Date(data.selectedDate + "T00:00:00").toLocaleDateString("en-IN", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
+  const selectedDayLabel = new Date(data.selectedDate + "T00:00:00").toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+
+  return (
+    <div className="hr-dashboard">
+      {/* Top row: current status is the strongest signal on the page; leave
+          balances stay visible right alongside it (secondary, not competing)
+          at every breakpoint, since DOM order here is also the visual order. */}
+      <div className="hr-dashboard__top">
+        {/* A. Header / today's status + the one authoritative filter control */}
+        <AttendanceHero
+          firstName={firstName}
+          fullName={employeeName}
+          profilePhotoUrl={profilePhotoUrl}
+          displayDate={displayDate}
+          dateIso={data.selectedDate}
+          shift={employee?.shift ?? null}
+          heroStatus={heroStatus}
+          defaultStart={data.selectedStart}
+          defaultEnd={data.selectedEnd}
+        />
+
+        <aside className="hr-dashboard__rail">
+          {/* B. Leave / upcoming information */}
+          <DashboardWidgets balances={balances} />
+        </aside>
+      </div>
+
+      <div className="hr-dashboard__main">
+        {/* C. Attendance heatmap — the primary navigation surface for picking a day, so
+            it leads the column; selecting a cell updates the details section right
+            below it via the `date` URL param (see AttendanceTimeline). */}
+        <AttendanceHeatmap month={heatmap} />
+
+        {/* D. Selected-day details (attendance / login / logout / activity) — always
+            immediately follows the heatmap so the cause → effect relationship of
+            clicking a cell is visually obvious. */}
+        <AttendanceTimeline
+          heroStatus={heroStatus}
+          sessions={data.day.sessions}
+          expectedWorkMinutes={expectedWorkMinutes}
+          totalWorkedMinutes={data.day.workedMinutes}
+          isToday={isToday}
+          selectedDateLabel={selectedDayLabel}
+        />
+
+        {/* E. Core KPI summary */}
+        <StatsGridSection
+          presentDays={data.period.presentDays}
+          dayWorkedMinutes={data.day.workedMinutes}
+          shortHoursCount={data.period.shortHoursCount}
+          rangeLabel={data.period.rangeLabel}
+          selectedDateLabel={selectedDayLabel}
+        />
+
+        {/* F. Attendance history */}
+        <HistorySection
+          rangeLabel={data.period.rangeLabel}
+          records={data.recentRecords}
+          totalCount={data.recentRecordsTotal}
+        />
+      </div>
+    </div>
+  );
+}

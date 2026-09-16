@@ -1,0 +1,105 @@
+import { getSession, type SessionUser } from "@/lib/auth";
+import { assertPasswordChangeComplete } from "@/lib/auth/password-change-gate";
+import {
+  canAccessAdmin,
+  canAccessHRAdministration,
+  canAccessPlatformAdministration,
+  canManageEmployee,
+  PermissionError,
+  requirePermission,
+} from "@/lib/permissions";
+import { canAccessRecruitmentAdministration } from "@/lib/recruitment/permissions/recruitment-test-manager";
+import type { AppUserRole } from "@/lib/roles";
+
+export async function getSessionOrThrow(): Promise<SessionUser> {
+  const session = await getSession();
+  if (!session) throw new PermissionError("Not authenticated");
+  assertPasswordChangeComplete(session);
+  return session;
+}
+
+/** Authenticated session without the mustChangePassword application gate (logout / password change). */
+export async function getSessionAllowingPasswordChange(): Promise<SessionUser> {
+  const session = await getSession();
+  if (!session) throw new PermissionError("Not authenticated");
+  return session;
+}
+
+/** Super Admin only — platform & security administration. */
+export async function requireSuperAdminSession(): Promise<SessionUser> {
+  const session = await getSessionOrThrow();
+  requirePermission(session, canAccessPlatformAdministration);
+  return session;
+}
+
+/** Super Admin or HR — the /admin operations shell. */
+export async function requireHROrSuperAdminSession(): Promise<SessionUser> {
+  const session = await getSessionOrThrow();
+  requirePermission(session, canAccessHRAdministration);
+  return session;
+}
+
+/**
+ * Recruitment workspace gate: HR / Super Admin, or the two allowlisted
+ * recruitment test managers ({@link canAccessRecruitmentAdministration}).
+ * Does not admit general employees or other line managers.
+ */
+export async function requireRecruitmentAdminSession(): Promise<SessionUser> {
+  const session = await getSessionOrThrow();
+  if (!canAccessRecruitmentAdministration(session)) {
+    throw new PermissionError("Unauthorized");
+  }
+  return session;
+}
+
+/**
+ * Legacy name retained across the codebase: gate for the /admin shell.
+ * Equivalent to {@link requireHROrSuperAdminSession} (Super Admin + HR).
+ */
+export async function requireAdminSession(): Promise<SessionUser> {
+  const session = await getSessionOrThrow();
+  requirePermission(session, canAccessAdmin);
+  return session;
+}
+
+export async function requireManageEmployeeSession(): Promise<SessionUser> {
+  const session = await getSessionOrThrow();
+  requirePermission(session, canManageEmployee);
+  return session;
+}
+
+/**
+ * Coarse guard for acting on a leave-approval step. Admits HR/Super Admin (HR queue) and
+ * any user linked to an Employee record (a potential line-manager approver). Per-step
+ * authorization is enforced downstream by `canUserApproveStep` in the workflow layer.
+ */
+export async function requireApproveLeaveSession(): Promise<SessionUser> {
+  const session = await getSessionOrThrow();
+  if (!canAccessAdmin(session.role) && session.employeeId == null) {
+    throw new PermissionError();
+  }
+  return session;
+}
+
+export async function requireRoleSession(
+  allowed: AppUserRole | AppUserRole[]
+): Promise<SessionUser> {
+  const session = await getSessionOrThrow();
+  const roles = Array.isArray(allowed) ? allowed : [allowed];
+  if (!roles.includes(session.role)) throw new PermissionError();
+  return session;
+}
+
+export type SessionWithEmployee = SessionUser & { employeeId: number };
+
+/**
+ * Workforce self-service session (own leave/attendance/tickets/security).
+ * Admits `employee` and `manager` — both are individual workforce members with
+ * a linked Employee record. Name kept for call-site stability; it predates the
+ * Manager role and now means "workforce shell session", not "role === employee".
+ */
+export async function requireEmployeeSession(): Promise<SessionWithEmployee> {
+  const session = await requireRoleSession(["employee", "manager"]);
+  if (session.employeeId == null) throw new PermissionError("Employee profile not linked");
+  return { ...session, employeeId: session.employeeId };
+}

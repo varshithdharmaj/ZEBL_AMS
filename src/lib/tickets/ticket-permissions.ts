@@ -1,0 +1,136 @@
+import type { SessionUser } from "@/lib/session";
+import { isSuperAdmin, isWorkforceMember, canAccessHRAdministration } from "@/lib/permissions";
+
+export type TicketLike = {
+  id: string;
+  isAnonymous: boolean;
+  raisedByEmployeeId: number;
+  assignedToUserId: string | null;
+  department: string | null;
+};
+
+/**
+ * Core ticket access check: whether a session user can view a specific ticket.
+ * 
+ * Rules:
+ * - Super Admin: all tickets (including anonymous)
+ * - HR: assigned tickets + department-matched tickets, non-anonymous only
+ * - Employee / Manager: own tickets only (own raisedByEmployeeId)
+ * - Anonymous tickets: Super Admin only
+ */
+export function canViewTicket(session: SessionUser | null, ticket: TicketLike): boolean {
+  if (!session) return false;
+
+  // Anonymous tickets: Super Admin only
+  if (ticket.isAnonymous) {
+    return isSuperAdmin(session.role);
+  }
+
+  // Super Admin sees all non-anonymous
+  if (isSuperAdmin(session.role)) return true;
+
+  // Employee / Manager: own tickets only (self-service, not team-scoped)
+  if (isWorkforceMember(session.role)) {
+    return session.employeeId === ticket.raisedByEmployeeId;
+  }
+
+  // HR: assigned tickets OR unassigned normal tickets
+  if (session.role === "hr") {
+    // Can view if assigned to them
+    if (ticket.assignedToUserId === session.id) return true;
+    
+    // Can also view unassigned normal (non-anonymous) tickets
+    // This matches the list query behavior and allows HR to manage new tickets
+    if (ticket.assignedToUserId === null) return true;
+    
+    // Cannot view tickets assigned to other HR users
+    return false;
+  }
+
+  return false;
+}
+
+/**
+ * Whether a user can manage a ticket (change status, assign, add updates).
+ * 
+ * Rules:
+ * - Super Admin: all tickets
+ * - HR: assigned tickets + department-matched tickets, non-anonymous only
+ * - Employee: cannot manage (can only reply to own)
+ */
+export function canManageTicket(session: SessionUser | null, ticket: TicketLike): boolean {
+  if (!session) return false;
+
+  // Anonymous tickets: Super Admin only
+  if (ticket.isAnonymous) {
+    return isSuperAdmin(session.role);
+  }
+
+  // Super Admin manages all
+  if (isSuperAdmin(session.role)) return true;
+
+  // HR manages assigned tickets OR unassigned normal tickets
+  if (session.role === "hr") {
+    // Can manage if assigned to them
+    if (ticket.assignedToUserId === session.id) return true;
+    
+    // Can also manage unassigned normal (non-anonymous) tickets
+    // This allows HR to assign, change status, and add updates to new tickets
+    if (ticket.assignedToUserId === null) return true;
+    
+    // Cannot manage tickets assigned to someone else
+    return false;
+  }
+
+  // Employees cannot manage
+  return false;
+}
+
+/**
+ * Whether a user can reply to a ticket (employee replies).
+ */
+export function canReplyToTicket(session: SessionUser | null, ticket: TicketLike): boolean {
+  if (!session) return false;
+
+  // Own tickets only for employees/managers
+  if (isWorkforceMember(session.role)) {
+    return session.employeeId === ticket.raisedByEmployeeId;
+  }
+
+  return false;
+}
+
+/**
+ * Whether a user can add public HR updates to a ticket.
+ */
+export function canAddPublicUpdate(session: SessionUser | null, ticket: TicketLike): boolean {
+  return canManageTicket(session, ticket);
+}
+
+/**
+ * Whether a user can add internal HR notes to a ticket.
+ */
+export function canAddInternalNote(session: SessionUser | null, ticket: TicketLike): boolean {
+  return canManageTicket(session, ticket);
+}
+
+/**
+ * Whether a user can view internal notes on a ticket.
+ */
+export function canViewInternalNotes(session: SessionUser | null, ticket: TicketLike): boolean {
+  if (!session) return false;
+
+  // Anonymous: SA only
+  if (ticket.isAnonymous && !isSuperAdmin(session.role)) return false;
+
+  // SA + HR can view internal notes on tickets they manage
+  return canAccessHRAdministration(session.role);
+}
+
+/**
+ * Whether a user can assign/reassign a ticket.
+ * Same boundary as canManageTicket — HR must not assign tickets they cannot manage.
+ */
+export function canAssignTicket(session: SessionUser | null, ticket: TicketLike): boolean {
+  return canManageTicket(session, ticket);
+}

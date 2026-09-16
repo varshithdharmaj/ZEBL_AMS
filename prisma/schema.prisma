@@ -1,0 +1,2437 @@
+// Cloudflare Workers config (uncomment for Cloudflare deploy):
+// generator client {
+//   provider   = "prisma-client"
+//   output     = "../src/generated/prisma"
+//   runtime    = "cloudflare"
+//   engineType = "client"
+// }
+
+// Local Node.js / Vercel (Next.js) config:
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../src/generated/prisma"
+  engineType    = "library"
+  // Vercel serverless runtime needs the RHEL engine; native covers local Windows/macOS/Linux.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  super_admin
+  hr
+  manager
+  employee
+}
+
+enum AuthProvider {
+  local
+  microsoft
+}
+
+enum LoginSessionStatus {
+  active
+  logged_out
+  expired
+  revoked
+  failed
+}
+
+enum AccountStatus {
+  active
+  inactive
+  locked
+  suspended
+  pending
+  terminated
+}
+
+enum AttendanceOverrideType {
+  working_day
+  weekly_off
+}
+
+enum AttendanceImportJobStatus {
+  UPLOADED
+  PROCESSING
+  FAILED
+  COMPLETED
+  CANCELLED
+}
+
+enum RegularizationRequestType {
+  missing_check_in
+  missing_check_out
+  missing_both
+  incorrect_check_in
+  incorrect_check_out
+  attendance_missing
+  device_failure
+}
+
+enum RegularizationStatus {
+  pending
+  approved
+  rejected
+  cancelled
+}
+
+enum LeaveRequestStatus {
+  pending
+  approved
+  rejected
+  withdrawn
+  cancelled
+}
+
+enum LeaveWorkflowStatus {
+  submitted
+  pending_approval
+  approved
+  rejected
+  withdrawn
+  cancelled
+}
+
+enum ApprovalStepStatus {
+  pending
+  approved
+  rejected
+  skipped
+}
+
+enum ApproverRole {
+  manager
+  skip_level_manager
+  hr_admin
+}
+
+enum NotificationType {
+  leave_submitted
+  approval_required
+  leave_approved
+  leave_rejected
+  leave_withdrawn
+  leave_cancelled
+  escalation_reminder
+  ticket_created
+  ticket_assigned
+  ticket_updated
+  ticket_employee_replied
+  ticket_status_changed
+  ticket_resolved
+  ticket_reopened
+  ticket_anonymous_created
+  ticket_anonymous_updated
+  recruitment_interview_scheduled
+  recruitment_stage_changed
+  recruitment_decision_pending
+  recruitment_offer_approval
+  recruitment_offer_released
+  recruitment_duplicate_found
+  recruitment_parse_ready
+  recruitment_mention
+  recruitment_converted
+  recruitment_sla_stale
+  recruitment_public_application_received
+  recruitment_public_application_hr_alert
+  attendance_regularization_submitted
+  attendance_regularization_approved
+  attendance_regularization_rejected
+}
+
+enum NotificationChannel {
+  email
+  teams
+  push
+  sms
+}
+
+enum NotificationDeliveryStatus {
+  pending
+  processing
+  sent
+  failed
+  cancelled
+}
+
+enum ApprovalTokenAction {
+  approve
+  reject
+}
+
+enum ApprovalTokenStatus {
+  active
+  consumed
+  expired
+  revoked
+}
+
+enum CalendarSyncStatus {
+  pending
+  synced
+  failed
+  skipped
+  deleted
+}
+
+enum IntegrationJobStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
+enum AnalyticsScope {
+  organization
+  department
+  team
+  employee
+}
+
+enum MetricPeriod {
+  daily
+  weekly
+  monthly
+}
+
+enum AnomalySeverity {
+  low
+  medium
+  high
+}
+
+enum TicketCategory {
+  attendance
+  leave
+  payroll
+  salary
+  it_technical
+  hr
+  workplace
+  facilities
+  suggestion
+  other
+}
+
+enum TicketType {
+  complaint
+  service_request
+  suggestion
+  meeting_request
+  anonymous_complaint
+  other
+}
+
+enum TicketPriority {
+  low
+  medium
+  high
+}
+
+enum TicketStatus {
+  new
+  open
+  in_progress
+  waiting_for_employee
+  on_hold
+  resolved
+  closed
+  canceled
+}
+
+enum TicketMessageVisibility {
+  public_update
+  internal_note
+  employee_reply
+}
+
+model User {
+  id                            String                        @id @default(cuid())
+  email                         String                        @unique
+  password                      String?
+  role                          UserRole                      @default(employee)
+  authProvider                  AuthProvider                  @default(local) @map("auth_provider")
+  azureOid                      String?                       @unique @map("azure_oid")
+  microsoftTenantId             String?                       @map("microsoft_tenant_id")
+  lastLoginAt                   DateTime?                     @map("last_login_at")
+  profilePhotoUrl               String?                       @map("profile_photo_url")
+  profilePhotoStorageKey        String?                       @map("profile_photo_storage_key")
+  authMetadata                  String                        @default("{}") @map("auth_metadata")
+  sessionVersion                Int                           @default(1) @map("session_version")
+  isActive                      Boolean                       @default(true) @map("is_active")
+  username                      String?                       @unique
+  accountStatus                 AccountStatus                 @default(active) @map("account_status")
+  mustChangePassword            Boolean                       @default(false) @map("must_change_password")
+  lockedAt                      DateTime?                     @map("locked_at")
+  lockedReason                  String?                       @map("locked_reason")
+  /**
+   * Recruitment admin ops without HR role — permanent capability (not general /admin).
+   */
+  recruitmentOpsAccess          Boolean                       @default(false) @map("recruitment_ops_access")
+  employeeId                    Int?                          @unique
+  employee                      Employee?                     @relation(fields: [employeeId], references: [id])
+  notificationPreference        NotificationPreference?
+  assignedTickets               Ticket[]                      @relation("AssignedHandler")
+  ticketMessages                TicketMessage[]
+  ticketHistoryEntries          TicketHistory[]
+  loginSessions                 LoginSession[]
+  // Recruitment relations (Phase 0)
+  pipelineTemplatesCreated      RecruitmentPipelineTemplate[] @relation("PipelineTemplateCreatedBy")
+  jobOpeningsOwned              JobOpening[]                  @relation("JobOpeningOwner")
+  jobOpeningsCreated            JobOpening[]                  @relation("JobOpeningCreatedBy")
+  jobDocsUploaded               JobOpeningDocument[]          @relation("JobDocUploadedBy")
+  jobNotesAuthored              JobOpeningNote[]              @relation("JobNoteAuthor")
+  candidatesPrimary             Candidate[]                   @relation("CandidatePrimaryRecruiter")
+  candidatesCreated             Candidate[]                   @relation("CandidateCreatedBy")
+  candidateDocsUploaded         CandidateDocument[]           @relation("CandidateDocUploadedBy")
+  candidateNotesAuthored        CandidateNote[]               @relation("CandidateNoteAuthor")
+  candidateChatsAuthored        CandidateChatMessage[]        @relation("CandidateChatAuthor")
+  intakeCreated                 IntakeItem[]                  @relation("IntakeCreatedBy")
+  applicationsAsRecruiter       Application[]                 @relation("ApplicationRecruiter")
+  applicationsCreated           Application[]                 @relation("ApplicationCreatedBy")
+  applicationsAssessmentUpdated Application[]                 @relation("ApplicationAssessmentUpdatedBy")
+  stageHistoryActed             ApplicationStageHistory[]     @relation("StageHistoryActor")
+  interviewsCreated             Interview[]                   @relation("InterviewCreatedBy")
+  decisionsAuthored             HiringDecision[]              @relation("DecisionAuthor")
+  offersCreated                 Offer[]                       @relation("OfferCreatedBy")
+  conversionsActed              EmployeeConversionSnapshot[]  @relation("ConversionActor")
+  savedRecruitmentFilters       RecruitmentSavedFilter[]      @relation("RecruitmentSavedFilters")
+  emailTemplatesCreated         RecruitmentEmailTemplate[]    @relation("EmailTemplateCreatedBy")
+  communicationsSent            RecruitmentCommunication[]    @relation("CommunicationSender")
+  createdAt                     DateTime                      @default(now())
+  updatedAt                     DateTime                      @updatedAt
+
+  @@index([role])
+  @@index([role, isActive])
+  @@index([accountStatus])
+  @@map("users")
+}
+
+model Employee {
+  id                        Int                               @id @default(autoincrement())
+  employeeCode              String                            @unique @map("employee_code")
+  name                      String
+  firstName                 String?                           @map("first_name")
+  lastName                  String?                           @map("last_name")
+  preferredName             String?                           @map("preferred_name")
+  gender                    String?
+  dateOfBirth               DateTime?                         @map("date_of_birth")
+  email                     String?
+  phone                     String?
+  alternatePhone            String?                           @map("alternate_phone")
+  address                   String?
+  emergencyContact          String?                           @map("emergency_contact")
+  department                String?
+  designation               String?
+  employmentType            String?                           @map("employment_type")
+  workLocation              String?                           @map("work_location")
+  shift                     String?
+  joiningDate               DateTime                          @default(now()) @map("joining_date")
+  employeeStatus            String                            @default("Active") @map("employee_status")
+  isActive                  Boolean                           @default(true) @map("is_active")
+  managerId                 Int?                              @map("manager_id")
+  manager                   Employee?                         @relation("EmployeeHierarchy", fields: [managerId], references: [id], onDelete: SetNull)
+  directReports             Employee[]                        @relation("EmployeeHierarchy")
+  cachedPresence            String?                           @map("cached_presence")
+  cachedPresenceAt          DateTime?                         @map("cached_presence_at")
+  externalProfileSyncedAt   DateTime?                         @map("external_profile_synced_at")
+  createdAt                 DateTime                          @default(now()) @map("created_at")
+  updatedAt                 DateTime                          @updatedAt @map("updated_at")
+  user                      User?
+  attendanceRecords         AttendanceRecord[]
+  regularizationRequests    AttendanceRegularizationRequest[]
+  leaveRequests             LeaveRequest[]
+  leaveBalance              EmployeeLeaveBalance?
+  leaveTransactions         LeaveTransaction[]
+  elAccrualLots             ElAccrualLot[]
+  approvalSteps             LeaveApprovalStep[]
+  payrollSummaries          PayrollAttendanceSummary[]
+  raisedTickets             Ticket[]
+  loginSessions             LoginSession[]
+  // Recruitment relations (Phase 0)
+  hiringTeamMemberships     HiringTeamMember[]
+  headcountRequestedJobs    JobOpening[]                      @relation("JobHeadcountRequester")
+  candidatesReferred        Candidate[]                       @relation("CandidateReferrer")
+  convertedFromCandidate    Candidate?                        @relation("CandidateConvertedEmployee")
+  applicationsAsManager     Application[]                     @relation("ApplicationManager")
+  interviewPanelistOf       InterviewPanelist[]
+  interviewFeedbackAuthored InterviewFeedback[]
+  conversionSnapshots       EmployeeConversionSnapshot[]      @relation("ConversionSnapshotEmployee")
+  // Biometric bridge integration (Phase 2D)
+  biometricPunches          BiometricPunch[]
+
+  @@index([managerId])
+  @@index([employeeStatus])
+  @@map("employees")
+}
+
+model AttendanceUpload {
+  id          Int                @id @default(autoincrement())
+  fileName    String             @map("file_name")
+  uploadedBy  String?            @map("uploaded_by")
+  recordCount Int                @default(0) @map("record_count")
+  uploadedAt  DateTime           @default(now()) @map("uploaded_at")
+  records     AttendanceRecord[]
+
+  @@map("attendance_uploads")
+}
+
+/// Resumable attendance import: parse once, import in committed chunks, resume without re-upload.
+model AttendanceImportJob {
+  id                 String                    @id @default(cuid())
+  createdByUserId    String                    @map("created_by_user_id")
+  status             AttendanceImportJobStatus @default(UPLOADED)
+  fileName           String                    @map("file_name")
+  source             String
+  reportType         String?                   @map("report_type")
+  formAttendanceDate DateTime?                 @map("form_attendance_date")
+  totalRows          Int                       @map("total_rows")
+  nextRowIndex       Int                       @default(0) @map("next_row_index")
+  importedCount      Int                       @default(0) @map("imported_count")
+  skippedCount       Int                       @default(0) @map("skipped_count")
+  employeesCreated   Int                       @default(0) @map("employees_created")
+  usersCreated       Int                       @default(0) @map("users_created")
+  warningsCount      Int                       @default(0) @map("warnings_count")
+  errorCount         Int                       @default(0) @map("error_count")
+  errorMessage       String?                   @map("error_message")
+  payloadCompressed  Bytes                     @map("payload_compressed")
+  parserVersion      String                    @map("parser_version")
+  startedAt          DateTime?                 @map("started_at")
+  completedAt        DateTime?                 @map("completed_at")
+  createdAt          DateTime                  @default(now()) @map("created_at")
+  updatedAt          DateTime                  @updatedAt @map("updated_at")
+
+  @@index([createdByUserId, status, createdAt])
+  @@map("attendance_import_jobs")
+}
+
+model AttendanceRecord {
+  id              Int                 @id @default(autoincrement())
+  employeeId      Int                 @map("employee_id")
+  employee        Employee            @relation(fields: [employeeId], references: [id])
+  uploadId        Int?                @map("upload_id")
+  upload          AttendanceUpload?   @relation(fields: [uploadId], references: [id])
+  attendanceDate  DateTime            @map("attendance_date")
+  shift           String?
+  checkIn         String?             @map("check_in")
+  checkOut        String?             @map("check_out")
+  workDuration    String?             @map("work_duration")
+  workedMinutes   Int                 @default(0) @map("worked_minutes")
+  overtimeMinutes Int                 @default(0) @map("overtime_minutes")
+  status          String
+  remarks         String?
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+  sessions        AttendanceSession[]
+
+  /// The currently-applied approved regularisation for this day, if any.
+  /// Overlay provenance lives here rather than a denormalized "source" enum:
+  /// activeRegularizationId != null IS the "this day has an HR correction" signal.
+  activeRegularizationId Int?                             @unique @map("active_regularization_id")
+  activeRegularization   AttendanceRegularizationRequest? @relation("ActiveRegularization", fields: [activeRegularizationId], references: [id])
+
+  @@unique([employeeId, attendanceDate])
+  @@index([attendanceDate])
+  @@map("attendance_records")
+}
+
+/// Individual check-in / check-out period within a daily AttendanceRecord.
+/// Daily totals (workedMinutes, status, legacy checkIn/checkOut) remain on AttendanceRecord.
+model AttendanceSession {
+  id            Int              @id @default(autoincrement())
+  attendanceId  Int              @map("attendance_id")
+  attendance    AttendanceRecord @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  checkIn       String           @map("check_in")
+  checkOut      String?          @map("check_out")
+  workedMinutes Int              @default(0) @map("worked_minutes")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+
+  @@index([attendanceId])
+  @@index([attendanceId, checkOut])
+  @@map("attendance_sessions")
+}
+
+/// Employee-submitted, HR-reviewed correction to a day's derived attendance.
+/// Never mutates BiometricPunch (raw device layer stays immutable); once
+/// approved it is applied as an overlay on top of the punch-derived
+/// AttendanceRecord/AttendanceSession rows by the same derivation pipeline
+/// that builds them from raw punches (see deriveAttendanceForEmployeeDate).
+model AttendanceRegularizationRequest {
+  id             Int      @id @default(autoincrement())
+  employeeId     Int      @map("employee_id")
+  employee       Employee @relation(fields: [employeeId], references: [id])
+  attendanceDate DateTime @map("attendance_date")
+
+  requestType       RegularizationRequestType @map("request_type")
+  requestedCheckIn  String?                   @map("requested_check_in")
+  requestedCheckOut String?                   @map("requested_check_out")
+  checkOutNextDay   Boolean                   @default(false) @map("check_out_next_day")
+  reason            String
+
+  status  RegularizationStatus @default(pending)
+  version Int                  @default(0)
+
+  submittedAt   DateTime  @default(now()) @map("submitted_at")
+  reviewedBy    String?   @map("reviewed_by")
+  reviewedAt    DateTime? @map("reviewed_at")
+  reviewComment String?   @map("review_comment")
+  appliedAt     DateTime? @map("applied_at")
+  cancelledAt   DateTime? @map("cancelled_at")
+
+  /// Links a resubmission (after rejection) back to the request it replaces.
+  previousRequestId Int?                             @unique @map("previous_request_id")
+  previousRequest   AttendanceRegularizationRequest? @relation("Resubmission", fields: [previousRequestId], references: [id])
+  resubmittedAs     AttendanceRegularizationRequest? @relation("Resubmission")
+
+  /// Pre-correction AttendanceRecord snapshot (checkIn/checkOut/status/workedMinutes/remarks),
+  /// captured at submission time for HR diff view and potential future revoke.
+  snapshotBefore Json @default("{}") @map("snapshot_before")
+
+  appliedRecord AttendanceRecord? @relation("ActiveRegularization")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([employeeId, attendanceDate])
+  @@index([status])
+  @@index([employeeId, status])
+  @@index([attendanceDate, status])
+  @@map("attendance_regularization_requests")
+}
+
+model LeaveRequest {
+  id                      Int                  @id @default(autoincrement())
+  employeeId              Int                  @map("employee_id")
+  employee                Employee             @relation(fields: [employeeId], references: [id])
+  leaveType               String               @default("CL") @map("leave_type")
+  startDate               DateTime             @map("start_date")
+  endDate                 DateTime             @map("end_date")
+  days                    Float                @default(0)
+  reason                  String
+  status                  LeaveRequestStatus   @default(pending)
+  workflowStatus          LeaveWorkflowStatus  @default(pending_approval) @map("workflow_status")
+  submittedAt             DateTime?            @map("submitted_at")
+  currentStepId           Int?                 @unique @map("current_step_id")
+  currentStep             LeaveApprovalStep?   @relation("CurrentApprovalStep", fields: [currentStepId], references: [id])
+  rejectionReason         String?              @map("rejection_reason")
+  cancelledAt             DateTime?            @map("cancelled_at")
+  withdrawnAt             DateTime?            @map("withdrawn_at")
+  finalApprovedAt         DateTime?            @map("final_approved_at")
+  reviewedBy              String?              @map("reviewed_by")
+  reviewedAt              DateTime?            @map("reviewed_at")
+  version                 Int                  @default(0)
+  externalCalendarEventId String?              @map("external_calendar_event_id")
+  calendarSyncStatus      CalendarSyncStatus   @default(pending) @map("calendar_sync_status")
+  calendarLastSyncedAt    DateTime?            @map("calendar_last_synced_at")
+  createdAt               DateTime             @default(now()) @map("created_at")
+  approvalSteps           LeaveApprovalStep[]  @relation("LeaveApprovalSteps")
+  approvalTokens          ApprovalToken[]
+  workflowEscalations     WorkflowEscalation[]
+  leaveConsumptions       LeaveConsumption[]
+
+  @@index([employeeId, status])
+  @@index([employeeId, workflowStatus])
+  @@index([workflowStatus])
+  @@map("leave_requests")
+}
+
+model LeaveApprovalStep {
+  id              Int                @id @default(autoincrement())
+  leaveRequestId  Int                @map("leave_request_id")
+  leaveRequest    LeaveRequest       @relation("LeaveApprovalSteps", fields: [leaveRequestId], references: [id], onDelete: Cascade)
+  currentForLeave LeaveRequest?      @relation("CurrentApprovalStep")
+  stepOrder       Int                @map("step_order")
+  approverId      Int?               @map("approver_id")
+  approver        Employee?          @relation(fields: [approverId], references: [id], onDelete: SetNull)
+  approverRole    ApproverRole       @map("approver_role")
+  status          ApprovalStepStatus @default(pending)
+  actedAt         DateTime?          @map("acted_at")
+  actedByUserId   String?            @map("acted_by_user_id")
+  comment         String?
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+  approvalTokens  ApprovalToken[]
+
+  @@unique([leaveRequestId, stepOrder])
+  @@index([approverId, status])
+  @@index([leaveRequestId])
+  @@map("leave_approval_steps")
+}
+
+model ApprovalToken {
+  id             String              @id @default(cuid())
+  leaveRequestId Int                 @map("leave_request_id")
+  leaveRequest   LeaveRequest        @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
+  approvalStepId Int                 @map("approval_step_id")
+  approvalStep   LeaveApprovalStep   @relation(fields: [approvalStepId], references: [id], onDelete: Cascade)
+  approverId     Int?                @map("approver_id")
+  approverUserId String?             @map("approver_user_id")
+  action         ApprovalTokenAction
+  tokenHash      String              @unique @map("token_hash")
+  status         ApprovalTokenStatus @default(active)
+  expiresAt      DateTime            @map("expires_at")
+  usedAt         DateTime?           @map("used_at")
+  revokedAt      DateTime?           @map("revoked_at")
+  viewedAt       DateTime?           @map("viewed_at")
+  createdBy      String?             @map("created_by")
+  metadata       String              @default("{}")
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@index([approverId])
+  @@index([approvalStepId])
+  @@index([leaveRequestId, approvalStepId])
+  @@map("approval_tokens")
+}
+
+model EmployeeLeaveBalance {
+  id         Int      @id @default(autoincrement())
+  employeeId Int      @unique @map("employee_id")
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  elBalance  Float    @default(0) @map("el_balance")
+  clBalance  Float    @default(0) @map("cl_balance")
+  slBalance  Float    @default(0) @map("sl_balance")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("employee_leave_balances")
+}
+
+model LeaveTransaction {
+  id              Int           @id @default(autoincrement())
+  employeeId      Int           @map("employee_id")
+  employee        Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType       String        @map("leave_type")
+  transactionType String        @map("transaction_type")
+  amount          Float
+  reason          String?
+  createdBy       String?       @map("created_by")
+  leaveRequestId  Int?          @map("leave_request_id")
+  elAccrualLotId  Int?          @map("el_accrual_lot_id")
+  elAccrualLot    ElAccrualLot? @relation(fields: [elAccrualLotId], references: [id])
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  @@index([employeeId, leaveType])
+  @@index([elAccrualLotId])
+  /// Partial uniques (Postgres migration — Prisma has no partial-unique DSL):
+  /// - (leave_request_id, transaction_type) WHERE leave_request_id IS NOT NULL
+  ///   → at most one deduction and one cancel-restore accrual per leave request
+  /// - (employee_id, reason) WHERE transaction_type = 'accrual' AND leave_request_id IS NULL AND reason IS NOT NULL
+  ///   → idempotent system accruals (CL/SL yearly, EL monthly)
+  @@map("leave_transactions")
+}
+
+/// Global, single-row (id fixed at 1) Leave Settings configuration for the
+/// startup EL/SL policy. Policy changes here never rewrite already-created
+/// ElAccrualLot rows (their accrualDate/expiryDate are computed and stored
+/// at accrual time) — so changing e.g. elExpiryMonths only affects future accruals.
+model LeavePolicySettings {
+  id                  Int      @id @default(1)
+  cycleStartDay       Int      @default(26) @map("cycle_start_day")
+  elAccrualAmount     Float    @default(0.5) @map("el_accrual_amount")
+  elEligibilityMonths Int      @default(12) @map("el_eligibility_months")
+  elExpiryMonths      Int      @default(36) @map("el_expiry_months")
+  elEncashmentCapDays Float    @default(30) @map("el_encashment_cap_days")
+  slAnnualEntitlement Int      @default(6) @map("sl_annual_entitlement")
+  slCarryForward      Boolean  @default(false) @map("sl_carry_forward")
+  slExpiryMonths      Int?     @map("sl_expiry_months")
+  clAnnualEntitlement Int      @default(12) @map("cl_annual_entitlement")
+  monthlyLeaveLimit   Float    @default(2) @map("monthly_leave_limit")
+  maxConsecutiveDays  Int      @default(3) @map("max_consecutive_days")
+  advanceNoticeDays   Int      @default(7) @map("advance_notice_days")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  updatedBy           String?  @map("updated_by")
+
+  @@map("leave_policy_settings")
+}
+
+/// Human-readable leave policy content, versioned and never deleted — kept
+/// deliberately separate from LeavePolicySettings (the machine-readable
+/// values leave business logic actually enforces). Business logic must never
+/// parse `content` to compute anything; it exists only for employees/HR to
+/// read the policy in-app instead of a separate PDF.
+model LeavePolicyDocument {
+  id            Int       @id @default(autoincrement())
+  version       String
+  effectiveFrom DateTime  @map("effective_from")
+  effectiveTo   DateTime? @map("effective_to")
+  isActive      Boolean   @default(true) @map("is_active")
+  content       String
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([isActive])
+  @@map("leave_policy_documents")
+}
+
+/// One row per Earned Leave accrual event ("lot"), enabling FIFO consumption
+/// and per-lot 36-month expiry. cycleKey (e.g. "2027-03") is the accrual-job
+/// idempotency key — running the accrual job twice for the same employee/month
+/// hits the unique constraint on the second attempt.
+model ElAccrualLot {
+  id          Int      @id @default(autoincrement())
+  employeeId  Int      @map("employee_id")
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  cycleKey    String   @map("cycle_key")
+  accrualDate DateTime @map("accrual_date")
+  amount      Float
+  remaining   Float
+  expiryDate  DateTime @map("expiry_date")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  transactions LeaveTransaction[]
+  consumptions LeaveConsumption[]
+
+  @@unique([employeeId, cycleKey])
+  @@index([employeeId, expiryDate])
+  @@index([employeeId, accrualDate])
+  @@map("el_accrual_lots")
+}
+
+/// Records exactly which EL lot(s) a given LeaveRequest's approval consumed,
+/// and how much of each — required so cancellation/reversal can restore the
+/// precise amount to the precise lot (not a flat balance bump).
+model LeaveConsumption {
+  id             Int          @id @default(autoincrement())
+  leaveRequestId Int          @map("leave_request_id")
+  leaveRequest   LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
+  elAccrualLotId Int          @map("el_accrual_lot_id")
+  elAccrualLot   ElAccrualLot @relation(fields: [elAccrualLotId], references: [id])
+  amount         Float
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@index([leaveRequestId])
+  @@index([elAccrualLotId])
+  @@map("leave_consumptions")
+}
+
+model Holiday {
+  id          Int      @id @default(autoincrement())
+  name        String
+  holidayDate DateTime @unique @map("holiday_date")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("holidays")
+}
+
+model Notification {
+  id            String                     @id @default(cuid())
+  type          NotificationType
+  channel       NotificationChannel
+  recipient     String
+  subject       String
+  payload       String                     @default("{}")
+  status        NotificationDeliveryStatus @default(pending)
+  attempts      Int                        @default(0)
+  lastError     String?                    @map("last_error")
+  correlationId String?                    @map("correlation_id")
+  scheduledAt   DateTime                   @default(now()) @map("scheduled_at")
+  sentAt        DateTime?                  @map("sent_at")
+  lockedAt      DateTime?                  @map("locked_at")
+  lockedBy      String?                    @map("locked_by")
+  createdAt     DateTime                   @default(now()) @map("created_at")
+  updatedAt     DateTime                   @updatedAt @map("updated_at")
+
+  @@index([status, scheduledAt])
+  @@index([status, lockedAt])
+  @@index([recipient])
+  @@index([correlationId])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id                        String  @id @default(cuid())
+  userId                    String  @unique @map("user_id")
+  user                      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailEnabled              Boolean @default(true) @map("email_enabled")
+  teamsNotificationsEnabled Boolean @default(true) @map("teams_notifications_enabled")
+  teamsApprovalCardsEnabled Boolean @default(true) @map("teams_approval_cards_enabled")
+  calendarSyncEnabled       Boolean @default(true) @map("calendar_sync_enabled")
+  futureTeamsEnabled        Boolean @default(true) @map("future_teams_enabled")
+  futurePushEnabled         Boolean @default(true) @map("future_push_enabled")
+  leaveApprovalAlerts       Boolean @default(true) @map("leave_approval_alerts")
+  leaveStatusAlerts         Boolean @default(true) @map("leave_status_alerts")
+  escalationAlerts          Boolean @default(true) @map("escalation_alerts")
+
+  @@map("notification_preferences")
+}
+
+model IntegrationSettings {
+  id                    String    @id @default("default")
+  teamsWebhookUrl       String?   @map("teams_webhook_url")
+  teamsApprovalsEnabled Boolean   @default(true) @map("teams_approvals_enabled")
+  calendarSyncEnabled   Boolean   @default(true) @map("calendar_sync_enabled")
+  orgSyncEnabled        Boolean   @default(false) @map("org_sync_enabled")
+  orgSyncPolicy         String    @default("{}") @map("org_sync_policy")
+  escalationHours       Int       @default(24) @map("escalation_hours")
+  graphLastHealthAt     DateTime? @map("graph_last_health_at")
+  graphLastHealthStatus String?   @map("graph_last_health_status")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@map("integration_settings")
+}
+
+model IntegrationJob {
+  id            String               @id @default(cuid())
+  jobType       String               @map("job_type")
+  status        IntegrationJobStatus @default(pending)
+  payload       String               @default("{}")
+  attempts      Int                  @default(0)
+  lastError     String?              @map("last_error")
+  correlationId String?              @map("correlation_id")
+  scheduledAt   DateTime             @default(now()) @map("scheduled_at")
+  completedAt   DateTime?            @map("completed_at")
+  lockedAt      DateTime?            @map("locked_at")
+  lockedBy      String?              @map("locked_by")
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @default(now()) @updatedAt @map("updated_at")
+
+  @@index([status, scheduledAt])
+  @@index([status, lockedAt])
+  @@index([jobType])
+  @@map("integration_jobs")
+}
+
+model WorkflowEscalation {
+  id             String       @id @default(cuid())
+  leaveRequestId Int          @map("leave_request_id")
+  leaveRequest   LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
+  approvalStepId Int          @map("approval_step_id")
+  escalationType String       @map("escalation_type")
+  metadata       String       @default("{}")
+  sentAt         DateTime     @default(now()) @map("sent_at")
+
+  @@unique([approvalStepId, escalationType])
+  @@index([leaveRequestId])
+  @@map("workflow_escalations")
+}
+
+model WorkforceMetric {
+  id          String         @id @default(cuid())
+  scope       AnalyticsScope
+  scopeKey    String         @map("scope_key")
+  metricKey   String         @map("metric_key")
+  period      MetricPeriod
+  periodStart DateTime       @map("period_start")
+  periodEnd   DateTime       @map("period_end")
+  value       Float
+  metadata    String         @default("{}")
+  computedAt  DateTime       @default(now()) @map("computed_at")
+
+  @@unique([scope, scopeKey, metricKey, period, periodStart])
+  @@index([scope, scopeKey])
+  @@index([metricKey, periodStart])
+  @@map("workforce_metrics")
+}
+
+model AnalyticsSnapshot {
+  id            String         @id @default(cuid())
+  snapshotType  String         @map("snapshot_type")
+  scope         AnalyticsScope
+  scopeKey      String         @map("scope_key")
+  payload       String         @default("{}")
+  periodStart   DateTime       @map("period_start")
+  periodEnd     DateTime       @map("period_end")
+  generatedAt   DateTime       @default(now()) @map("generated_at")
+  correlationId String?        @map("correlation_id")
+
+  @@index([snapshotType, generatedAt])
+  @@index([scope, scopeKey])
+  @@map("analytics_snapshots")
+}
+
+model AnomalyDetection {
+  id          String          @id @default(cuid())
+  anomalyType String          @map("anomaly_type")
+  severity    AnomalySeverity
+  scope       AnalyticsScope
+  scopeKey    String          @map("scope_key")
+  title       String
+  description String
+  explanation String
+  metadata    String          @default("{}")
+  detectedAt  DateTime        @default(now()) @map("detected_at")
+  resolvedAt  DateTime?       @map("resolved_at")
+  notifiedAt  DateTime?       @map("notified_at")
+
+  @@index([detectedAt])
+  @@index([scope, scopeKey])
+  @@index([anomalyType, resolvedAt])
+  @@map("anomaly_detections")
+}
+
+model AuditLog {
+  id              String   @id @default(cuid())
+  entityType      String   @map("entity_type")
+  entityId        String   @map("entity_id")
+  action          String
+  actorUserId     String?  @map("actor_user_id")
+  actorEmail      String?  @map("actor_email")
+  employeeId      Int?     @map("employee_id")
+  module          String?
+  description     String?
+  oldValue        Json?    @map("old_value")
+  newValue        Json?    @map("new_value")
+  metadata        String   @default("{}")
+  status          String   @default("success")
+  ipAddress       String?  @map("ip_address")
+  browser         String?
+  device          String?
+  operatingSystem String?  @map("operating_system")
+  userAgent       String?  @map("user_agent")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([actorUserId])
+  @@index([employeeId])
+  @@index([module, action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model LoginSession {
+  id              String             @id @default(cuid())
+  userId          String?            @map("user_id")
+  user            User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employeeId      Int?               @map("employee_id")
+  employee        Employee?          @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  attemptedEmail  String?            @map("attempted_email")
+  loginAt         DateTime           @default(now()) @map("login_at")
+  logoutAt        DateTime?          @map("logout_at")
+  lastActivityAt  DateTime           @default(now()) @map("last_activity_at")
+  status          LoginSessionStatus @default(active)
+  ipAddress       String?            @map("ip_address")
+  browser         String?
+  browserVersion  String?            @map("browser_version")
+  device          String?
+  operatingSystem String?            @map("operating_system")
+  userAgent       String?            @map("user_agent")
+  sessionToken    String?            @unique @map("session_token")
+  sessionDuration Int?               @map("session_duration")
+  failureReason   String?            @map("failure_reason")
+  isCurrent       Boolean            @default(true) @map("is_current")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([employeeId])
+  @@index([loginAt])
+  @@index([status])
+  @@index([userId, status, lastActivityAt])
+  @@index([attemptedEmail, loginAt])
+  @@map("login_sessions")
+}
+
+enum WorkerRunStatus {
+  running
+  idle
+  error
+  stopped
+}
+
+model WorkerHeartbeat {
+  workerName     String          @id @map("worker_name")
+  status         WorkerRunStatus @default(idle)
+  lastBeatAt     DateTime        @map("last_beat_at")
+  lastRunAt      DateTime?       @map("last_run_at")
+  lastDurationMs Int?            @map("last_duration_ms")
+  lastResult     String?         @map("last_result")
+  lastError      String?         @map("last_error")
+  runsTotal      Int             @default(0) @map("runs_total")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  @@index([status, lastBeatAt])
+  @@map("worker_heartbeats")
+}
+
+enum PayrollHrDecision {
+  no_action
+  apply_leave
+  salary_deduction
+  warning
+  approved_exception
+}
+
+model PayrollSettings {
+  id                       String   @id @default("default")
+  payrollStartDay          Int      @default(25) @map("payroll_start_day")
+  requiredWorkMinutes      Int      @default(480) @map("required_work_minutes")
+  breakMinutes             Int      @default(60) @map("break_minutes")
+  requiredOfficeMinutes    Int      @default(540) @map("required_office_minutes")
+  otThresholdMinutes       Int      @default(0) @map("ot_threshold_minutes")
+  halfDayThresholdMinutes  Int      @default(240) @map("half_day_threshold_minutes")
+  graceMinutes             Int      @default(15) @map("grace_minutes")
+  shiftRulesJson           String   @default("{}") @map("shift_rules_json")
+  regularizationWindowDays Int      @default(7) @map("regularization_window_days")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+
+  @@map("payroll_settings")
+}
+
+model PayrollAttendanceSummary {
+  id                   Int               @id @default(autoincrement())
+  employeeId           Int               @map("employee_id")
+  employee             Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  payrollPeriodStart   DateTime          @map("payroll_period_start")
+  payrollPeriodEnd     DateTime          @map("payroll_period_end")
+  workingDays          Int               @default(0) @map("working_days")
+  requiredMinutes      Int               @default(0) @map("required_minutes")
+  actualMinutes        Int               @default(0) @map("actual_minutes")
+  shortfallMinutes     Int               @default(0) @map("shortfall_minutes")
+  otMinutes            Int               @default(0) @map("ot_minutes")
+  leaveDays            Float             @default(0) @map("leave_days")
+  absentDays           Int               @default(0) @map("absent_days")
+  lateCount            Int               @default(0) @map("late_count")
+  recommendedDeduction String?           @map("recommended_deduction")
+  hrDecision           PayrollHrDecision @default(no_action) @map("hr_decision")
+  remarks              String?
+  computedAt           DateTime          @default(now()) @map("computed_at")
+  updatedAt            DateTime          @updatedAt @map("updated_at")
+
+  @@unique([employeeId, payrollPeriodStart, payrollPeriodEnd])
+  @@index([payrollPeriodStart, payrollPeriodEnd])
+  @@index([hrDecision])
+  @@map("payroll_attendance_summaries")
+}
+
+/// Attendance scheduling — the source of truth for weekly working days and
+/// expected work minutes. Deliberately separate from PayrollSettings: payroll
+/// governs pay calculation, this governs attendance-day classification.
+model AttendanceSettings {
+  id                  String   @id @default("default")
+  mondayWorking       Boolean  @default(true) @map("monday_working")
+  tuesdayWorking      Boolean  @default(true) @map("tuesday_working")
+  wednesdayWorking    Boolean  @default(true) @map("wednesday_working")
+  thursdayWorking     Boolean  @default(true) @map("thursday_working")
+  fridayWorking       Boolean  @default(true) @map("friday_working")
+  saturdayWorking     Boolean  @default(false) @map("saturday_working")
+  sundayWorking       Boolean  @default(false) @map("sunday_working")
+  expectedWorkMinutes Int      @default(480) @map("expected_work_minutes")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("attendance_settings")
+}
+
+model AttendanceDateOverride {
+  id        Int                    @id @default(autoincrement())
+  date      DateTime               @unique
+  type      AttendanceOverrideType
+  reason    String?
+  createdBy String?                @map("created_by")
+  createdAt DateTime               @default(now()) @map("created_at")
+
+  @@index([date])
+  @@map("attendance_date_overrides")
+}
+
+model Ticket {
+  id                 String          @id @default(cuid())
+  ticketNumber       String          @unique @map("ticket_number")
+  subject            String
+  description        String
+  category           TicketCategory
+  type               TicketType
+  priority           TicketPriority  @default(medium)
+  status             TicketStatus    @default(new)
+  isAnonymous        Boolean         @default(false) @map("is_anonymous")
+  raisedByEmployeeId Int             @map("raised_by_employee_id")
+  raisedByEmployee   Employee        @relation(fields: [raisedByEmployeeId], references: [id], onDelete: Cascade)
+  department         String?
+  assignedToUserId   String?         @map("assigned_to_user_id")
+  assignedToUser     User?           @relation("AssignedHandler", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  resolutionNotes    String?         @map("resolution_notes")
+  resolvedAt         DateTime?       @map("resolved_at")
+  closedAt           DateTime?       @map("closed_at")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+  messages           TicketMessage[]
+  history            TicketHistory[]
+
+  @@index([ticketNumber])
+  @@index([status])
+  @@index([priority])
+  @@index([category])
+  @@index([raisedByEmployeeId])
+  @@index([assignedToUserId])
+  @@index([isAnonymous])
+  @@index([createdAt])
+  @@index([status, isAnonymous])
+  @@index([assignedToUserId, status])
+  @@map("tickets")
+}
+
+model TicketMessage {
+  id           String                  @id @default(cuid())
+  ticketId     String                  @map("ticket_id")
+  ticket       Ticket                  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  visibility   TicketMessageVisibility
+  body         String
+  authorUserId String                  @map("author_user_id")
+  author       User                    @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+  createdAt    DateTime                @default(now()) @map("created_at")
+
+  @@index([ticketId])
+  @@index([ticketId, createdAt])
+  @@index([authorUserId])
+  @@map("ticket_messages")
+}
+
+model TicketHistory {
+  id           String   @id @default(cuid())
+  ticketId     String   @map("ticket_id")
+  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  action       String
+  fieldChanged String?  @map("field_changed")
+  oldValue     String?  @map("old_value")
+  newValue     String?  @map("new_value")
+  actorUserId  String   @map("actor_user_id")
+  actor        User     @relation(fields: [actorUserId], references: [id], onDelete: Cascade)
+  metadata     String   @default("{}")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([ticketId])
+  @@index([ticketId, createdAt])
+  @@index([action])
+  @@index([actorUserId])
+  @@map("ticket_history")
+}
+
+// =============================================================================
+// RECRUITMENT MODULE — Phase 0 foundation
+// =============================================================================
+
+enum JobOpeningStatus {
+  draft
+  open
+  on_hold
+  closed
+  filled
+}
+
+enum JobEmploymentType {
+  full_time
+  part_time
+  contract
+  intern
+  temporary
+  other
+}
+
+enum HiringTeamRole {
+  recruiter
+  hiring_manager
+  team_lead
+  interviewer
+}
+
+enum CandidateStatus {
+  active
+  hired
+  talent_pool
+  do_not_hire
+  archived
+  merged
+}
+
+enum CandidateSource {
+  manual_upload
+  referral
+  csv_import
+  google_forms_csv
+  other
+  manual
+  import
+  employee_referral
+  career_portal_future
+  /// Anonymous public /apply submission (see PublicApplicationSubmission).
+  career_portal
+}
+
+enum PreferredWorkMode {
+  remote
+  hybrid
+  onsite
+}
+
+enum RecruitmentDocumentType {
+  resume
+  cover_letter
+  portfolio
+  assessment
+  offer_letter
+  identity
+  photo
+  other
+}
+
+enum NoteVisibility {
+  team
+  private
+  hr_only
+}
+
+enum IntakeItemStatus {
+  received
+  parse_pending
+  parse_ready
+  duplicate_review
+  confirmed
+  discarded
+}
+
+enum ApplicationPriority {
+  low
+  normal
+  high
+  critical
+}
+
+enum ApplicationStatus {
+  active
+  hired
+  rejected
+  on_hold
+  withdrawn
+}
+
+/// System pipeline stages (PRD defaults). Terminal + hold included.
+enum RecruitmentPipelineStage {
+  resume_received
+  screening
+  assessment
+  hr_round
+  technical_round
+  team_lead_round
+  manager_round
+  client_round
+  reference_check
+  decision
+  offer
+  hired
+  rejected
+  on_hold
+  withdrawn
+}
+
+/// Coarse funnel/reporting bucket for a RecruitmentPipelineStage value —
+/// lets funnel counts, terminal-stage checks, etc. key off a stable category
+/// instead of the literal enum value, so a job's custom stage label/order
+/// still rolls up correctly. See PIPELINE_STAGE_CATEGORY in
+/// src/lib/recruitment/shared/pipeline-stage-groups.ts for the mapping.
+enum StageCategory {
+  APPLIED
+  SCREENING
+  ASSESSMENT
+  INTERVIEW
+  DECISION
+  OFFER
+  JOINED
+  REJECTED
+}
+
+enum InterviewStatus {
+  draft
+  scheduled
+  completed
+  no_show
+  cancelled
+}
+
+enum InterviewRoundType {
+  screening
+  hr
+  technical
+  team_lead
+  manager
+  client
+  other
+}
+
+enum HiringDecisionOutcome {
+  strong_hire
+  hire
+  borderline
+  hold
+  reject
+}
+
+enum OfferStatus {
+  draft
+  released
+  accepted
+  declined
+  withdrawn
+}
+
+enum AiInsightType {
+  resume_parse
+  profile_completion
+  quality_score
+  candidate_summary
+  resume_field_recovery
+  duplicate_suggestion
+  job_match
+  interview_summary
+  decision_draft
+}
+
+enum AiInsightStatus {
+  pending_review
+  accepted
+  dismissed
+  superseded
+}
+
+enum RecruitmentTimelineEntityType {
+  job_opening
+  candidate
+  application
+  interview
+  offer
+  intake
+}
+
+enum SavedFilterEntity {
+  applications
+  candidates
+  jobs
+  interviews
+  offers
+  reports
+}
+
+enum RecruitmentCommunicationType {
+  email_sent
+  email_received
+  interview_invitation
+  interview_reminder
+  offer_letter
+  rejection
+  internal_note
+  system_notification
+}
+
+enum RecruitmentCommunicationStatus {
+  draft
+  scheduled
+  sent
+  delivered
+  failed
+  cancelled
+}
+
+enum RecruitmentEmailTemplateType {
+  interview_invitation
+  interview_reminder
+  interview_cancelled
+  interview_rescheduled
+  offer_letter
+  offer_reminder
+  offer_expired
+  rejection
+  welcome
+  general
+}
+
+// --- Config ------------------------------------------------------------------
+
+/// Org-level recruitment settings (singleton row id = "default").
+model RecruitmentSettings {
+  id                        String                       @id @default("default")
+  defaultPipelineTemplateId String?                      @map("default_pipeline_template_id")
+  defaultPipelineTemplate   RecruitmentPipelineTemplate? @relation(fields: [defaultPipelineTemplateId], references: [id], onDelete: SetNull)
+  slaDaysPerStageJson       Json                         @default("{}") @map("sla_days_per_stage_json")
+  aiEnabled                 Boolean                      @default(true) @map("ai_enabled")
+  requireDecisionForOffer   Boolean                      @default(true) @map("require_decision_for_offer")
+  skipManagerApprovalIfNoHm Boolean                      @default(true) @map("skip_manager_approval_if_no_hm")
+  hmCompensationVisible     Boolean                      @default(true) @map("hm_compensation_visible")
+  allowDuplicateActiveApp   Boolean                      @default(false) @map("allow_duplicate_active_app")
+  metadata                  Json                         @default("{}")
+  updatedAt                 DateTime                     @updatedAt @map("updated_at")
+
+  @@map("recruitment_settings")
+}
+
+model RecruitmentPipelineTemplate {
+  id                String                  @id @default(cuid())
+  name              String
+  description       String?
+  isSystem          Boolean                 @default(false) @map("is_system")
+  isActive          Boolean                 @default(true) @map("is_active")
+  createdByUserId   String?                 @map("created_by_user_id")
+  createdBy         User?                   @relation("PipelineTemplateCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt         DateTime                @default(now()) @map("created_at")
+  updatedAt         DateTime                @updatedAt @map("updated_at")
+  deletedAt         DateTime?               @map("deleted_at")
+  stages            PipelineTemplateStage[]
+  jobOpenings       JobOpening[]
+  settingsAsDefault RecruitmentSettings[]
+
+  @@index([isActive, deletedAt])
+  @@map("recruitment_pipeline_templates")
+}
+
+model PipelineTemplateStage {
+  id         String                      @id @default(cuid())
+  templateId String                      @map("template_id")
+  template   RecruitmentPipelineTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  stage      RecruitmentPipelineStage
+  sortOrder  Int                         @map("sort_order")
+  isOptional Boolean                     @default(false) @map("is_optional")
+  label      String?
+  slaDays    Int?                        @map("sla_days")
+
+  @@unique([templateId, stage])
+  @@unique([templateId, sortOrder])
+  @@index([templateId])
+  @@map("recruitment_pipeline_template_stages")
+}
+
+// --- Job Opening -------------------------------------------------------------
+
+model JobOpening {
+  id                             String                       @id @default(cuid())
+  title                          String
+  code                           String?                      @unique
+  status                         JobOpeningStatus             @default(draft)
+  department                     String?
+  location                       String?
+  workMode                       String?                      @map("work_mode") // onsite|hybrid|remote (string for flexibility)
+  employmentType                 JobEmploymentType            @default(full_time) @map("employment_type")
+  description                    String?
+  requirements                   String?
+  openingsCount                  Int                          @default(1) @map("openings_count")
+  /// Headcount request fields (NOT a separate entity — architecture freeze)
+  headcountApproved              Boolean                      @default(false) @map("headcount_approved")
+  headcountRequestedByEmployeeId Int?                         @map("headcount_requested_by_employee_id")
+  headcountRequestedBy           Employee?                    @relation("JobHeadcountRequester", fields: [headcountRequestedByEmployeeId], references: [id], onDelete: SetNull)
+  headcountRequestedAt           DateTime?                    @map("headcount_requested_at")
+  headcountUrgency               String?                      @map("headcount_urgency")
+  compensationCurrency           String?                      @map("compensation_currency")
+  compensationMin                Decimal?                     @map("compensation_min") @db.Decimal(14, 2)
+  compensationMax                Decimal?                     @map("compensation_max") @db.Decimal(14, 2)
+  targetStartDate                DateTime?                    @map("target_start_date")
+  pipelineTemplateId             String?                      @map("pipeline_template_id")
+  pipelineTemplate               RecruitmentPipelineTemplate? @relation(fields: [pipelineTemplateId], references: [id], onDelete: SetNull)
+  ownerRecruiterUserId           String?                      @map("owner_recruiter_user_id")
+  ownerRecruiter                 User?                        @relation("JobOpeningOwner", fields: [ownerRecruiterUserId], references: [id], onDelete: SetNull)
+  publishedAt                    DateTime?                    @map("published_at")
+  closedAt                       DateTime?                    @map("closed_at")
+  filledAt                       DateTime?                    @map("filled_at")
+  /// Public career-portal visibility (independent of `status`) — a job can be
+  /// `open` internally without being publicly listed (confidential/internal-only reqs).
+  isPubliclyListed               Boolean                      @default(false) @map("is_publicly_listed")
+  /// Unique, URL-safe slug for /apply/[publicSlug]. Null until first published publicly.
+  publicSlug                     String?                      @unique @map("public_slug")
+  createdByUserId                String?                      @map("created_by_user_id")
+  createdBy                      User?                        @relation("JobOpeningCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt                      DateTime                     @default(now()) @map("created_at")
+  updatedAt                      DateTime                     @updatedAt @map("updated_at")
+  deletedAt                      DateTime?                    @map("deleted_at")
+
+  stages                       JobOpeningStage[]
+  hiringTeam                   HiringTeamMember[]
+  documents                    JobOpeningDocument[]
+  notes                        JobOpeningNote[]
+  applications                 Application[]
+  intakeItems                  IntakeItem[]
+  communications               RecruitmentCommunication[]
+  publicApplicationSubmissions PublicApplicationSubmission[]
+
+  @@index([status, deletedAt])
+  @@index([department])
+  @@index([ownerRecruiterUserId, status])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@index([isPubliclyListed, status])
+  @@map("job_openings")
+}
+
+/// Frozen ordered stages for this job (copied from template at create).
+/// Becoming the canonical stage-identity table Application.currentStageId /
+/// ApplicationStageHistory.fromStageId/toStageId reference — `stage` (the
+/// RecruitmentPipelineStage enum) stays only as the legacy/default seed
+/// value; `category` is what business logic and reporting key off.
+model JobOpeningStage {
+  id           String                   @id @default(cuid())
+  jobOpeningId String                   @map("job_opening_id")
+  jobOpening   JobOpening               @relation(fields: [jobOpeningId], references: [id], onDelete: Cascade)
+  stage        RecruitmentPipelineStage
+  category     StageCategory            @default(SCREENING)
+  sortOrder    Int                      @map("sort_order")
+  isOptional   Boolean                  @default(false) @map("is_optional")
+  isEnabled    Boolean                  @default(true) @map("is_enabled")
+  isArchived   Boolean                  @default(false) @map("is_archived")
+  label        String?
+  slaDays      Int?                     @map("sla_days")
+
+  applications     Application[]
+  historyFromStage ApplicationStageHistory[] @relation("StageHistoryFromStage")
+  historyToStage   ApplicationStageHistory[] @relation("StageHistoryToStage")
+
+  @@unique([jobOpeningId, stage])
+  @@unique([jobOpeningId, sortOrder])
+  @@index([jobOpeningId])
+  @@index([jobOpeningId, sortOrder])
+  @@index([jobOpeningId, isArchived])
+  @@map("job_opening_stages")
+}
+
+model HiringTeamMember {
+  id           String         @id @default(cuid())
+  jobOpeningId String         @map("job_opening_id")
+  jobOpening   JobOpening     @relation(fields: [jobOpeningId], references: [id], onDelete: Cascade)
+  employeeId   Int            @map("employee_id")
+  employee     Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  role         HiringTeamRole
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  @@unique([jobOpeningId, employeeId, role])
+  @@index([employeeId, role])
+  @@index([jobOpeningId, role])
+  /// ScopeEngine: resolve job ids for an employee quickly
+  @@index([employeeId, jobOpeningId])
+  @@map("hiring_team_members")
+}
+
+model JobOpeningDocument {
+  id               String                  @id @default(cuid())
+  jobOpeningId     String                  @map("job_opening_id")
+  jobOpening       JobOpening              @relation(fields: [jobOpeningId], references: [id], onDelete: Cascade)
+  documentType     RecruitmentDocumentType @default(other) @map("document_type")
+  fileName         String                  @map("file_name")
+  mimeType         String?                 @map("mime_type")
+  sizeBytes        Int?                    @map("size_bytes")
+  storageKey       String                  @map("storage_key")
+  checksum         String?
+  uploadedByUserId String?                 @map("uploaded_by_user_id")
+  uploadedBy       User?                   @relation("JobDocUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime                @default(now()) @map("created_at")
+  deletedAt        DateTime?               @map("deleted_at")
+
+  @@index([jobOpeningId, deletedAt])
+  @@map("job_opening_documents")
+}
+
+model JobOpeningNote {
+  id           String         @id @default(cuid())
+  jobOpeningId String         @map("job_opening_id")
+  jobOpening   JobOpening     @relation(fields: [jobOpeningId], references: [id], onDelete: Cascade)
+  body         String
+  visibility   NoteVisibility @default(team)
+  isPinned     Boolean        @default(false) @map("is_pinned")
+  isResolved   Boolean        @default(false) @map("is_resolved")
+  authorUserId String         @map("author_user_id")
+  author       User           @relation("JobNoteAuthor", fields: [authorUserId], references: [id], onDelete: Cascade)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  deletedAt    DateTime?      @map("deleted_at")
+
+  @@index([jobOpeningId, deletedAt])
+  @@index([jobOpeningId, isPinned])
+  @@map("job_opening_notes")
+}
+
+// --- Candidate ---------------------------------------------------------------
+
+model Candidate {
+  id                     String             @id @default(cuid())
+  tenantId               String?            @map("tenant_id")
+  fullName               String             @map("full_name")
+  firstName              String?            @map("first_name")
+  lastName               String?            @map("last_name")
+  preferredName          String?            @map("preferred_name")
+  email                  String?
+  phone                  String?
+  alternatePhone         String?            @map("alternate_phone")
+  dateOfBirth            DateTime?          @map("date_of_birth")
+  location               String?
+  currentCompany         String?            @map("current_company")
+  currentTitle           String?            @map("current_title")
+  linkedinUrl            String?            @map("linkedin_url")
+  professionalSummary    String?            @map("professional_summary") @db.Text
+  headline               String?            @map("headline")
+  totalExperienceYears   Decimal?           @map("total_experience_years") @db.Decimal(4, 1)
+  githubUrl              String?            @map("github_url")
+  preferredWorkMode      PreferredWorkMode? @map("preferred_work_mode")
+  willingToRelocate      Boolean?           @map("willing_to_relocate")
+  source                 CandidateSource    @default(manual_upload)
+  status                 CandidateStatus    @default(active)
+  doNotHireReason        String?            @map("do_not_hire_reason")
+  /// Compensation expectations (sensitive — Scope/Permission gated in queries)
+  currentCtc             Decimal?           @map("current_ctc") @db.Decimal(14, 2)
+  expectedCtc            Decimal?           @map("expected_ctc") @db.Decimal(14, 2)
+  currency               String?            @default("INR")
+  noticePeriodDays       Int?               @map("notice_period_days")
+  earliestJoinDate       DateTime?          @map("earliest_join_date")
+  availabilityNotes      String?            @map("availability_notes")
+  timezone               String?
+  primaryRecruiterUserId String?            @map("primary_recruiter_user_id")
+  primaryRecruiter       User?              @relation("CandidatePrimaryRecruiter", fields: [primaryRecruiterUserId], references: [id], onDelete: SetNull)
+  referredByEmployeeId   Int?               @map("referred_by_employee_id")
+  referredBy             Employee?          @relation("CandidateReferrer", fields: [referredByEmployeeId], references: [id], onDelete: SetNull)
+  /// Set on successful conversion
+  employeeId             Int?               @unique @map("employee_id")
+  employee               Employee?          @relation("CandidateConvertedEmployee", fields: [employeeId], references: [id], onDelete: SetNull)
+  mergedIntoCandidateId  String?            @map("merged_into_candidate_id")
+  mergedInto             Candidate?         @relation("CandidateMerge", fields: [mergedIntoCandidateId], references: [id], onDelete: SetNull)
+  mergedFrom             Candidate[]        @relation("CandidateMerge")
+  createdByUserId        String?            @map("created_by_user_id")
+  createdBy              User?              @relation("CandidateCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt              DateTime           @default(now()) @map("created_at")
+  updatedAt              DateTime           @updatedAt @map("updated_at")
+  deletedAt              DateTime?          @map("deleted_at")
+  archivedAt             DateTime?          @map("archived_at")
+  normalizedEmail        String?            @map("normalized_email")
+  normalizedPhone        String?            @map("normalized_phone")
+
+  personal           CandidatePersonal?
+  documents          CandidateDocument[]
+  experiences        CandidateExperience[]
+  educations         CandidateEducation[]
+  skills             CandidateSkill[]
+  projects           CandidateProject[]
+  certifications     CandidateCertification[]
+  notes              CandidateNote[]
+  chatMessages       CandidateChatMessage[]
+  tags               CandidateTag[]
+  talentPoolEntries  TalentPoolEntry[]
+  aiInsights         CandidateAiInsight[]
+  applications       Application[]
+  intakeItems        IntakeItem[]
+  conversionSnapshot EmployeeConversionSnapshot?
+  communications     RecruitmentCommunication[]
+
+  @@index([status, deletedAt])
+  @@index([email])
+  @@index([phone])
+  @@index([source])
+  @@index([primaryRecruiterUserId])
+  @@index([createdAt])
+  @@index([fullName])
+  @@index([deletedAt])
+  @@index([tenantId])
+  @@index([normalizedEmail])
+  @@index([normalizedPhone])
+  /// Partial unique (email) among live candidates — enforce in migration SQL:
+  /// CREATE UNIQUE INDEX ... ON candidates (lower(email)) WHERE deleted_at IS NULL AND email IS NOT NULL AND merged_into_candidate_id IS NULL;
+  @@map("candidates")
+}
+
+model CandidatePersonal {
+  candidateId       String    @id @map("candidate_id")
+  candidate         Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  nationality       String?
+  currentLocation   String?   @map("current_location")
+  preferredLocation String?   @map("preferred_location")
+  noticePeriod      String?   @map("notice_period")
+  availabilityDate  DateTime? @map("availability_date")
+  linkedinUrl       String?   @map("linkedin_url")
+  portfolioUrl      String?   @map("portfolio_url")
+
+  @@map("candidate_personal")
+}
+
+model CandidateDocument {
+  id               String                  @id @default(cuid())
+  candidateId      String                  @map("candidate_id")
+  candidate        Candidate               @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  documentType     RecruitmentDocumentType @map("document_type")
+  fileName         String                  @map("file_name")
+  mimeType         String?                 @map("mime_type")
+  sizeBytes        Int?                    @map("size_bytes")
+  storageKey       String                  @map("storage_key")
+  checksum         String?
+  version          Int                     @default(1)
+  isPrimary        Boolean                 @default(false) @map("is_primary")
+  uploadedByUserId String?                 @map("uploaded_by_user_id")
+  uploadedBy       User?                   @relation("CandidateDocUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime                @default(now()) @map("created_at")
+  deletedAt        DateTime?               @map("deleted_at")
+  fileType         String?                 @map("file_type")
+  storagePath      String?                 @map("storage_path")
+  size             Int?
+
+  @@index([candidateId, documentType, deletedAt])
+  @@index([candidateId, isPrimary])
+  @@map("candidate_documents")
+}
+
+model CandidateExperience {
+  id               String    @id @default(cuid())
+  candidateId      String    @map("candidate_id")
+  candidate        Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  company          String
+  title            String
+  location         String?
+  startDate        DateTime? @map("start_date")
+  endDate          DateTime? @map("end_date")
+  isCurrent        Boolean   @default(false) @map("is_current")
+  description      String?
+  sortOrder        Int       @default(0) @map("sort_order")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  companyName      String?   @map("company_name")
+  designation      String?   @map("designation")
+  employmentType   String?   @map("employment_type")
+  currentlyWorking Boolean?  @default(false) @map("currently_working")
+
+  @@index([candidateId, sortOrder])
+  @@map("candidate_experiences")
+}
+
+model CandidateEducation {
+  id           String    @id @default(cuid())
+  candidateId  String    @map("candidate_id")
+  candidate    Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  institution  String
+  degree       String?
+  field        String?
+  startYear    Int?      @map("start_year")
+  endYear      Int?      @map("end_year")
+  notes        String?
+  sortOrder    Int       @default(0) @map("sort_order")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  fieldOfStudy String?   @map("field_of_study")
+  grade        String?
+
+  @@index([candidateId])
+  @@map("candidate_educations")
+}
+
+model CandidateSkill {
+  id                String    @id @default(cuid())
+  candidateId       String    @map("candidate_id")
+  candidate         Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  name              String
+  proficiency       String?
+  isConfirmed       Boolean   @default(true) @map("is_confirmed")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  skillName         String?   @map("skill_name")
+  yearsOfExperience Int?      @map("years_of_experience")
+
+  @@unique([candidateId, name])
+  @@index([name])
+  @@map("candidate_skills")
+}
+
+model CandidateProject {
+  id           String    @id @default(cuid())
+  candidateId  String    @map("candidate_id")
+  candidate    Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  title        String
+  summary      String?
+  techStack    String?   @map("tech_stack")
+  url          String?
+  sortOrder    Int       @default(0) @map("sort_order")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  description  String?
+  technologies String?
+  role         String?
+  duration     String?
+
+  @@index([candidateId])
+  @@map("candidate_projects")
+}
+
+model CandidateCertification {
+  id            String    @id @default(cuid())
+  candidateId   String    @map("candidate_id")
+  candidate     Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  name          String
+  issuer        String?
+  issuedAt      DateTime? @map("issued_at")
+  expiresAt     DateTime? @map("expires_at")
+  credentialId  String?   @map("credential_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  issueDate     DateTime? @map("issue_date")
+  expiryDate    DateTime? @map("expiry_date")
+  credentialUrl String?   @map("credential_url")
+
+  @@index([candidateId])
+  @@map("candidate_certifications")
+}
+
+model CandidateNote {
+  id           String         @id @default(cuid())
+  candidateId  String         @map("candidate_id")
+  candidate    Candidate      @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  body         String
+  visibility   NoteVisibility @default(team)
+  isPinned     Boolean        @default(false) @map("is_pinned")
+  isResolved   Boolean        @default(false) @map("is_resolved")
+  authorUserId String         @map("author_user_id")
+  author       User           @relation("CandidateNoteAuthor", fields: [authorUserId], references: [id], onDelete: Cascade)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  deletedAt    DateTime?      @map("deleted_at")
+  content      String?
+
+  @@index([candidateId, deletedAt])
+  @@index([candidateId, isPinned])
+  @@map("candidate_notes")
+}
+
+model CandidateChatMessage {
+  id             String    @id @default(cuid())
+  candidateId    String    @map("candidate_id")
+  candidate      Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  body           String
+  authorUserId   String    @map("author_user_id")
+  author         User      @relation("CandidateChatAuthor", fields: [authorUserId], references: [id], onDelete: Cascade)
+  isPinned       Boolean   @default(false) @map("is_pinned")
+  promotedNoteId String?   @map("promoted_note_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  @@index([candidateId, createdAt])
+  @@index([candidateId, deletedAt])
+  @@map("candidate_chat_messages")
+}
+
+model RecruitmentTag {
+  id         String         @id @default(cuid())
+  name       String         @unique
+  color      String?
+  createdAt  DateTime       @default(now()) @map("created_at")
+  candidates CandidateTag[]
+
+  @@map("recruitment_tags")
+}
+
+model CandidateTag {
+  candidateId String         @map("candidate_id")
+  tagId       String         @map("tag_id")
+  candidate   Candidate      @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  tag         RecruitmentTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  @@id([candidateId, tagId])
+  @@index([tagId])
+  @@map("candidate_tags")
+}
+
+model TalentPoolEntry {
+  id                  String    @id @default(cuid())
+  candidateId         String    @map("candidate_id")
+  candidate           Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  reason              String?
+  sourceApplicationId String?   @map("source_application_id")
+  enteredAt           DateTime  @default(now()) @map("entered_at")
+  exitedAt            DateTime? @map("exited_at")
+  createdByUserId     String?   @map("created_by_user_id")
+
+  @@index([candidateId, exitedAt])
+  @@index([enteredAt])
+  @@map("talent_pool_entries")
+}
+
+model CandidateAiInsight {
+  id               String          @id @default(cuid())
+  candidateId      String          @map("candidate_id")
+  candidate        Candidate       @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  applicationId    String?         @map("application_id")
+  insightType      AiInsightType   @map("insight_type")
+  status           AiInsightStatus @default(pending_review)
+  title            String?
+  contentJson      Json            @map("content_json")
+  confidence       Float?
+  modelId          String?         @map("model_id")
+  createdByUserId  String?         @map("created_by_user_id")
+  reviewedByUserId String?         @map("reviewed_by_user_id")
+  reviewedAt       DateTime?       @map("reviewed_at")
+  createdAt        DateTime        @default(now()) @map("created_at")
+
+  @@index([candidateId, status])
+  @@index([insightType, status])
+  @@index([createdAt])
+  /// Partial unique indexes (pending insights) — enforced in migration SQL:
+  /// - one pending candidate_summary per candidate
+  /// - one pending resume_field_recovery per candidate
+  @@map("candidate_ai_insights")
+}
+
+model IntakeItem {
+  id                     String           @id @default(cuid())
+  status                 IntakeItemStatus @default(received)
+  source                 CandidateSource
+  rawPayloadJson         Json             @default("{}") @map("raw_payload_json")
+  fileName               String?          @map("file_name")
+  storageKey             String?          @map("storage_key")
+  candidateId            String?          @map("candidate_id")
+  candidate              Candidate?       @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  jobOpeningId           String?          @map("job_opening_id")
+  jobOpening             JobOpening?      @relation(fields: [jobOpeningId], references: [id], onDelete: SetNull)
+  duplicateOfCandidateId String?          @map("duplicate_of_candidate_id")
+  duplicateConfidence    Float?           @map("duplicate_confidence")
+  errorMessage           String?          @map("error_message")
+  createdByUserId        String?          @map("created_by_user_id")
+  createdBy              User?            @relation("IntakeCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt              DateTime         @default(now()) @map("created_at")
+  updatedAt              DateTime         @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@index([jobOpeningId])
+  @@index([candidateId])
+  @@map("recruitment_intake_items")
+}
+
+/// Anonymous public-intake session for /apply. Deliberately NOT IntakeItem —
+/// IntakeItem is HR-initiated; this is candidate-initiated and unauthenticated.
+/// Holds only lifecycle/audit JSON snapshots; the permanent source of truth on
+/// successful submit is always Candidate/CandidateDocument/Application, never
+/// these JSON columns (see parsedProposalJson/candidateEditedJson/submittedSnapshotJson).
+enum PublicSubmissionStatus {
+  started
+  basic_info_complete
+  resume_uploaded
+  parsing
+  ready_for_review
+  candidate_edited
+  parse_failed
+  upload_failed
+  submission_failed
+  submitted
+  job_closed
+  expired
+}
+
+model PublicApplicationSubmission {
+  id     String                 @id @default(cuid())
+  status PublicSubmissionStatus @default(started)
+
+  jobOpeningId String     @map("job_opening_id")
+  jobOpening   JobOpening @relation(fields: [jobOpeningId], references: [id], onDelete: Restrict)
+
+  // --- Basic info (§4B) ---
+  fullName        String? @map("full_name")
+  email           String?
+  phone           String?
+  normalizedEmail String? @map("normalized_email")
+  normalizedPhone String? @map("normalized_phone")
+
+  // --- Resume file (temp storage — public-intake/YYYY-MM/{id}/, deleted after
+  // permanent copy on submit or on lazy expiry) ---
+  resumeFileName   String? @map("resume_file_name")
+  resumeMimeType   String? @map("resume_mime_type")
+  resumeSizeBytes  Int?    @map("resume_size_bytes")
+  resumeStorageKey String? @map("resume_storage_key")
+  resumeChecksum   String? @map("resume_checksum")
+
+  // --- Passport photo file (same temp storage/lifecycle as resume above) ---
+  photoFileName   String? @map("photo_file_name")
+  photoMimeType   String? @map("photo_mime_type")
+  photoSizeBytes  Int?    @map("photo_size_bytes")
+  photoStorageKey String? @map("photo_storage_key")
+  photoChecksum   String? @map("photo_checksum")
+
+  // --- Parsing / review chain (§9 trust boundary — audit snapshots only) ---
+  parserVersion         String? @map("parser_version")
+  parseFailureReason    String? @map("parse_failure_reason")
+  parsedProposalJson    Json?   @map("parsed_proposal_json")
+  candidateEditedJson   Json?   @map("candidate_edited_json")
+  submittedSnapshotJson Json?   @map("submitted_snapshot_json")
+
+  consentGivenAt DateTime? @map("consent_given_at")
+
+  // --- Dedup signal (mirrors IntakeItem's duplicate fields; kept separate
+  // per PublicApplicationSubmission not being IntakeItem) ---
+  duplicateOfCandidateId String? @map("duplicate_of_candidate_id")
+  duplicateConfidence    Float?  @map("duplicate_confidence")
+
+  // --- Resolution outcome (set only at successful submit) ---
+  resolvedCandidateId   String? @map("resolved_candidate_id")
+  resolvedApplicationId String? @map("resolved_application_id")
+  referenceCode         String? @map("reference_code")
+
+  // --- Token/lifecycle (signature itself is never stored — see token-service.ts) ---
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  ipHash     String?   @map("ip_hash")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([jobOpeningId, status])
+  @@index([status, expiresAt])
+  @@index([normalizedEmail])
+  @@index([createdAt])
+  @@map("public_application_submissions")
+}
+
+// --- Application & pipeline --------------------------------------------------
+
+model Application {
+  id                        String                   @id @default(cuid())
+  candidateId               String                   @map("candidate_id")
+  candidate                 Candidate                @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+  jobOpeningId              String                   @map("job_opening_id")
+  jobOpening                JobOpening               @relation(fields: [jobOpeningId], references: [id], onDelete: Restrict)
+  status                    ApplicationStatus        @default(active)
+  currentStage              RecruitmentPipelineStage @default(resume_received) @map("current_stage")
+  /// Nullable FK to JobOpeningStage — additive alongside `currentStage`
+  /// during the Phase 1 transition; both are written on every stage move.
+  currentStageId            String?                  @map("current_stage_id")
+  currentStageRef           JobOpeningStage?         @relation(fields: [currentStageId], references: [id], onDelete: SetNull)
+  stageEnteredAt            DateTime                 @default(now()) @map("stage_entered_at")
+  priority                  ApplicationPriority      @default(normal)
+  assignedRecruiterUserId   String?                  @map("assigned_recruiter_user_id")
+  assignedRecruiter         User?                    @relation("ApplicationRecruiter", fields: [assignedRecruiterUserId], references: [id], onDelete: SetNull)
+  assignedManagerEmployeeId Int?                     @map("assigned_manager_employee_id")
+  assignedManager           Employee?                @relation("ApplicationManager", fields: [assignedManagerEmployeeId], references: [id], onDelete: SetNull)
+  source                    CandidateSource?
+  riskFlagsJson             Json                     @default("[]") @map("risk_flags_json")
+  aggregateScore            Float?                   @map("aggregate_score")
+  rejectedReason            String?                  @map("rejected_reason")
+  holdReason                String?                  @map("hold_reason")
+  withdrawnReason           String?                  @map("withdrawn_reason")
+  /// Recruiter assessment for this application (role-specific evaluation)
+  assessment                String?
+  assessmentUpdatedAt       DateTime?                @map("assessment_updated_at")
+  assessmentUpdatedByUserId String?                  @map("assessment_updated_by_user_id")
+  assessmentUpdatedBy       User?                    @relation("ApplicationAssessmentUpdatedBy", fields: [assessmentUpdatedByUserId], references: [id], onDelete: SetNull)
+  createdByUserId           String?                  @map("created_by_user_id")
+  createdBy                 User?                    @relation("ApplicationCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt                 DateTime                 @default(now()) @map("created_at")
+  updatedAt                 DateTime                 @updatedAt @map("updated_at")
+  deletedAt                 DateTime?                @map("deleted_at")
+
+  stageHistory       ApplicationStageHistory[]
+  interviews         Interview[]
+  decisions          HiringDecision[]
+  offers             Offer[]
+  conversionSnapshot EmployeeConversionSnapshot?
+  communications     RecruitmentCommunication[]
+
+  @@index([jobOpeningId, currentStage, deletedAt])
+  @@index([currentStageId])
+  @@index([candidateId, deletedAt])
+  @@index([status, currentStage])
+  @@index([assignedRecruiterUserId, status])
+  @@index([assignedManagerEmployeeId, status])
+  @@index([priority, currentStage])
+  @@index([stageEnteredAt])
+  @@index([createdAt])
+  /// Partial unique active app per candidate×job — migration SQL:
+  /// UNIQUE (candidate_id, job_opening_id) WHERE deleted_at IS NULL AND status = 'active'
+  @@index([candidateId, jobOpeningId])
+  @@map("recruitment_applications")
+}
+
+/// IMMUTABLE ledger — existing rows' fromStage/toStage/actor/createdAt are
+/// never rewritten. fromStageId/toStageId are additive: nullable, populated
+/// going forward by the service layer and backfilled best-effort for
+/// existing rows (see prisma/scripts/backfill-dynamic-pipeline-stages.ts) —
+/// a row with no confident backfill mapping simply keeps them null.
+model ApplicationStageHistory {
+  id            String                    @id @default(cuid())
+  applicationId String                    @map("application_id")
+  application   Application               @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  fromStage     RecruitmentPipelineStage? @map("from_stage")
+  toStage       RecruitmentPipelineStage  @map("to_stage")
+  fromStageId   String?                   @map("from_stage_id")
+  fromStageRef  JobOpeningStage?          @relation("StageHistoryFromStage", fields: [fromStageId], references: [id], onDelete: SetNull)
+  toStageId     String?                   @map("to_stage_id")
+  toStageRef    JobOpeningStage?          @relation("StageHistoryToStage", fields: [toStageId], references: [id], onDelete: SetNull)
+  note          String?
+  isOverride    Boolean                   @default(false) @map("is_override")
+  actorUserId   String?                   @map("actor_user_id")
+  actor         User?                     @relation("StageHistoryActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  createdAt     DateTime                  @default(now()) @map("created_at")
+
+  @@index([applicationId, createdAt])
+  @@index([toStage, createdAt])
+  @@index([fromStageId])
+  @@index([toStageId])
+  @@map("application_stage_history")
+}
+
+// --- Interview ---------------------------------------------------------------
+
+model Interview {
+  id              String             @id @default(cuid())
+  applicationId   String             @map("application_id")
+  application     Application        @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  roundType       InterviewRoundType @map("round_type")
+  status          InterviewStatus    @default(draft)
+  title           String?
+  scheduledStart  DateTime?          @map("scheduled_start")
+  scheduledEnd    DateTime?          @map("scheduled_end")
+  timezone        String?
+  location        String?
+  meetingUrl      String?            @map("meeting_url")
+  transcriptText  String?            @map("transcript_text")
+  recordingUrl    String?            @map("recording_url")
+  summary         String?
+  createdByUserId String?            @map("created_by_user_id")
+  createdBy       User?              @relation("InterviewCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+  deletedAt       DateTime?          @map("deleted_at")
+
+  panelists      InterviewPanelist[]
+  feedback       InterviewFeedback[]
+  attachments    InterviewAttachment[]
+  communications RecruitmentCommunication[]
+
+  @@index([applicationId, status])
+  @@index([scheduledStart])
+  @@index([status, scheduledStart])
+  @@index([status, deletedAt])
+  @@map("recruitment_interviews")
+}
+
+model InterviewPanelist {
+  id          String    @id @default(cuid())
+  interviewId String    @map("interview_id")
+  interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  employeeId  Int       @map("employee_id")
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  isObserver  Boolean   @default(false) @map("is_observer")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@unique([interviewId, employeeId])
+  @@index([employeeId])
+  @@map("interview_panelists")
+}
+
+model InterviewFeedback {
+  id               String    @id @default(cuid())
+  interviewId      String    @map("interview_id")
+  interview        Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  authorEmployeeId Int       @map("author_employee_id")
+  author           Employee  @relation(fields: [authorEmployeeId], references: [id], onDelete: Cascade)
+  overallRating    Float?    @map("overall_rating")
+  ratingsJson      Json      @default("{}") @map("ratings_json")
+  recommendation   String?
+  strengths        String?
+  concerns         String?
+  privateNotes     String?   @map("private_notes")
+  submittedAt      DateTime? @map("submitted_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@unique([interviewId, authorEmployeeId])
+  @@index([authorEmployeeId])
+  @@map("interview_feedback")
+}
+
+model InterviewAttachment {
+  id               String    @id @default(cuid())
+  interviewId      String    @map("interview_id")
+  interview        Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  fileName         String    @map("file_name")
+  mimeType         String?   @map("mime_type")
+  sizeBytes        Int?      @map("size_bytes")
+  storageKey       String    @map("storage_key")
+  uploadedByUserId String?   @map("uploaded_by_user_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  deletedAt        DateTime? @map("deleted_at")
+
+  @@index([interviewId])
+  @@map("interview_attachments")
+}
+
+// --- Decision / Offer / Conversion -------------------------------------------
+
+model HiringDecision {
+  id                   String                @id @default(cuid())
+  applicationId        String                @map("application_id")
+  application          Application           @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  outcome              HiringDecisionOutcome
+  rationale            String
+  strengths            String
+  concerns             String?
+  salaryRecommendation Decimal?              @map("salary_recommendation") @db.Decimal(14, 2)
+  currency             String?
+  riskTagsJson         Json                  @default("[]") @map("risk_tags_json")
+  version              Int
+  isCurrent            Boolean               @default(true) @map("is_current")
+  decidedByUserId      String                @map("decided_by_user_id")
+  decidedBy            User                  @relation("DecisionAuthor", fields: [decidedByUserId], references: [id], onDelete: Restrict)
+  decidedAt            DateTime              @default(now()) @map("decided_at")
+  createdAt            DateTime              @default(now()) @map("created_at")
+
+  offers Offer[]
+
+  @@unique([applicationId, version])
+  @@index([applicationId, isCurrent])
+  @@index([outcome, decidedAt])
+  @@map("hiring_decisions")
+}
+
+model Offer {
+  id                      String          @id @default(cuid())
+  applicationId           String          @map("application_id")
+  application             Application     @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  hiringDecisionId        String?         @map("hiring_decision_id")
+  hiringDecision          HiringDecision? @relation(fields: [hiringDecisionId], references: [id], onDelete: Restrict)
+  status                  OfferStatus     @default(draft)
+  currency                String          @default("INR")
+  baseSalary              Decimal         @map("base_salary") @db.Decimal(14, 2)
+  variablePay             Decimal?        @map("variable_pay") @db.Decimal(14, 2)
+  benefitsNotes           String?         @map("benefits_notes")
+  proposedStartDate       DateTime?       @map("proposed_start_date")
+  expiresAt               DateTime?       @map("expires_at")
+  declineReason           String?         @map("decline_reason")
+  withdrawReason          String?         @map("withdraw_reason")
+  releasedAt              DateTime?       @map("released_at")
+  acceptedAt              DateTime?       @map("accepted_at")
+  declinedAt              DateTime?       @map("declined_at")
+  withdrawnAt             DateTime?       @map("withdrawn_at")
+  createdByUserId         String?         @map("created_by_user_id")
+  createdBy               User?           @relation("OfferCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt               DateTime        @default(now()) @map("created_at")
+  updatedAt               DateTime        @updatedAt @map("updated_at")
+
+  // Additional fields for Phase 4.2 Offer Management
+  offerNumber         String    @unique @map("offer_number")
+  employmentType      String?   @map("employment_type")
+  department          String?   @map("department")
+  location            String?   @map("location")
+  grade               String?   @map("grade")
+  reportingManagerId  Int?      @map("reporting_manager_id")
+  joiningDate         DateTime? @map("joining_date")
+  ctc                 Decimal?  @map("ctc") @db.Decimal(14, 2)
+  salaryBreakdownJson Json?     @map("salary_breakdown_json")
+  bonus               Decimal?  @map("bonus") @db.Decimal(14, 2)
+  stock               String?   @map("stock")
+  probationDays       Int?      @map("probation_days")
+  noticeBuyout        Boolean   @default(false) @map("notice_buyout")
+  offerPdfKey         String?   @map("offer_pdf_key")
+  offerNotes          String?   @map("offer_notes")
+  sentAt              DateTime? @map("sent_at")
+
+  // Offer letter generation & delivery
+  letterGeneratedAt       DateTime? @map("letter_generated_at")
+  letterGeneratedByUserId String?   @map("letter_generated_by_user_id")
+  letterSentByUserId      String?   @map("letter_sent_by_user_id")
+
+  revisions          OfferRevision[]
+  conversionSnapshot EmployeeConversionSnapshot?
+  communications     RecruitmentCommunication[]
+
+  @@index([applicationId, status])
+  @@index([status, createdAt])
+  @@index([hiringDecisionId])
+  @@index([department])
+  @@index([sentAt])
+  @@index([acceptedAt])
+  @@map("recruitment_offers")
+}
+
+model OfferRevision {
+  id           String   @id @default(cuid())
+  offerId      String   @map("offer_id")
+  offer        Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  version      Int
+  snapshotJson Json     @map("snapshot_json")
+  changeNote   String?  @map("change_note")
+  actorUserId  String?  @map("actor_user_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([offerId, version])
+  @@index([offerId])
+  @@map("offer_revisions")
+}
+
+/// IMMUTABLE — no updatedAt, no deletedAt, no product updates.
+model EmployeeConversionSnapshot {
+  id                String      @id @default(cuid())
+  applicationId     String      @unique @map("application_id")
+  application       Application @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  candidateId       String      @unique @map("candidate_id")
+  candidate         Candidate   @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+  offerId           String      @unique @map("offer_id")
+  offer             Offer       @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  employeeId        Int         @unique @map("employee_id")
+  employee          Employee    @relation("ConversionSnapshotEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  fieldMapVersion   String      @map("field_map_version")
+  mappedFields      Json        @map("mapped_fields")
+  overrideReason    String?     @map("override_reason")
+  convertedByUserId String      @map("converted_by_user_id")
+  convertedBy       User        @relation("ConversionActor", fields: [convertedByUserId], references: [id], onDelete: Restrict)
+  convertedAt       DateTime    @default(now()) @map("converted_at")
+  /// createdAt == convertedAt semantically; keep for audit-field consistency
+  createdAt         DateTime    @default(now()) @map("created_at")
+
+  @@index([convertedAt])
+  @@map("employee_conversion_snapshots")
+}
+
+// --- Timeline / metrics / saved filters --------------------------------------
+
+model RecruitmentTimelineEvent {
+  id            String                        @id @default(cuid())
+  entityType    RecruitmentTimelineEntityType @map("entity_type")
+  entityId      String                        @map("entity_id")
+  applicationId String?                       @map("application_id")
+  candidateId   String?                       @map("candidate_id")
+  jobOpeningId  String?                       @map("job_opening_id")
+  eventType     String                        @map("event_type")
+  summary       String
+  actorUserId   String?                       @map("actor_user_id")
+  metadata      Json                          @default("{}")
+  createdAt     DateTime                      @default(now()) @map("created_at")
+
+  @@index([entityType, entityId, createdAt])
+  @@index([applicationId, createdAt])
+  @@index([candidateId, createdAt])
+  @@index([jobOpeningId, createdAt])
+  @@index([eventType, createdAt])
+  @@map("recruitment_timeline_events")
+}
+
+/// Dashboard / report aggregates (WorkforceMetric pattern).
+model RecruitmentMetricSnapshot {
+  id          String   @id @default(cuid())
+  metricKey   String   @map("metric_key")
+  scopeType   String   @map("scope_type") // org|job|recruiter|manager
+  scopeKey    String   @map("scope_key")
+  periodStart DateTime @map("period_start")
+  periodEnd   DateTime @map("period_end")
+  value       Float
+  payloadJson Json     @default("{}") @map("payload_json")
+  computedAt  DateTime @default(now()) @map("computed_at")
+
+  @@unique([metricKey, scopeType, scopeKey, periodStart, periodEnd])
+  @@index([metricKey, periodStart])
+  @@index([scopeType, scopeKey])
+  @@map("recruitment_metric_snapshots")
+}
+
+// --- Communication -----------------------------------------------------------
+
+model RecruitmentEmailTemplate {
+  id              String                       @id @default(cuid())
+  name            String
+  type            RecruitmentEmailTemplateType
+  subject         String
+  body            String                       @db.Text
+  isSystem        Boolean                      @default(false) @map("is_system")
+  isActive        Boolean                      @default(true) @map("is_active")
+  createdByUserId String?                      @map("created_by_user_id")
+  createdBy       User?                        @relation("EmailTemplateCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime                     @default(now()) @map("created_at")
+  updatedAt       DateTime                     @updatedAt @map("updated_at")
+  deletedAt       DateTime?                    @map("deleted_at")
+  communications  RecruitmentCommunication[]
+
+  @@index([type, isActive])
+  @@index([deletedAt])
+  @@map("recruitment_email_templates")
+}
+
+model RecruitmentCommunication {
+  id             String                               @id @default(cuid())
+  type           RecruitmentCommunicationType
+  status         RecruitmentCommunicationStatus       @default(draft)
+  subject        String?
+  body           String?                              @db.Text
+  candidateId    String?                              @map("candidate_id")
+  candidate      Candidate?                           @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  applicationId  String?                              @map("application_id")
+  application    Application?                         @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  jobOpeningId   String?                              @map("job_opening_id")
+  jobOpening     JobOpening?                          @relation(fields: [jobOpeningId], references: [id], onDelete: SetNull)
+  interviewId    String?                              @map("interview_id")
+  interview      Interview?                           @relation(fields: [interviewId], references: [id], onDelete: SetNull)
+  offerId        String?                              @map("offer_id")
+  offer          Offer?                               @relation(fields: [offerId], references: [id], onDelete: SetNull)
+  templateId     String?                              @map("template_id")
+  template       RecruitmentEmailTemplate?            @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  senderUserId   String?                              @map("sender_user_id")
+  sender         User?                                @relation("CommunicationSender", fields: [senderUserId], references: [id], onDelete: SetNull)
+  recipientEmail String?                              @map("recipient_email")
+  threadId       String?                              @map("thread_id")
+  parentId       String?                              @map("parent_id")
+  parent         RecruitmentCommunication?            @relation("CommunicationThread", fields: [parentId], references: [id], onDelete: SetNull)
+  replies        RecruitmentCommunication[]           @relation("CommunicationThread")
+  sentAt         DateTime?                            @map("sent_at")
+  deliveredAt    DateTime?                            @map("delivered_at")
+  scheduledFor   DateTime?                            @map("scheduled_for")
+  errorMessage   String?                              @map("error_message")
+  metadata       Json                                 @default("{}")
+  createdAt      DateTime                             @default(now()) @map("created_at")
+  updatedAt      DateTime                             @updatedAt @map("updated_at")
+  deletedAt      DateTime?                            @map("deleted_at")
+  attachments    RecruitmentCommunicationAttachment[]
+
+  @@index([candidateId, createdAt])
+  @@index([applicationId, createdAt])
+  @@index([jobOpeningId, createdAt])
+  @@index([interviewId])
+  @@index([offerId])
+  @@index([status, scheduledFor])
+  @@index([senderUserId, createdAt])
+  @@index([threadId, createdAt])
+  @@index([type, status])
+  @@index([deletedAt])
+  @@map("recruitment_communications")
+}
+
+model RecruitmentCommunicationAttachment {
+  id              String                   @id @default(cuid())
+  communicationId String                   @map("communication_id")
+  communication   RecruitmentCommunication @relation(fields: [communicationId], references: [id], onDelete: Cascade)
+  fileName        String                   @map("file_name")
+  fileType        String                   @map("file_type")
+  fileSize        Int                      @map("file_size")
+  storagePath     String                   @map("storage_path")
+  uploadedAt      DateTime                 @default(now()) @map("uploaded_at")
+
+  @@index([communicationId])
+  @@map("recruitment_communication_attachments")
+}
+
+model RecruitmentSavedFilter {
+  id         String            @id @default(cuid())
+  userId     String            @map("user_id")
+  user       User              @relation("RecruitmentSavedFilters", fields: [userId], references: [id], onDelete: Cascade)
+  entity     SavedFilterEntity
+  name       String
+  filterJson Json              @map("filter_json")
+  isDefault  Boolean           @default(false) @map("is_default")
+  createdAt  DateTime          @default(now()) @map("created_at")
+  updatedAt  DateTime          @updatedAt @map("updated_at")
+
+  @@unique([userId, entity, name])
+  @@index([userId, entity])
+  @@map("recruitment_saved_filters")
+}
+
+/// Raw biometric punch events from the eSSL Attendance Bridge.
+/// Immutable audit layer — never edited after insert.
+/// source + tableName + deviceLogId is the idempotency key.
+model BiometricPunch {
+  id Int @id @default(autoincrement())
+
+  source      String
+  tableName   String @map("table_name")
+  deviceLogId Int    @map("device_log_id")
+
+  employeeCode String @map("employee_code")
+
+  employeeId Int?      @map("employee_id")
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  punchedAt DateTime @map("punched_at")
+  deviceId  Int      @map("device_id")
+
+  metadata Json @default("{}")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([source, tableName, deviceLogId])
+  @@index([employeeCode])
+  @@index([employeeId])
+  @@index([punchedAt])
+  @@map("biometric_punches")
+}
