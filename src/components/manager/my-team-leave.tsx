@@ -60,7 +60,14 @@ function LeaveRequestTable({
           <DataTableCell className="whitespace-nowrap text-xs">
             {formatDate(r.startDate)} – {formatDate(r.endDate)}
           </DataTableCell>
-          <DataTableCell className="tabular-nums">{formatLeaveDays(r.days)}</DataTableCell>
+          <DataTableCell className="tabular-nums">
+            {formatLeaveDays(r.days)}
+            {r.lopDays > 0 && (
+              <span className="ml-1 font-medium text-destructive">
+                · {formatLeaveDays(r.lopDays)} unpaid
+              </span>
+            )}
+          </DataTableCell>
           <DataTableCell>
             <span
               className={cn(

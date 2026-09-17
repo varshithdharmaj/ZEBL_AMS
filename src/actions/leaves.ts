@@ -74,11 +74,9 @@ export async function applyLeaveAction(
       };
     }
 
-    if ((typeBalance?.remaining ?? 0) < days) {
-      return {
-        error: `Insufficient ${leaveType} balance. Available: ${typeBalance?.remaining ?? 0}, requested: ${days}.`,
-      };
-    }
+    const available = typeBalance?.remaining ?? 0;
+    const payableDays = Math.min(days, available);
+    const lopDays = days - payableDays;
 
     await createLeaveWorkflow({
       employeeId,
@@ -86,6 +84,7 @@ export async function applyLeaveAction(
       startDate,
       endDate,
       days,
+      lopDays,
       reason,
       actor: toWorkflowActor(session),
     });
@@ -94,7 +93,12 @@ export async function applyLeaveAction(
     revalidatePath("/employee/dashboard");
     revalidatePath("/employee/approvals");
     revalidatePath("/admin/leaves");
-    return { success: "Leave request submitted for approval." };
+    return {
+      success:
+        lopDays > 0
+          ? `Leave request submitted for approval. ${lopDays} of ${days} day(s) exceed your available ${leaveType} balance and will be recorded as unpaid (Loss of Pay).`
+          : "Leave request submitted for approval.",
+    };
   } catch (e) {
     const message = e instanceof WorkflowError ? e.message : "Failed to submit leave request.";
     return { error: message };

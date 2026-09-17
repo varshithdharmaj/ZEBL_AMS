@@ -103,6 +103,7 @@ export async function listLeaveApprovalInboxItems(
           startDate: dto.startDate,
           endDate: dto.endDate,
           days: dto.days,
+          lopDays: dto.lopDays,
           reason: dto.reason,
           workflowStatus: dto.workflowStatus,
           version: dto.version,

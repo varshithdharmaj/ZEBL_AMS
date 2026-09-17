@@ -1,0 +1,530 @@
+import { describe, expect, it } from "vitest";
+import type { SessionUser } from "@/lib/session";
+import {
+  canViewTicket,
+  canManageTicket,
+  canReplyToTicket,
+  canAddPublicUpdate,
+  canAddInternalNote,
+  canViewInternalNotes,
+  canAssignTicket,
+  type TicketLike,
+} from "@/lib/tickets/ticket-permissions";
+import {
+  buildTicketWhereClause,
+  buildAnonymousTicketWhereClause,
+} from "@/lib/tickets/ticket-access";
+import { canAccessAnonymousTickets } from "@/lib/permissions";
+
+const superAdminSession: SessionUser = {
+  id: "sa-1",
+  email: "admin@test.local",
+  role: "super_admin",
+  employeeId: null,
+  employeeName: null,
+  sessionVersion: 1,
+  authProvider: "local",
+};
+
+const hrSession: SessionUser = {
+  id: "hr-1",
+  email: "hr@test.local",
+  role: "hr",
+  employeeId: 100,
+  employeeName: "HR User",
+  sessionVersion: 1,
+  authProvider: "local",
+};
+
+const employeeSession: SessionUser = {
+  id: "emp-1",
+  email: "employee@test.local",
+  role: "employee",
+  employeeId: 200,
+  employeeName: "Employee User",
+  sessionVersion: 1,
+  authProvider: "local",
+};
+
+const otherEmployeeSession: SessionUser = {
+  id: "emp-2",
+  email: "other@test.local",
+  role: "employee",
+  employeeId: 201,
+  employeeName: "Other Employee",
+  sessionVersion: 1,
+  authProvider: "local",
+};
+
+const managerSession: SessionUser = {
+  id: "mgr-1",
+  email: "manager@test.local",
+  role: "manager",
+  employeeId: 300,
+  employeeName: "Manager User",
+  sessionVersion: 1,
+  authProvider: "local",
+};
+
+const normalTicket: TicketLike = {
+  id: "ticket-1",
+  isAnonymous: false,
+  raisedByEmployeeId: 200,
+  assignedToUserId: "hr-1",
+  department: "Engineering",
+};
+
+const anonymousTicket: TicketLike = {
+  id: "ticket-anon",
+  isAnonymous: true,
+  raisedByEmployeeId: 200,
+  assignedToUserId: null,
+  department: "Engineering",
+};
+
+const unassignedTicket: TicketLike = {
+  id: "ticket-unassigned",
+  isAnonymous: false,
+  raisedByEmployeeId: 201,
+  assignedToUserId: null,
+  department: "HR",
+};
+
+describe("Ticket Authorization — View Access", () => {
+  it("Super Admin can view normal tickets", () => {
+    expect(canViewTicket(superAdminSession, normalTicket)).toBe(true);
+  });
+
+  it("Super Admin can view anonymous tickets", () => {
+    expect(canViewTicket(superAdminSession, anonymousTicket)).toBe(true);
+  });
+
+  it("HR can view assigned tickets", () => {
+    expect(canViewTicket(hrSession, normalTicket)).toBe(true);
+  });
+
+  it("HR cannot view anonymous tickets", () => {
+    expect(canViewTicket(hrSession, anonymousTicket)).toBe(false);
+  });
+
+  it("Employee can view own tickets", () => {
+    expect(canViewTicket(employeeSession, normalTicket)).toBe(true);
+  });
+
+  it("Employee cannot view another employee's ticket", () => {
+    expect(canViewTicket(employeeSession, unassignedTicket)).toBe(false);
+  });
+
+  it("Employee cannot view anonymous tickets (even own)", () => {
+    // Employee who raised an anonymous ticket should be able to see it
+    // in their "My tickets" — but this is edge case. For now, strictest rule.
+    expect(canViewTicket(employeeSession, anonymousTicket)).toBe(false);
+  });
+
+  it("Unauthenticated user cannot view tickets", () => {
+    expect(canViewTicket(null, normalTicket)).toBe(false);
+  });
+});
+
+describe("Ticket Authorization — Management", () => {
+  it("Super Admin can manage normal tickets", () => {
+    expect(canManageTicket(superAdminSession, normalTicket)).toBe(true);
+  });
+
+  it("Super Admin can manage anonymous tickets", () => {
+    expect(canManageTicket(superAdminSession, anonymousTicket)).toBe(true);
+  });
+
+  it("HR can manage assigned tickets", () => {
+    expect(canManageTicket(hrSession, normalTicket)).toBe(true);
+  });
+
+  it("HR cannot manage anonymous tickets", () => {
+    expect(canManageTicket(hrSession, anonymousTicket)).toBe(false);
+  });
+
+  it("HR CAN manage unassigned normal tickets", () => {
+    // HR should be able to manage unassigned tickets so they can assign, update status, etc.
+    expect(canManageTicket(hrSession, unassignedTicket)).toBe(true);
+  });
+
+  it("HR CANNOT manage tickets assigned to other HR users", () => {
+    const ticketAssignedToOtherHR = {
+      id: "ticket-10",
+      isAnonymous: false,
+      raisedByEmployeeId: 50,
+      assignedToUserId: "other-hr-user-id",
+      department: "IT",
+    };
+    expect(canManageTicket(hrSession, ticketAssignedToOtherHR)).toBe(false);
+  });
+
+  it("Employee cannot manage own tickets", () => {
+    expect(canManageTicket(employeeSession, normalTicket)).toBe(false);
+  });
+});
+
+describe("Ticket Authorization — Employee Actions", () => {
+  it("Employee can reply to own tickets", () => {
+    expect(canReplyToTicket(employeeSession, normalTicket)).toBe(true);
+  });
+
+  it("Employee cannot reply to another employee's ticket", () => {
+    expect(canReplyToTicket(employeeSession, unassignedTicket)).toBe(false);
+  });
+
+  it("HR cannot use employee reply action", () => {
+    expect(canReplyToTicket(hrSession, normalTicket)).toBe(false);
+  });
+
+  it("Super Admin cannot use employee reply action", () => {
+    expect(canReplyToTicket(superAdminSession, normalTicket)).toBe(false);
+  });
+});
+
+describe("Ticket Authorization — HR Actions", () => {
+  it("HR can add public updates to assigned tickets", () => {
+    expect(canAddPublicUpdate(hrSession, normalTicket)).toBe(true);
+  });
+
+  it("HR can add internal notes to assigned tickets", () => {
+    expect(canAddInternalNote(hrSession, normalTicket)).toBe(true);
+  });
+
+  it("HR cannot add updates to anonymous tickets", () => {
+    expect(canAddPublicUpdate(hrSession, anonymousTicket)).toBe(false);
+    expect(canAddInternalNote(hrSession, anonymousTicket)).toBe(false);
+  });
+
+  it("HR can view internal notes on managed tickets", () => {
+    expect(canViewInternalNotes(hrSession, normalTicket)).toBe(true);
+  });
+
+  it("HR cannot view internal notes on anonymous tickets", () => {
+    expect(canViewInternalNotes(hrSession, anonymousTicket)).toBe(false);
+  });
+
+  it("Employee cannot view internal notes", () => {
+    expect(canViewInternalNotes(employeeSession, normalTicket)).toBe(false);
+  });
+
+  it("Super Admin can view internal notes on all tickets", () => {
+    expect(canViewInternalNotes(superAdminSession, normalTicket)).toBe(true);
+    expect(canViewInternalNotes(superAdminSession, anonymousTicket)).toBe(true);
+  });
+});
+
+describe("Ticket Authorization — Assignment", () => {
+  it("HR can assign tickets assigned to them", () => {
+    expect(canAssignTicket(hrSession, normalTicket)).toBe(true);
+  });
+
+  it("HR can assign unassigned non-anonymous tickets", () => {
+    expect(canAssignTicket(hrSession, unassignedTicket)).toBe(true);
+  });
+
+  it("HR cannot assign tickets assigned to another HR", () => {
+    const ticketAssignedToOtherHR: TicketLike = {
+      id: "ticket-other-hr",
+      isAnonymous: false,
+      raisedByEmployeeId: 200,
+      assignedToUserId: "hr-other",
+      department: "Engineering",
+    };
+    expect(canManageTicket(hrSession, ticketAssignedToOtherHR)).toBe(false);
+    expect(canAssignTicket(hrSession, ticketAssignedToOtherHR)).toBe(false);
+  });
+
+  it("canAssignTicket matches canManageTicket for HR", () => {
+    expect(canAssignTicket(hrSession, normalTicket)).toBe(
+      canManageTicket(hrSession, normalTicket)
+    );
+    expect(canAssignTicket(hrSession, unassignedTicket)).toBe(
+      canManageTicket(hrSession, unassignedTicket)
+    );
+  });
+
+  it("HR cannot assign anonymous tickets", () => {
+    expect(canAssignTicket(hrSession, anonymousTicket)).toBe(false);
+  });
+
+  it("Super Admin can assign anonymous tickets", () => {
+    expect(canAssignTicket(superAdminSession, anonymousTicket)).toBe(true);
+  });
+
+  it("Super Admin can assign any non-anonymous ticket", () => {
+    const ticketAssignedToOtherHR: TicketLike = {
+      id: "ticket-other-hr",
+      isAnonymous: false,
+      raisedByEmployeeId: 200,
+      assignedToUserId: "hr-other",
+      department: "Engineering",
+    };
+    expect(canAssignTicket(superAdminSession, ticketAssignedToOtherHR)).toBe(true);
+  });
+
+  it("Employee cannot assign tickets", () => {
+    expect(canAssignTicket(employeeSession, normalTicket)).toBe(false);
+  });
+});
+
+describe("Ticket Authorization — Anonymous Queue Access", () => {
+  it("Super Admin can access anonymous queue", () => {
+    expect(canAccessAnonymousTickets("super_admin")).toBe(true);
+  });
+
+  it("HR cannot access anonymous queue", () => {
+    expect(canAccessAnonymousTickets("hr")).toBe(false);
+  });
+
+  it("Employee cannot access anonymous queue", () => {
+    expect(canAccessAnonymousTickets("employee")).toBe(false);
+  });
+});
+
+describe("Ticket Query Filtering — WHERE Clause", () => {
+  it("Super Admin WHERE clause includes anonymous tickets", () => {
+    const where = buildTicketWhereClause(superAdminSession);
+    expect(where.isAnonymous).toBeUndefined(); // No filter = all tickets
+  });
+
+  it("HR WHERE clause explicitly excludes anonymous tickets", () => {
+    const where = buildTicketWhereClause(hrSession);
+    expect(where.isAnonymous).toBe(false);
+  });
+
+  it("Employee WHERE clause explicitly excludes anonymous tickets", () => {
+    const where = buildTicketWhereClause(employeeSession);
+    expect(where.isAnonymous).toBe(false);
+  });
+
+  it("Employee WHERE clause restricts to own raisedByEmployeeId", () => {
+    const where = buildTicketWhereClause(employeeSession);
+    expect(where.raisedByEmployeeId).toBe(200);
+  });
+
+  it("HR WHERE clause includes OR conditions for assigned/unassigned", () => {
+    const where = buildTicketWhereClause(hrSession);
+    expect(where.OR).toBeDefined();
+    expect(Array.isArray(where.OR)).toBe(true);
+  });
+
+  it("Employee without employeeId gets impossible WHERE clause", () => {
+    const sessionWithoutEmployee: SessionUser = {
+      ...employeeSession,
+      employeeId: null,
+    };
+    const where = buildTicketWhereClause(sessionWithoutEmployee);
+    expect(where.id).toBe("impossible");
+  });
+});
+
+describe("Ticket Query Filtering — Anonymous Queue", () => {
+  it("Super Admin can query anonymous tickets", () => {
+    const where = buildAnonymousTicketWhereClause(superAdminSession);
+    expect(where.isAnonymous).toBe(true);
+    expect(where.id).not.toBe("impossible");
+  });
+
+  it("HR gets impossible WHERE clause for anonymous queue", () => {
+    const where = buildAnonymousTicketWhereClause(hrSession);
+    expect(where.id).toBe("impossible");
+  });
+
+  it("Employee gets impossible WHERE clause for anonymous queue", () => {
+    const where = buildAnonymousTicketWhereClause(employeeSession);
+    expect(where.id).toBe("impossible");
+  });
+});
+
+describe("Ticket Query Filtering — Search and Filters", () => {
+  it("Applies status filter to WHERE clause", () => {
+    const where = buildTicketWhereClause(superAdminSession, { status: "open" });
+    expect(where.status).toBe("open");
+  });
+
+  it("Applies priority filter to WHERE clause", () => {
+    const where = buildTicketWhereClause(superAdminSession, { priority: "high" });
+    expect(where.priority).toBe("high");
+  });
+
+  it("Applies category filter to WHERE clause", () => {
+    const where = buildTicketWhereClause(superAdminSession, { category: "hr" });
+    expect(where.category).toBe("hr");
+  });
+
+  it("Applies search to OR clause for ticketNumber, subject, description", () => {
+    const where = buildTicketWhereClause(superAdminSession, { search: "test" });
+    expect(where.OR).toBeDefined();
+    expect(Array.isArray(where.OR)).toBe(true);
+    if (Array.isArray(where.OR)) {
+      expect(where.OR.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("Non-SA search still excludes anonymous tickets", () => {
+    const where = buildTicketWhereClause(hrSession, { search: "test" });
+    expect(where.isAnonymous).toBe(false);
+  });
+
+  it("HR without search keeps assigned/unassigned access OR", () => {
+    const where = buildTicketWhereClause(hrSession);
+    expect(where.isAnonymous).toBe(false);
+    expect(where.OR).toEqual([
+      { assignedToUserId: "hr-1" },
+      { assignedToUserId: null },
+    ]);
+    expect(where.AND).toBeUndefined();
+  });
+
+  it("HR search ANDs access scope with search OR (does not overwrite)", () => {
+    const where = buildTicketWhereClause(hrSession, { search: "payroll" });
+    expect(where.isAnonymous).toBe(false);
+    // Top-level OR must not be only search (would drop access scope)
+    expect(where.OR).toBeUndefined();
+    expect(where.AND).toEqual([
+      {
+        OR: [{ assignedToUserId: "hr-1" }, { assignedToUserId: null }],
+      },
+      {
+        OR: [
+          { ticketNumber: { contains: "payroll", mode: "insensitive" } },
+          { subject: { contains: "payroll", mode: "insensitive" } },
+          { description: { contains: "payroll", mode: "insensitive" } },
+        ],
+      },
+    ]);
+  });
+
+  it("HR search + status/category/priority preserves all filters with access scope", () => {
+    const where = buildTicketWhereClause(hrSession, {
+      search: "leave",
+      status: "open",
+      category: "hr",
+      priority: "high",
+    });
+    expect(where.isAnonymous).toBe(false);
+    expect(where.status).toBe("open");
+    expect(where.category).toBe("hr");
+    expect(where.priority).toBe("high");
+    expect(where.AND).toBeDefined();
+    expect(Array.isArray(where.AND)).toBe(true);
+    if (Array.isArray(where.AND)) {
+      expect(where.AND).toHaveLength(2);
+      expect(where.AND[0]).toEqual({
+        OR: [{ assignedToUserId: "hr-1" }, { assignedToUserId: null }],
+      });
+    }
+  });
+
+  it("HR search for inaccessible ticket still requires assigned/unassigned scope", () => {
+    // Even if search text matches a ticket assigned to another HR, WHERE still
+    // requires assignedToUserId = self OR null — inaccessible tickets cannot match.
+    const where = buildTicketWhereClause(hrSession, {
+      search: "TKT-ASSIGNED-TO-OTHER",
+    });
+    expect(where.isAnonymous).toBe(false);
+    const accessBranch = Array.isArray(where.AND) ? where.AND[0] : undefined;
+    expect(accessBranch).toEqual({
+      OR: [{ assignedToUserId: "hr-1" }, { assignedToUserId: null }],
+    });
+  });
+});
+
+describe("Ticket Authorization — Edge Cases", () => {
+  it("Null session cannot view tickets", () => {
+    expect(canViewTicket(null, normalTicket)).toBe(false);
+  });
+
+  it("Null session cannot manage tickets", () => {
+    expect(canManageTicket(null, normalTicket)).toBe(false);
+  });
+
+  it("Null session cannot reply to tickets", () => {
+    expect(canReplyToTicket(null, normalTicket)).toBe(false);
+  });
+
+  it("Anonymous ticket with assigned HR still hidden from HR", () => {
+    const assignedAnonymous: TicketLike = {
+      ...anonymousTicket,
+      assignedToUserId: "hr-1",
+    };
+    expect(canViewTicket(hrSession, assignedAnonymous)).toBe(false);
+    expect(canManageTicket(hrSession, assignedAnonymous)).toBe(false);
+  });
+
+  it("Super Admin can manage anonymous ticket regardless of assignment", () => {
+    expect(canManageTicket(superAdminSession, anonymousTicket)).toBe(true);
+  });
+});
+
+describe("Ticket Authorization — Manager role (self-service parity with Employee)", () => {
+  // MANAGER is an application role; ticket self-service is per-record (own tickets
+  // only), same as Employee. It must NOT gain HR-style management just from role.
+  const managerOwnTicket: TicketLike = {
+    id: "ticket-mgr-own",
+    isAnonymous: false,
+    raisedByEmployeeId: 300,
+    assignedToUserId: null,
+    department: "Engineering",
+  };
+
+  it("Manager can view own tickets", () => {
+    expect(canViewTicket(managerSession, managerOwnTicket)).toBe(true);
+  });
+
+  it("Manager cannot view another employee's ticket", () => {
+    expect(canViewTicket(managerSession, normalTicket)).toBe(false);
+  });
+
+  it("Manager cannot view anonymous tickets", () => {
+    expect(canViewTicket(managerSession, { ...anonymousTicket, raisedByEmployeeId: 300 })).toBe(
+      false
+    );
+  });
+
+  it("Manager can reply to own tickets", () => {
+    expect(canReplyToTicket(managerSession, managerOwnTicket)).toBe(true);
+  });
+
+  it("Manager cannot reply to another employee's ticket", () => {
+    expect(canReplyToTicket(managerSession, normalTicket)).toBe(false);
+  });
+
+  it("Manager cannot manage tickets (no HR authority from role alone)", () => {
+    expect(canManageTicket(managerSession, managerOwnTicket)).toBe(false);
+  });
+
+  it("Manager cannot view internal notes", () => {
+    expect(canViewInternalNotes(managerSession, managerOwnTicket)).toBe(false);
+  });
+
+  it("Manager cannot assign tickets", () => {
+    expect(canAssignTicket(managerSession, managerOwnTicket)).toBe(false);
+  });
+
+  it("Manager WHERE clause restricts to own raisedByEmployeeId, excludes anonymous", () => {
+    const where = buildTicketWhereClause(managerSession);
+    expect(where.raisedByEmployeeId).toBe(300);
+    expect(where.isAnonymous).toBe(false);
+  });
+
+  it("Manager cannot access anonymous queue", () => {
+    expect(canAccessAnonymousTickets("manager")).toBe(false);
+    expect(buildAnonymousTicketWhereClause(managerSession).id).toBe("impossible");
+  });
+});
+
+describe("Ticket Authorization — Department Manager (No Special Role)", () => {
+  // Per architecture analysis: no separate "Department Manager" role exists.
+  // Department filtering for HR is basic string matching on Employee.department.
+  // This test confirms HR cannot bypass anonymous restrictions via department.
+
+  it("HR user cannot access anonymous ticket in their department", () => {
+    const anonInHRDept: TicketLike = {
+      ...anonymousTicket,
+      department: "HR",
+    };
+    expect(canViewTicket(hrSession, anonInHRDept)).toBe(false);
+  });
+});

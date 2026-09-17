@@ -13,6 +13,7 @@ export type PayrollExportRow = {
   shortfallHours: string;
   otHours: string;
   leaveDays: number;
+  lopDays: number;
   absentDays: number;
   lateCount: number;
   recommendedDeduction: string;
@@ -49,6 +50,7 @@ export function buildPayrollAttendanceExcel(params: {
     Shortfall: r.shortfallHours,
     OT: r.otHours,
     "Leave Days": r.leaveDays,
+    "LOP Days": r.lopDays,
     "Absent Days": r.absentDays,
     "Late Count": r.lateCount,
     "Recommended Deduction": r.recommendedDeduction,
@@ -65,6 +67,7 @@ export function buildPayrollAttendanceExcel(params: {
     { wch: 14 },
     { wch: 14 },
     { wch: 12 },
+    { wch: 10 },
     { wch: 10 },
     { wch: 10 },
     { wch: 10 },
@@ -92,6 +95,7 @@ export function toPayrollExportRow(summary: {
   shortfallMinutes: number;
   otMinutes: number;
   leaveDays: number;
+  lopDays: number;
   absentDays: number;
   lateCount: number;
   recommendedDeduction: string | null;
@@ -108,6 +112,7 @@ export function toPayrollExportRow(summary: {
     shortfallHours: formatMinutesAsHours(summary.shortfallMinutes),
     otHours: formatMinutesAsHours(summary.otMinutes),
     leaveDays: summary.leaveDays,
+    lopDays: summary.lopDays,
     absentDays: summary.absentDays,
     lateCount: summary.lateCount,
     recommendedDeduction: summary.recommendedDeduction ?? "—",

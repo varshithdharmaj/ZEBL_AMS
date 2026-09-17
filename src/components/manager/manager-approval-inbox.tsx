@@ -202,7 +202,14 @@ export function ManagerApprovalInbox({ items }: { items: PendingApprovalItem[] }
                 <td className="px-4 py-3 text-xs font-medium text-slate-700 whitespace-nowrap">
                   {formatDate(item.leave.startDate)} – {formatDate(item.leave.endDate)}
                 </td>
-                <td className="px-4 py-3 font-semibold text-slate-900 tabular-nums">{formatLeaveDays(item.leave.days)}</td>
+                <td className="px-4 py-3 font-semibold text-slate-900 tabular-nums">
+                  {formatLeaveDays(item.leave.days)}
+                  {item.leave.lopDays > 0 && (
+                    <span className="ml-1 font-medium text-rose-600">
+                      · {formatLeaveDays(item.leave.lopDays)} unpaid
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-3 w-28">
                   <WorkflowProgressBar
                     percent={item.sla.percentElapsed}

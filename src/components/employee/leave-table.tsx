@@ -17,6 +17,7 @@ type Leave = {
   startDate: Date;
   endDate: Date;
   days: number;
+  lopDays: number;
   reason: string;
   status: string;
   workflowStatus: LeaveWorkflowStatus;
@@ -72,7 +73,14 @@ export function EmployeeLeaveTable({ leaves }: { leaves: Leave[] }) {
               </DataTableCell>
               <DataTableCell className="text-xs font-medium text-slate-700 whitespace-nowrap">{formatDate(leave.startDate)}</DataTableCell>
               <DataTableCell className="text-xs font-medium text-slate-700 whitespace-nowrap">{formatDate(leave.endDate)}</DataTableCell>
-              <DataTableCell className="font-semibold text-slate-900 tabular-nums">{formatLeaveDays(leave.days)}</DataTableCell>
+              <DataTableCell className="font-semibold text-slate-900 tabular-nums">
+                {formatLeaveDays(leave.days)}
+                {leave.lopDays > 0 && (
+                  <span className="ml-1 font-medium text-rose-600">
+                    · {formatLeaveDays(leave.lopDays)} unpaid
+                  </span>
+                )}
+              </DataTableCell>
               <DataTableCell className="text-slate-700">{leave.reason}</DataTableCell>
               <DataTableCell>
                 <ApprovalBadge workflowStatus={leave.workflowStatus} />

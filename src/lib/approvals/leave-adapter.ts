@@ -35,6 +35,7 @@ export function mapLeaveToApprovalCase(
     id: number;
     leaveType: string;
     days: number;
+    lopDays: number;
     startDate: Date;
     endDate: Date;
     employeeId: number;
@@ -58,7 +59,10 @@ export function mapLeaveToApprovalCase(
   return {
     caseId: toLeaveCaseId(leave.id),
     caseType: "leave",
-    title: `${typeLabel} · ${formatLeaveDaysSafe(leave.days)}`,
+    title:
+      leave.lopDays > 0
+        ? `${typeLabel} · ${formatLeaveDaysSafe(leave.days)} (${formatLeaveDaysSafe(leave.lopDays)} unpaid)`
+        : `${typeLabel} · ${formatLeaveDaysSafe(leave.days)}`,
     subtitle: `${employeeName} · ${formatDate(leave.startDate)} – ${formatDate(leave.endDate)}`,
     subjectEmployeeId: leave.employeeId,
     status: "pending",
