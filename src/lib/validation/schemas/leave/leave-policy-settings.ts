@@ -61,6 +61,9 @@ export const leavePolicySettingsSchema = z
       .int()
       .min(0, "Advance notice must be between 0 and 90 days.")
       .max(90, "Advance notice must be between 0 and 90 days."),
+    allowManualLeaveBalanceAdjustments: checkboxBoolean,
+    allowHistoricalLeaveEntry: checkboxBoolean,
+    allowHistoricalLeaveEdit: checkboxBoolean,
   })
   .transform((v) => ({
     ...v,

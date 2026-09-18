@@ -25,6 +25,15 @@ export function LeaveSettingsView({
     initialState
   );
   const [slCarryForward, setSlCarryForward] = useState(settings.slCarryForward);
+  const [allowManualAdjustments, setAllowManualAdjustments] = useState(
+    settings.allowManualLeaveBalanceAdjustments
+  );
+  const [allowHistoricalEntry, setAllowHistoricalEntry] = useState(
+    settings.allowHistoricalLeaveEntry
+  );
+  const [allowHistoricalEdit, setAllowHistoricalEdit] = useState(
+    settings.allowHistoricalLeaveEdit
+  );
 
   return (
     <form action={formAction} className="space-y-6">
@@ -254,6 +263,76 @@ export function LeaveSettingsView({
             />
             <p className="text-xs text-muted-foreground">
               Applies to planned EL/CL. Sick Leave is exempt (it&apos;s inherently unplanned).
+            </p>
+          </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Manual leave balance adjustments"
+        description="Lets HR set or adjust an employee's leave balance directly from their profile — used to enter opening balances when migrating off a manual/paper system."
+      >
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            id="allowManualLeaveBalanceAdjustments"
+            name="allowManualLeaveBalanceAdjustments"
+            type="checkbox"
+            defaultChecked={settings.allowManualLeaveBalanceAdjustments}
+            onChange={(e) => setAllowManualAdjustments(e.target.checked)}
+            disabled={!canEdit || pending}
+            className="h-4 w-4 rounded border-input accent-primary disabled:opacity-60"
+          />
+          Allow HR to manually adjust leave balances
+        </label>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {allowManualAdjustments
+            ? "HR can set/adjust balances from an employee's profile. Turn this off once opening balances are entered so future changes only happen through normal accrual and leave requests."
+            : "Manual balance adjustments are disabled — balances only change through normal accrual and approved leave requests."}
+        </p>
+      </SectionCard>
+
+      <SectionCard
+        title="Historical leave entries"
+        description="Lets HR record leave that was actually taken before migrating to this system — with real dates and a reason — instead of just correcting the balance number."
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                id="allowHistoricalLeaveEntry"
+                name="allowHistoricalLeaveEntry"
+                type="checkbox"
+                defaultChecked={settings.allowHistoricalLeaveEntry}
+                onChange={(e) => setAllowHistoricalEntry(e.target.checked)}
+                disabled={!canEdit || pending}
+                className="h-4 w-4 rounded border-input accent-primary disabled:opacity-60"
+              />
+              Allow HR to add historical leave entries
+            </label>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {allowHistoricalEntry
+                ? "HR can backfill a leave with its actual start/end date and reason. It's recorded already-approved and deducts the balance immediately — no approval chain, since it already happened."
+                : "HR cannot add new historical leave entries."}
+            </p>
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                id="allowHistoricalLeaveEdit"
+                name="allowHistoricalLeaveEdit"
+                type="checkbox"
+                defaultChecked={settings.allowHistoricalLeaveEdit}
+                onChange={(e) => setAllowHistoricalEdit(e.target.checked)}
+                disabled={!canEdit || pending}
+                className="h-4 w-4 rounded border-input accent-primary disabled:opacity-60"
+              />
+              Allow HR to correct historical leave entries
+            </label>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {allowHistoricalEdit
+                ? "HR can correct an already-backfilled entry. The original is reversed and kept on record, and a corrected entry is created in its place — nothing is silently overwritten."
+                : "HR cannot correct historical entries already on record. Turn this off once migration is settled so past entries stay final."}
             </p>
           </div>
         </div>

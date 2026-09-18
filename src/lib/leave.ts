@@ -758,6 +758,12 @@ export async function getLeaveTransactionHistory(employeeId: number, limit = 100
     reason: string;
     updatedBy: string;
     importBatchId: number | null;
+    /** Set only for a "leave_approval" row backed by a HR-backfilled LeaveRequest that has no correction yet. */
+    editableHistoricalEntry: {
+      leaveRequestId: number;
+      startDate: Date;
+      endDate: Date;
+    } | null;
   };
 
   const rows: HistoryRow[] = transactions.map((tx) => ({
@@ -774,7 +780,12 @@ export async function getLeaveTransactionHistory(employeeId: number, limit = 100
     reason: tx.reason ?? "—",
     updatedBy: tx.createdBy ?? "system",
     importBatchId: tx.importBatchId,
+    editableHistoricalEntry: null,
   }));
+
+  const correctedRequestIds = new Set(
+    requests.filter((r) => r.previousRequestId != null).map((r) => r.previousRequestId)
+  );
 
   for (const req of requests) {
     if (req.status === LeaveRequestStatus.approved) {
@@ -787,6 +798,10 @@ export async function getLeaveTransactionHistory(employeeId: number, limit = 100
         reason: req.reason,
         updatedBy: req.reviewedBy ?? "HR",
         importBatchId: null,
+        editableHistoricalEntry:
+          req.isHistoricalEntry && !correctedRequestIds.has(req.id)
+            ? { leaveRequestId: req.id, startDate: req.startDate, endDate: req.endDate }
+            : null,
       });
     }
   }

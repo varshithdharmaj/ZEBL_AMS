@@ -17,9 +17,11 @@ const initialState: ActionState = {};
 export function LeaveBalancesTab({
   employeeId,
   balances,
+  canAdjust,
 }: {
   employeeId: number;
   balances: LeaveBalanceSummary[];
+  canAdjust: boolean;
 }) {
   const [state, formAction, pending] = useActionState(adjustLeaveBalanceAction, initialState);
   const [leaveType, setLeaveType] = useState("CL");
@@ -43,6 +45,20 @@ export function LeaveBalancesTab({
 
       <LeaveBalanceGrid balances={balances} />
 
+      {!canAdjust ? (
+        <SectionCard
+          title="Adjust balance"
+          description="Manual leave balance adjustments are currently disabled."
+        >
+          <p className="text-sm text-muted-foreground">
+            Enable this from{" "}
+            <a href="/admin/leave-settings" className="font-medium text-primary underline">
+              Leave Settings
+            </a>{" "}
+            to set or adjust this employee&apos;s balance.
+          </p>
+        </SectionCard>
+      ) : (
       <SectionCard title="Adjust balance" description="Creates a transaction record for every change">
         <form action={formAction} className="max-w-md space-y-4">
           <input type="hidden" name="employeeId" value={employeeId} />
@@ -112,6 +128,7 @@ export function LeaveBalancesTab({
           </Button>
         </form>
       </SectionCard>
+      )}
     </div>
   );
 }

@@ -16,7 +16,6 @@ import {
   ScrollText,
   Activity,
   Settings,
-  LogOut,
   Menu,
   X,
   ChevronLeft,
@@ -32,7 +31,6 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { logoutAction } from "@/actions/auth";
 import { NavLinkPendingHint } from "@/components/layout/nav-link-pending-hint";
 import type { AppUserRole } from "@/lib/roles";
 import { ROLE_LABELS } from "@/lib/roles";
@@ -93,7 +91,6 @@ function groupedNavForRole(
             { href: "/admin/attendance", label: "Attendance", icon: ClipboardList },
             { href: "/admin/payroll-attendance", label: "Payroll Attendance", icon: Banknote },
             { href: "/admin/leaves", label: "Leaves", icon: CalendarDays },
-            { href: "/admin/leave-policy", label: "Leave Policy", icon: BookOpen },
             { href: "/admin/calendar", label: "Calendar", icon: CalendarDays },
             { href: "/admin/tickets", label: "Helpdesk", icon: Headset },
             { href: "/admin/upload", label: "Upload Data", icon: Upload },
@@ -109,7 +106,6 @@ function groupedNavForRole(
                   { href: "/employee/dashboard", label: "My Dashboard", icon: LayoutDashboard },
                   { href: "/employee/attendance", label: "My Attendance", icon: ClipboardList },
                   { href: "/employee/leaves", label: "My Leaves", icon: CalendarDays },
-                  { href: "/employee/profile", label: "My Profile", icon: UserRound },
                 ],
               },
             ]
@@ -158,8 +154,11 @@ function groupedNavForRole(
           ],
         },
         {
-          group: "Help",
-          items: [{ href: "/admin/help", label: "User Guide", icon: HelpCircle }],
+          group: "Help & Policies",
+          items: [
+            { href: "/admin/leave-policy", label: "Leave Policy", icon: BookOpen },
+            { href: "/admin/help", label: "User Guide", icon: HelpCircle },
+          ],
         },
         // Platform & security administration — Super Admin only.
         ...(role === "super_admin"
@@ -184,18 +183,8 @@ function groupedNavForRole(
   }
 }
 
-function initials(name: string) {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-}
-
 export function AppSidebar({
   role,
-  userName,
   collapsed = false,
   onToggleCollapse,
   showMyTeamGroup = false,
@@ -205,7 +194,6 @@ export function AppSidebar({
   showOwnWorkspaceNav = false,
 }: {
   role: AppUserRole;
-  userName: string;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   /** Line-manager My Team nav group (from MyTeamNavContext.showMyTeamGroup). */
@@ -344,78 +332,6 @@ export function AppSidebar({
             </div>
           ))}
         </nav>
-
-        <div className="border-t border-sidebar-border p-3">
-          {role === "employee" ? (
-            <Link
-              href="/employee/profile"
-              onClick={onMobileClose}
-              title={collapsed ? `${userName} · Profile` : undefined}
-              aria-label={`Open profile for ${userName}`}
-              className={cn(
-                "mb-2 flex items-center gap-3 rounded-lg bg-sidebar-accent px-2.5 py-2 border border-border/60 transition-all duration-200",
-                "hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
-                collapsed ? "lg:justify-center lg:px-2" : ""
-              )}
-            >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-bold text-background">
-                {initials(userName)}
-              </span>
-              <div
-                className={cn(
-                  "min-w-0 flex-1 transition-opacity duration-200",
-                  collapsed ? "lg:hidden lg:opacity-0" : "opacity-100"
-                )}
-              >
-                <p className="truncate text-xs font-semibold text-foreground">{userName}</p>
-                <p className="truncate text-[0.6875rem] text-muted-foreground">
-                  Profile · {ROLE_LABELS[role]}
-                </p>
-              </div>
-            </Link>
-          ) : (
-            <div
-              className={cn(
-                "mb-2 flex items-center gap-3 rounded-lg bg-sidebar-accent px-2.5 py-2 border border-border/60 transition-all duration-200",
-                collapsed ? "lg:justify-center lg:px-2" : ""
-              )}
-              title={collapsed ? `${userName} (${ROLE_LABELS[role]})` : undefined}
-            >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-bold text-background">
-                {initials(userName)}
-              </span>
-              <div
-                className={cn(
-                  "min-w-0 flex-1 transition-opacity duration-200",
-                  collapsed ? "lg:hidden lg:opacity-0" : "opacity-100"
-                )}
-              >
-                <p className="truncate text-xs font-semibold text-foreground">{userName}</p>
-                <p className="truncate text-[0.6875rem] text-muted-foreground">{ROLE_LABELS[role]}</p>
-              </div>
-            </div>
-          )}
-          <form action={logoutAction}>
-            <button
-              type="submit"
-              title={collapsed ? "Sign out" : undefined}
-              className={cn(
-                "flex w-full items-center gap-2 rounded-lg py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-                collapsed ? "lg:justify-center lg:px-2 px-3" : "px-3"
-              )}
-            >
-              <LogOut className="h-3.5 w-3.5 shrink-0" />
-              <span
-                className={cn(
-                  "transition-opacity duration-200 whitespace-nowrap",
-                  collapsed ? "lg:hidden lg:opacity-0" : "opacity-100"
-                )}
-              >
-                Sign out
-              </span>
-            </button>
-          </form>
-        </div>
       </aside>
     </>
   );

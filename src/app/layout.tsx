@@ -3,6 +3,11 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 
+// Self-hosted targets (ECS, Cloudflare Workers) have no /_vercel/speed-insights
+// route, so the injected script 404s to an HTML error page and the browser
+// blocks it on MIME type. Only render where the Vercel edge actually serves it.
+const isVercelHosted = Boolean(process.env.VERCEL ?? process.env.NEXT_PUBLIC_VERCEL_ENV);
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -46,7 +51,7 @@ export default function RootLayout({
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
         {children}
-        <SpeedInsights />
+        {isVercelHosted ? <SpeedInsights /> : null}
       </body>
     </html>
   );

@@ -11,6 +11,9 @@ export type LeavePolicy = ElPolicyDates & {
   monthlyLeaveLimit: number;
   maxConsecutiveDays: number;
   advanceNoticeDays: number;
+  allowManualLeaveBalanceAdjustments: boolean;
+  allowHistoricalLeaveEntry: boolean;
+  allowHistoricalLeaveEdit: boolean;
 };
 
 const SETTINGS_ROW_ID = 1;
@@ -28,6 +31,9 @@ function toPolicy(row: {
   monthlyLeaveLimit: number;
   maxConsecutiveDays: number;
   advanceNoticeDays: number;
+  allowManualLeaveBalanceAdjustments: boolean;
+  allowHistoricalLeaveEntry: boolean;
+  allowHistoricalLeaveEdit: boolean;
 }): LeavePolicy {
   return {
     cycleStartDay: row.cycleStartDay,
@@ -42,6 +48,9 @@ function toPolicy(row: {
     monthlyLeaveLimit: row.monthlyLeaveLimit,
     maxConsecutiveDays: row.maxConsecutiveDays,
     advanceNoticeDays: row.advanceNoticeDays,
+    allowManualLeaveBalanceAdjustments: row.allowManualLeaveBalanceAdjustments,
+    allowHistoricalLeaveEntry: row.allowHistoricalLeaveEntry,
+    allowHistoricalLeaveEdit: row.allowHistoricalLeaveEdit,
   };
 }
 
@@ -79,6 +88,9 @@ export async function updateLeavePolicySettings(
     monthlyLeaveLimit: number;
     maxConsecutiveDays: number;
     advanceNoticeDays: number;
+    allowManualLeaveBalanceAdjustments: boolean;
+    allowHistoricalLeaveEntry: boolean;
+    allowHistoricalLeaveEdit: boolean;
   },
   updatedBy: string
 ) {
