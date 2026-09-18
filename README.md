@@ -1,8 +1,5 @@
 # ZEBL AMS
 
-[![CI](https://github.com/varshithdharmaj/ZEBL_AMS/actions/workflows/ci.yml/badge.svg)](https://github.com/varshithdharmaj/ZEBL_AMS/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/varshithdharmaj/ZEBL_AMS/actions/workflows/codeql.yml/badge.svg)](https://github.com/varshithdharmaj/ZEBL_AMS/actions/workflows/codeql.yml)
-
 ZEBL AMS is an internal HR platform covering **attendance, leave, helpdesk, security/audit, and recruitment**, built with Next.js 15 (App Router), Prisma, and PostgreSQL. This document is a developer handoff guide: what the system does today, how the pieces fit together, and how to set it up, test it, and ship it.
 
 > This README describes what is actually implemented in the codebase as of this writing. Where a feature is partial, flagged off by default, or still a stub, that is called out explicitly — see [Current Product Status](#current-product-status).

@@ -4,6 +4,7 @@ import { validateApplicationConfig } from "@/lib/config/validate";
 import { getEnv } from "@/lib/config/env";
 import { getWorkerHealthSummary, isWorkerStale } from "@/lib/workers/worker-health";
 import { isTeamsWebhookConfiguredInEnv } from "@/lib/integrations/integration-settings";
+import { version as appVersion } from "../../../package.json";
 
 export type HealthCheck = {
   name: string;
@@ -139,7 +140,7 @@ export function checkAppConfig(): HealthCheck {
 export async function runShallowHealth() {
   const db = await checkDatabase();
   const overall = db.status === "ok" ? "ok" : "error";
-  return { status: overall, checks: [db], at: new Date().toISOString() };
+  return { status: overall, version: appVersion, checks: [db], at: new Date().toISOString() };
 }
 
 export async function runDeepHealth() {
