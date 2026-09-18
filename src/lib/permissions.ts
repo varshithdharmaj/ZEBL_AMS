@@ -123,6 +123,22 @@ export function canViewOrgAnalytics(role: AppUserRole): boolean {
   return canAccessHRAdministration(role);
 }
 
+/**
+ * Statutory/financial PII (PAN, Aadhaar, bank details) is masked by default
+ * everywhere. Only HR/Super Admin or the employee viewing their own record
+ * may see the unmasked value — explicitly NOT a manager, even for direct
+ * reports (unlike other profile fields).
+ */
+export function canViewUnmaskedStatutoryDetails(input: {
+  actorRole: AppUserRole;
+  actorEmployeeId: number | null | undefined;
+  targetEmployeeId: number;
+}): boolean {
+  if (canManageEmployee(input.actorRole)) return true;
+  if (input.actorEmployeeId == null) return false;
+  return input.actorEmployeeId === input.targetEmployeeId;
+}
+
 // --- User & role administration (Super Admin only) -----------------------
 
 /** Only Super Admin may change user roles. */

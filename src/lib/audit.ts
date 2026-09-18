@@ -83,6 +83,8 @@ export const AUDIT_ACTIONS = {
   EMPLOYEE_CREATED: "employee.created",
   EMPLOYEE_DELETED: "employee.deleted",
   EMPLOYEE_DEPARTMENT_CHANGED: "employee.department.changed",
+  EMPLOYEE_STATUTORY_UPDATED: "employee.statutory.updated",
+  EMPLOYEE_STATUTORY_VIEWED: "employee.statutory.viewed",
   PAYROLL_GENERATED: "payroll.generated",
   PAYROLL_DOWNLOADED: "payroll.downloaded",
   DOCUMENT_UPLOADED: "document.uploaded",

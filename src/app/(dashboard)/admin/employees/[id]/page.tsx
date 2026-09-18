@@ -11,6 +11,15 @@ import { parseDateRangeQuery } from "@/lib/date-range";
 import type { EmployeeStatus } from "@/lib/employee-types";
 import { getSession } from "@/lib/auth";
 import { toAppUserRole } from "@/lib/roles";
+import { canManageEmployee, canViewUnmaskedStatutoryDetails } from "@/lib/permissions";
+import { decryptField } from "@/lib/security/field-encryption";
+import { maskAadhaar, maskBankAccount, maskPan } from "@/lib/security/field-masking";
+import { AUDIT_ACTIONS, writeAuditLog } from "@/lib/audit";
+import { getRequestSecurityContext } from "@/lib/security/request-context";
+
+function decryptOrNull(value: string | null | undefined): string | null {
+  return value ? decryptField(value) : null;
+}
 
 export default async function EmployeeProfilePage({
   params,
@@ -40,16 +49,76 @@ export default async function EmployeeProfilePage({
   const hasRange = Boolean(raw.from || raw.to || raw.start || raw.end || raw.preset);
   const { start: defaultStart, end: defaultEnd } = defaultDateRange();
 
-  const [attendance, leaveData, managerCandidates, shifts] = await Promise.all([
-    getEmployeeAttendanceSummary(
-      id,
-      hasRange ? range.from : undefined,
-      hasRange ? range.to : undefined
-    ),
-    getEmployeeProfileLeaveData(id),
-    getManagerCandidates(id),
-    getActiveShifts(),
-  ]);
+  const [attendance, leaveData, managerCandidates, shifts, statutoryDetail, documents] =
+    await Promise.all([
+      getEmployeeAttendanceSummary(
+        id,
+        hasRange ? range.from : undefined,
+        hasRange ? range.to : undefined
+      ),
+      getEmployeeProfileLeaveData(id),
+      getManagerCandidates(id),
+      getActiveShifts(),
+      prisma.employeeStatutoryDetail.findUnique({ where: { employeeId: id } }),
+      prisma.employeeDocument.findMany({
+        where: { employeeId: id, deletedAt: null },
+        orderBy: { createdAt: "desc" },
+        include: { uploadedBy: { select: { email: true } } },
+      }),
+    ]);
+
+  const plainStatutory = {
+    pan: decryptOrNull(statutoryDetail?.panEnc),
+    aadhaar: decryptOrNull(statutoryDetail?.aadhaarEnc),
+    uan: decryptOrNull(statutoryDetail?.uanEnc),
+    pfNumber: decryptOrNull(statutoryDetail?.pfNumberEnc),
+    esiNumber: decryptOrNull(statutoryDetail?.esiNumberEnc),
+    bankAccountNo: decryptOrNull(statutoryDetail?.bankAccountNoEnc),
+    ifsc: decryptOrNull(statutoryDetail?.ifscEnc),
+    bankName: statutoryDetail?.bankName ?? null,
+  };
+
+  const maskedStatutory = {
+    pan: plainStatutory.pan ? maskPan(plainStatutory.pan) : null,
+    aadhaar: plainStatutory.aadhaar ? maskAadhaar(plainStatutory.aadhaar) : null,
+    uan: plainStatutory.uan ? maskAadhaar(plainStatutory.uan) : null,
+    pfNumber: plainStatutory.pfNumber ? maskBankAccount(plainStatutory.pfNumber) : null,
+    esiNumber: plainStatutory.esiNumber ? maskBankAccount(plainStatutory.esiNumber) : null,
+    bankAccountNo: plainStatutory.bankAccountNo ? maskBankAccount(plainStatutory.bankAccountNo) : null,
+    ifsc: plainStatutory.ifsc,
+    bankName: plainStatutory.bankName,
+  };
+
+  const canEditStatutory = canManageEmployee(session.role);
+  const canUnmaskStatutory = canViewUnmaskedStatutoryDetails({
+    actorRole: session.role,
+    actorEmployeeId: session.employeeId,
+    targetEmployeeId: id,
+  });
+
+  if (canUnmaskStatutory && statutoryDetail) {
+    const requestContext = await getRequestSecurityContext();
+    await writeAuditLog({
+      entityType: "employee",
+      entityId: String(id),
+      action: AUDIT_ACTIONS.EMPLOYEE_STATUTORY_VIEWED,
+      actorUserId: session.id,
+      actorEmail: session.email,
+      employeeId: id,
+      module: "employees",
+      description: "Employee statutory details were viewed unmasked.",
+      requestContext,
+    });
+  }
+
+  const documentRows = documents.map((doc) => ({
+    id: doc.id,
+    documentType: doc.documentType,
+    fileName: doc.fileName,
+    sizeBytes: doc.sizeBytes,
+    createdAt: doc.createdAt,
+    uploadedByEmail: doc.uploadedBy?.email ?? null,
+  }));
 
   const [pendingLeaves, approvedLeavesYtd] = await Promise.all([
     prisma.leaveRequest.count({
@@ -116,6 +185,13 @@ export default async function EmployeeProfilePage({
       currentUserId={session.id}
       currentUserRole={session.role}
       currentUserEmployeeId={session.employeeId}
+      statutory={{
+        masked: maskedStatutory,
+        unmasked: canUnmaskStatutory ? plainStatutory : null,
+        canEdit: canEditStatutory,
+        canUnmask: canUnmaskStatutory,
+      }}
+      documents={documentRows}
     />
   );
 }

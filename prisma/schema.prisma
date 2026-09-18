@@ -303,6 +303,9 @@ model User {
   savedRecruitmentFilters       RecruitmentSavedFilter[]      @relation("RecruitmentSavedFilters")
   emailTemplatesCreated         RecruitmentEmailTemplate[]    @relation("EmailTemplateCreatedBy")
   communicationsSent            RecruitmentCommunication[]    @relation("CommunicationSender")
+  // Employee statutory details & documents
+  employeeStatutoryUpdates      EmployeeStatutoryDetail[]     @relation("EmployeeStatutoryUpdatedBy")
+  employeeDocumentsUploaded     EmployeeDocument[]            @relation("EmployeeDocUploadedBy")
   createdAt                     DateTime                      @default(now())
   updatedAt                     DateTime                      @updatedAt
 
@@ -364,10 +367,69 @@ model Employee {
   conversionSnapshots       EmployeeConversionSnapshot[]      @relation("ConversionSnapshotEmployee")
   // Biometric bridge integration (Phase 2D)
   biometricPunches          BiometricPunch[]
+  statutoryDetail           EmployeeStatutoryDetail?
+  documents                 EmployeeDocument[]
 
   @@index([managerId])
   @@index([employeeStatus])
   @@map("employees")
+}
+
+enum EmployeeDocumentType {
+  PAN_CARD
+  AADHAAR_CARD
+  PASSPORT
+  BANK_PROOF
+  OFFER_LETTER
+  EDUCATION_CERTIFICATE
+  RELIEVING_LETTER
+  OTHER
+}
+
+/// Encrypted statutory/financial identifiers for an employee (PAN, Aadhaar, bank, PF/ESI).
+/// Each *_enc column holds ciphertext produced by src/lib/security/field-encryption.ts —
+/// plaintext is never persisted. Masked by default in the UI; see canViewUnmaskedStatutoryDetails.
+model EmployeeStatutoryDetail {
+  employeeId       Int      @id @map("employee_id")
+  employee         Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  panEnc           String?  @map("pan_enc")
+  aadhaarEnc       String?  @map("aadhaar_enc")
+  uanEnc           String?  @map("uan_enc")
+  pfNumberEnc      String?  @map("pf_number_enc")
+  esiNumberEnc     String?  @map("esi_number_enc")
+  bankAccountNoEnc String?  @map("bank_account_no_enc")
+  ifscEnc          String?  @map("ifsc_enc")
+  bankName         String?  @map("bank_name")
+
+  updatedByUserId  String?  @map("updated_by_user_id")
+  updatedBy        User?    @relation("EmployeeStatutoryUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("employee_statutory_details")
+}
+
+/// Generic document vault for an employee (ID proofs, offer/relieving letters, certificates).
+/// File bytes live in the configured storage adapter (see getEmployeeStorage()); storageKey
+/// is the lookup key there, not a URL. Soft-deleted via deletedAt, matching CandidateDocument.
+model EmployeeDocument {
+  id               String               @id @default(cuid())
+  employeeId       Int                  @map("employee_id")
+  employee         Employee             @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  documentType     EmployeeDocumentType @map("document_type")
+  fileName         String               @map("file_name")
+  mimeType         String?              @map("mime_type")
+  sizeBytes        Int?                 @map("size_bytes")
+  storageKey       String               @map("storage_key")
+  checksum         String?
+  uploadedByUserId String?              @map("uploaded_by_user_id")
+  uploadedBy       User?                @relation("EmployeeDocUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime             @default(now()) @map("created_at")
+  deletedAt        DateTime?            @map("deleted_at")
+
+  @@index([employeeId, documentType, deletedAt])
+  @@map("employee_documents")
 }
 
 model AttendanceUpload {
