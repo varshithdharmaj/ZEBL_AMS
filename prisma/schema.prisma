@@ -369,6 +369,7 @@ model Employee {
   biometricPunches          BiometricPunch[]
   statutoryDetail           EmployeeStatutoryDetail?
   documents                 EmployeeDocument[]
+  lateArrivalPenalties      LateArrivalPenalty[]
 
   @@index([managerId])
   @@index([employeeStatus])
@@ -601,6 +602,22 @@ model LeaveRequest {
   workflowEscalations     WorkflowEscalation[]
   leaveConsumptions       LeaveConsumption[]
 
+  /// HR-entered leave record backfilled for a period before the org went live
+  /// on this system (e.g. migrating off a manual/paper tracker) — created
+  /// already-approved, skipping the approval-step workflow, since it records
+  /// something that already happened rather than requesting permission.
+  /// Gated by LeavePolicySettings.allowHistoricalLeaveEntry.
+  isHistoricalEntry Boolean @default(false) @map("is_historical_entry")
+
+  /// Correcting a historical entry never rewrites it in place — the old row's
+  /// balance impact is reversed and it's marked cancelled, then a new row is
+  /// created and linked back here (same "reverse and recreate" shape as
+  /// AttendanceRegularizationRequest.previousRequestId). Gated by
+  /// LeavePolicySettings.allowHistoricalLeaveEdit.
+  previousRequestId Int?          @unique @map("previous_request_id")
+  previousRequest   LeaveRequest? @relation("LeaveHistoricalCorrection", fields: [previousRequestId], references: [id])
+  correctedAs       LeaveRequest? @relation("LeaveHistoricalCorrection")
+
   @@index([employeeId, status])
   @@index([employeeId, workflowStatus])
   @@index([workflowStatus])
@@ -733,6 +750,24 @@ model LeavePolicySettings {
   monthlyLeaveLimit   Float    @default(2) @map("monthly_leave_limit")
   maxConsecutiveDays  Int      @default(3) @map("max_consecutive_days")
   advanceNoticeDays   Int      @default(7) @map("advance_notice_days")
+  /// Super Admin/HR toggle: while true, HR can manually set/adjust an employee's
+  /// leave balance from their profile (see adjustLeaveBalanceAction) — needed to
+  /// seed opening balances when migrating off a manual/paper system. Meant to be
+  /// switched off once migration is complete so balances only move through normal
+  /// accrual/leave-request flows; every manual change still writes a LeaveTransaction
+  /// regardless of this flag's value at read time.
+  allowManualLeaveBalanceAdjustments Boolean @default(true) @map("allow_manual_leave_balance_adjustments")
+  /// Lets HR create backfilled, already-approved LeaveRequest rows for a period
+  /// before go-live (see LeaveRequest.isHistoricalEntry) — the date-range/reason
+  /// equivalent of allowManualLeaveBalanceAdjustments, for when HR wants the
+  /// actual leave-taken dates on record (calendar/attendance reporting) rather
+  /// than just a lump-sum balance correction.
+  allowHistoricalLeaveEntry Boolean @default(true) @map("allow_historical_leave_entry")
+  /// Separate, stricter toggle for correcting an already-backfilled historical
+  /// entry (reverse + recreate — see LeaveRequest.previousRequestId). Kept apart
+  /// from allowHistoricalLeaveEntry because rewriting something already on
+  /// record is a bigger deal than adding a new one during initial migration.
+  allowHistoricalLeaveEdit Boolean @default(true) @map("allow_historical_leave_edit")
   updatedAt           DateTime @updatedAt @map("updated_at")
   updatedBy           String?  @map("updated_by")
 
@@ -824,6 +859,50 @@ model Shift {
   updatedAt           DateTime @updatedAt @map("updated_at")
 
   @@map("shifts")
+}
+
+/// Super Admin toggle: converts repeated late arrivals (beyond a shift's grace
+/// period) into an automatic half-day leave deduction. Single default row, same
+/// shape as PayrollSettings/AttendanceSettings. `enabledAt` is the hard cutoff —
+/// evaluation (see src/lib/attendance/late-arrival-policy.ts) never looks at an
+/// attendance date before it, so turning this on never reaches back and rewrites
+/// past attendance/leave history. Reset every time the policy goes off -> on again.
+model LateArrivalPolicySettings {
+  id                String    @id @default("default")
+  enabled           Boolean   @default(false)
+  freeLatesPerMonth Int       @default(2) @map("free_lates_per_month")
+  enabledAt         DateTime? @map("enabled_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@map("late_arrival_policy_settings")
+}
+
+/// One row per (employee, attendanceDate) evaluated under LateArrivalPolicySettings.
+/// The @@unique is the idempotency guard against re-derivation re-running the same
+/// day (see deriveAttendanceForEmployeeDate's self-healing re-derivation); the
+/// monthKey + occurrenceInMonth pair is the audit trail for the monthly free-lates
+/// counter; leaveRequestId/reversedAt is how a later-approved Attendance
+/// Regularization reverses an auto-applied half-day (see approveRegularizationRequest).
+model LateArrivalPenalty {
+  id                         Int       @id @default(autoincrement())
+  employeeId                 Int       @map("employee_id")
+  employee                   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  attendanceDate             DateTime  @map("attendance_date")
+  /// IST calendar month the free-lates counter resets on, e.g. "2026-09".
+  monthKey                   String    @map("month_key")
+  occurrenceInMonth          Int       @map("occurrence_in_month")
+  /// Policy's freeLatesPerMonth snapshotted at evaluation time, so a later
+  /// policy edit never re-litigates an already-decided occurrence.
+  freeLatesAllowed           Int       @map("free_lates_allowed")
+  triggeredHalfDay           Boolean   @default(false) @map("triggered_half_day")
+  leaveRequestId             Int?      @map("leave_request_id")
+  reversedAt                 DateTime? @map("reversed_at")
+  reversedByRegularizationId Int?      @map("reversed_by_regularization_id")
+  createdAt                  DateTime  @default(now()) @map("created_at")
+
+  @@unique([employeeId, attendanceDate])
+  @@index([employeeId, monthKey])
+  @@map("late_arrival_penalties")
 }
 
 model Notification {

@@ -104,6 +104,21 @@ export function canEditEmployeeProfilePhoto(input: {
 }
 
 /**
+ * Contact-detail fields (phone, alternate phone, address, emergency contact)
+ * an employee may self-edit on their own profile — identity fields (name,
+ * DOB, gender, email) stay HR-managed via {@link canManageEmployee}.
+ */
+export function canEditEmployeeContactInfo(input: {
+  actorRole: AppUserRole;
+  actorEmployeeId: number | null | undefined;
+  targetEmployeeId: number;
+}): boolean {
+  if (canManageEmployee(input.actorRole)) return true;
+  if (input.actorEmployeeId == null) return false;
+  return input.actorEmployeeId === input.targetEmployeeId;
+}
+
+/**
  * Account-level administration is target-aware: HR may administer employee and
  * Manager accounts (password reset, lock/unlock — account lifecycle, not role
  * assignment), while only Super Admin may administer HR or Super Admin accounts.

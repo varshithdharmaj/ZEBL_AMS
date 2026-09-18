@@ -35,6 +35,8 @@ export const AUDIT_ACTIONS = {
   LEAVE_WITHDRAWN: "leave.withdrawn",
   LEAVE_CANCELLED: "leave.cancelled",
   LEAVE_BALANCE_IMPORT_COMPLETED: "leave.balance_import.completed",
+  LEAVE_HISTORICAL_ENTRY_ADDED: "leave.historical_entry.added",
+  LEAVE_HISTORICAL_ENTRY_CORRECTED: "leave.historical_entry.corrected",
   NOTIFICATION_QUEUED: "notification.queued",
   NOTIFICATION_SENT: "notification.sent",
   NOTIFICATION_FAILED: "notification.failed",

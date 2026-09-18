@@ -42,6 +42,9 @@ export async function updateLeavePolicySettingsAction(
     monthlyLeaveLimit: formData.get("monthlyLeaveLimit"),
     maxConsecutiveDays: formData.get("maxConsecutiveDays"),
     advanceNoticeDays: formData.get("advanceNoticeDays"),
+    allowManualLeaveBalanceAdjustments: formData.get("allowManualLeaveBalanceAdjustments"),
+    allowHistoricalLeaveEntry: formData.get("allowHistoricalLeaveEntry"),
+    allowHistoricalLeaveEdit: formData.get("allowHistoricalLeaveEdit"),
   });
   if (!validated.ok) return { error: validated.error };
 

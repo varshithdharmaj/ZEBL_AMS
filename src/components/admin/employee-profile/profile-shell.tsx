@@ -112,6 +112,9 @@ export function EmployeeProfileShell({
   attendance,
   balances,
   history,
+  canAdjustLeaveBalance,
+  canAddHistoricalLeave,
+  canEditHistoricalLeave,
   defaultStart,
   defaultEnd,
   managerCandidates,
@@ -127,6 +130,9 @@ export function EmployeeProfileShell({
   attendance: AttendanceSummary;
   balances: LeaveBalanceSummary[];
   history: HistoryRow[];
+  canAdjustLeaveBalance: boolean;
+  canAddHistoricalLeave: boolean;
+  canEditHistoricalLeave: boolean;
   defaultStart: string;
   defaultEnd: string;
   managerCandidates: ManagerSummary[];
@@ -205,9 +211,20 @@ export function EmployeeProfileShell({
           />
         )}
         {activeTab === "balances" && (
-          <LeaveBalancesTab employeeId={employee.id} balances={balances} />
+          <LeaveBalancesTab
+            employeeId={employee.id}
+            balances={balances}
+            canAdjust={canAdjustLeaveBalance}
+          />
         )}
-        {activeTab === "history" && <LeaveHistoryTab history={history} />}
+        {activeTab === "history" && (
+          <LeaveHistoryTab
+            employeeId={employee.id}
+            history={history}
+            canAddHistorical={canAddHistoricalLeave}
+            canEditHistorical={canEditHistoricalLeave}
+          />
+        )}
         {activeTab === "statutory" && (
           <StatutoryDetailsTab
             employeeId={employee.id}

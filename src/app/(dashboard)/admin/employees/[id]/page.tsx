@@ -6,6 +6,7 @@ import { getEmployeeProfileLeaveData } from "@/actions/leave-balances";
 import { getEmployeeAttendanceSummary, getEmployeeById } from "@/lib/data";
 import { getManagerCandidates } from "@/lib/org";
 import { getActiveShifts } from "@/lib/shifts";
+import { getLeavePolicySettings } from "@/lib/leave/leave-policy";
 import { defaultDateRange } from "@/lib/utils";
 import { parseDateRangeQuery } from "@/lib/date-range";
 import type { EmployeeStatus } from "@/lib/employee-types";
@@ -49,7 +50,7 @@ export default async function EmployeeProfilePage({
   const hasRange = Boolean(raw.from || raw.to || raw.start || raw.end || raw.preset);
   const { start: defaultStart, end: defaultEnd } = defaultDateRange();
 
-  const [attendance, leaveData, managerCandidates, shifts, statutoryDetail, documents] =
+  const [attendance, leaveData, managerCandidates, shifts, leavePolicy, statutoryDetail, documents] =
     await Promise.all([
       getEmployeeAttendanceSummary(
         id,
@@ -59,6 +60,7 @@ export default async function EmployeeProfilePage({
       getEmployeeProfileLeaveData(id),
       getManagerCandidates(id),
       getActiveShifts(),
+      getLeavePolicySettings(),
       prisma.employeeStatutoryDetail.findUnique({ where: { employeeId: id } }),
       prisma.employeeDocument.findMany({
         where: { employeeId: id, deletedAt: null },
@@ -177,6 +179,9 @@ export default async function EmployeeProfilePage({
       attendance={attendance}
       balances={leaveData.balances}
       history={leaveData.history}
+      canAdjustLeaveBalance={leavePolicy.allowManualLeaveBalanceAdjustments}
+      canAddHistoricalLeave={leavePolicy.allowHistoricalLeaveEntry}
+      canEditHistoricalLeave={leavePolicy.allowHistoricalLeaveEdit}
       defaultStart={defaultStart}
       defaultEnd={defaultEnd}
       managerCandidates={managerCandidates}
