@@ -5,12 +5,15 @@ import { prisma } from "@/lib/prisma";
 import { initializeEmployeeLeaveBalances } from "@/lib/leave";
 import { seedInitialElLot } from "@/lib/leave/el-fifo";
 import { isValidEmployeeStatus, statusToIsActive } from "@/lib/employee-types";
-import { requireManageEmployeeSession } from "@/lib/auth-guards";
+import { requireManageEmployeeSession, getSessionOrThrow } from "@/lib/auth-guards";
 import { AUDIT_ACTIONS, writeAuditLog } from "@/lib/audit";
 import { detectCircularManagerRelationship } from "@/lib/org";
-import { employeeProfileUpdateSchema } from "@/lib/validation/schemas/employee-account";
+import {
+  employeeProfileUpdateSchema,
+  employeeSelfContactUpdateSchema,
+} from "@/lib/validation/schemas/employee-account";
 import { safeParseWithSchema } from "@/lib/validation/parse";
-import { canAdministerEmployeeAccount } from "@/lib/permissions";
+import { canAdministerEmployeeAccount, canEditEmployeeContactInfo } from "@/lib/permissions";
 import { toAppUserRole } from "@/lib/roles";
 import { getRequestSecurityContext } from "@/lib/security/request-context";
 import { invalidateUserSessions } from "@/lib/auth";
@@ -491,5 +494,79 @@ export async function toggleEmployeeStatusAction(employeeId: number): Promise<Ac
     return { success: `Employee marked as ${newStatus}.` };
   } catch {
     return { error: "Failed to update employee status." };
+  }
+}
+
+/**
+ * Self-service: an employee updates their own contact details (phone,
+ * alternate phone, address, emergency contact) from My Profile. Identity
+ * fields (name, DOB, gender, email) stay out of scope here — those remain
+ * HR-managed via {@link updateEmployeeProfileAction}.
+ */
+export async function updateOwnContactInfoAction(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  try {
+    const session = await getSessionOrThrow();
+    if (session.employeeId == null) {
+      return { error: "No employee record is linked to your account." };
+    }
+
+    if (
+      !canEditEmployeeContactInfo({
+        actorRole: session.role,
+        actorEmployeeId: session.employeeId,
+        targetEmployeeId: session.employeeId,
+      })
+    ) {
+      return { error: "You are not permitted to edit this." };
+    }
+
+    const parsed = safeParseWithSchema(employeeSelfContactUpdateSchema, {
+      phone: formData.get("phone"),
+      alternatePhone: formData.get("alternatePhone"),
+      address: formData.get("address"),
+      emergencyContact: formData.get("emergencyContact"),
+    });
+    if (!parsed.ok) return { error: parsed.error };
+    const data = parsed.data;
+
+    const existing = await prisma.employee.findUnique({
+      where: { id: session.employeeId },
+      select: { phone: true, alternatePhone: true, address: true, emergencyContact: true },
+    });
+    if (!existing) return { error: "Employee record not found." };
+
+    const requestContext = await getRequestSecurityContext();
+    await prisma.$transaction(async (tx) => {
+      await tx.employee.update({
+        where: { id: session.employeeId! },
+        data,
+      });
+
+      await writeAuditLog(
+        {
+          entityType: "employee",
+          entityId: String(session.employeeId),
+          action: AUDIT_ACTIONS.EMPLOYEE_UPDATED,
+          actorUserId: session.id,
+          actorEmail: session.email,
+          employeeId: session.employeeId!,
+          module: "employees",
+          description: "Employee updated their own contact information.",
+          oldValue: existing,
+          newValue: data,
+          requestContext,
+          metadata: { operation: "self_service_contact_update" },
+        },
+        tx
+      );
+    });
+
+    revalidatePath("/employee/profile");
+    return { success: "Contact information updated." };
+  } catch {
+    return { error: "Failed to update contact information." };
   }
 }

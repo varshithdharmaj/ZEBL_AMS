@@ -34,6 +34,14 @@ export const employeeProfileUpdateSchema = z.object({
     .transform((value) => value === "" || value === "none" ? null : value),
 });
 
+/** Self-service subset: contact details an employee may update on their own profile. */
+export const employeeSelfContactUpdateSchema = z.object({
+  phone: optionalText(50),
+  alternatePhone: optionalText(50),
+  address: optionalText(500),
+  emergencyContact: optionalText(250),
+});
+
 export const passwordResetSchema = z
   .object({
     userId: z.string().min(1),
