@@ -397,11 +397,11 @@ model EmployeeStatutoryDetail {
   panEnc           String?  @map("pan_enc")
   aadhaarEnc       String?  @map("aadhaar_enc")
   uanEnc           String?  @map("uan_enc")
-  pfNumberEnc      String?  @map("pf_number_enc")
   esiNumberEnc     String?  @map("esi_number_enc")
   bankAccountNoEnc String?  @map("bank_account_no_enc")
   ifscEnc          String?  @map("ifsc_enc")
   bankName         String?  @map("bank_name")
+  bankBranchName   String?  @map("bank_branch_name")
 
   updatedByUserId  String?  @map("updated_by_user_id")
   updatedBy        User?    @relation("EmployeeStatutoryUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)

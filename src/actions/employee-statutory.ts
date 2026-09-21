@@ -26,11 +26,11 @@ export async function upsertEmployeeStatutoryDetailAction(
       pan: formData.get("pan"),
       aadhaar: formData.get("aadhaar"),
       uan: formData.get("uan"),
-      pfNumber: formData.get("pfNumber"),
       esiNumber: formData.get("esiNumber"),
       bankAccountNo: formData.get("bankAccountNo"),
       ifsc: formData.get("ifsc"),
       bankName: formData.get("bankName"),
+      bankBranchName: formData.get("bankBranchName"),
     });
     if (!parsed.ok) return { error: parsed.error };
     const data = parsed.data;
@@ -42,22 +42,22 @@ export async function upsertEmployeeStatutoryDetailAction(
       panEnc: encryptOrNull(data.pan),
       aadhaarEnc: encryptOrNull(data.aadhaar),
       uanEnc: encryptOrNull(data.uan),
-      pfNumberEnc: encryptOrNull(data.pfNumber),
       esiNumberEnc: encryptOrNull(data.esiNumber),
       bankAccountNoEnc: encryptOrNull(data.bankAccountNo),
       ifscEnc: encryptOrNull(data.ifsc),
       bankName: data.bankName,
+      bankBranchName: data.bankBranchName,
     };
 
     const fieldsWithValue = Object.entries({
       pan: data.pan,
       aadhaar: data.aadhaar,
       uan: data.uan,
-      pfNumber: data.pfNumber,
       esiNumber: data.esiNumber,
       bankAccountNo: data.bankAccountNo,
       ifsc: data.ifsc,
       bankName: data.bankName,
+      bankBranchName: data.bankBranchName,
     })
       .filter(([, value]) => Boolean(value))
       .map(([key]) => key);
