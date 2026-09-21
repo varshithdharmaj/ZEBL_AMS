@@ -13,22 +13,22 @@ export type StatutoryFields = {
   pan: string | null;
   aadhaar: string | null;
   uan: string | null;
-  pfNumber: string | null;
   esiNumber: string | null;
   bankAccountNo: string | null;
   ifsc: string | null;
   bankName: string | null;
+  bankBranchName: string | null;
 };
 
 const FIELD_LABELS: { key: keyof StatutoryFields; label: string }[] = [
   { key: "pan", label: "PAN" },
   { key: "aadhaar", label: "Aadhaar" },
   { key: "uan", label: "UAN" },
-  { key: "pfNumber", label: "PF number" },
   { key: "esiNumber", label: "ESI number" },
   { key: "bankAccountNo", label: "Bank account number" },
   { key: "ifsc", label: "IFSC code" },
   { key: "bankName", label: "Bank name" },
+  { key: "bankBranchName", label: "Bank branch name" },
 ];
 
 const initialState: ActionState = {};
@@ -110,10 +110,6 @@ export function StatutoryDetailsTab({
                 <Input id="uan" name="uan" defaultValue={unmasked?.uan ?? ""} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="pfNumber">PF number</Label>
-                <Input id="pfNumber" name="pfNumber" defaultValue={unmasked?.pfNumber ?? ""} />
-              </div>
-              <div className="space-y-2">
                 <Label htmlFor="esiNumber">ESI number</Label>
                 <Input id="esiNumber" name="esiNumber" defaultValue={unmasked?.esiNumber ?? ""} />
               </div>
@@ -132,6 +128,14 @@ export function StatutoryDetailsTab({
               <div className="space-y-2">
                 <Label htmlFor="bankName">Bank name</Label>
                 <Input id="bankName" name="bankName" defaultValue={unmasked?.bankName ?? ""} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="bankBranchName">Bank branch name</Label>
+                <Input
+                  id="bankBranchName"
+                  name="bankBranchName"
+                  defaultValue={unmasked?.bankBranchName ?? ""}
+                />
               </div>
             </div>
             <Button type="submit" loading={pending}>

@@ -73,22 +73,22 @@ export default async function EmployeeProfilePage({
     pan: decryptOrNull(statutoryDetail?.panEnc),
     aadhaar: decryptOrNull(statutoryDetail?.aadhaarEnc),
     uan: decryptOrNull(statutoryDetail?.uanEnc),
-    pfNumber: decryptOrNull(statutoryDetail?.pfNumberEnc),
     esiNumber: decryptOrNull(statutoryDetail?.esiNumberEnc),
     bankAccountNo: decryptOrNull(statutoryDetail?.bankAccountNoEnc),
     ifsc: decryptOrNull(statutoryDetail?.ifscEnc),
     bankName: statutoryDetail?.bankName ?? null,
+    bankBranchName: statutoryDetail?.bankBranchName ?? null,
   };
 
   const maskedStatutory = {
     pan: plainStatutory.pan ? maskPan(plainStatutory.pan) : null,
     aadhaar: plainStatutory.aadhaar ? maskAadhaar(plainStatutory.aadhaar) : null,
     uan: plainStatutory.uan ? maskAadhaar(plainStatutory.uan) : null,
-    pfNumber: plainStatutory.pfNumber ? maskBankAccount(plainStatutory.pfNumber) : null,
     esiNumber: plainStatutory.esiNumber ? maskBankAccount(plainStatutory.esiNumber) : null,
     bankAccountNo: plainStatutory.bankAccountNo ? maskBankAccount(plainStatutory.bankAccountNo) : null,
     ifsc: plainStatutory.ifsc,
     bankName: plainStatutory.bankName,
+    bankBranchName: plainStatutory.bankBranchName,
   };
 
   const canEditStatutory = canManageEmployee(session.role);
