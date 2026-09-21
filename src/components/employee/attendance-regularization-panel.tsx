@@ -164,6 +164,8 @@ export function AttendanceRegularizationPanel({
       <SectionCard
         title="Request a correction"
         description="Missed a punch or see incorrect check-in/out data? Submit a regularisation request for HR review."
+        id="request-correction"
+        className="scroll-mt-24"
       >
         <RequestForm />
       </SectionCard>

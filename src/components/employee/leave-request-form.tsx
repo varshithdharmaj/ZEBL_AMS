@@ -25,8 +25,10 @@ export function LeaveRequestForm({ policy }: { policy: LeavePolicy }) {
 
   return (
     <SectionCard
+      id="apply-for-leave"
       title="Apply for leave"
       description={`EL accrues 0.5/month after ${eligibilityText} of service · CL: ${policy.clAnnualEntitlement} days/year · SL: ${policy.slAnnualEntitlement} days/year · max ${policy.maxConsecutiveDays} consecutive days`}
+      className="scroll-mt-24"
     >
       <form action={formAction} className="max-w-lg space-y-4">
         <input type="hidden" name="leaveType" value={leaveType} />
