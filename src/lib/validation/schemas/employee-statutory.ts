@@ -19,14 +19,16 @@ const optionalPattern = (regex: RegExp, message: string, normalize: (value: stri
 
 export const employeeStatutoryDetailSchema = z.object({
   employeeId: z.coerce.number().int().positive(),
-  pan: optionalPattern(PAN_REGEX, "Enter a valid PAN (e.g. ABCDE1234F).", (v) => v.toUpperCase()),
+  pan: optionalPattern(PAN_REGEX, "Enter a valid PAN (e.g. ABCDE1234F).", (v) =>
+    v.replace(/\s+/g, "").toUpperCase()
+  ),
   aadhaar: optionalPattern(AADHAAR_REGEX, "Aadhaar must be 12 digits.", (v) => v.replace(/\s+/g, "")),
   uan: optionalPattern(UAN_REGEX, "UAN must be 12 digits.", (v) => v.replace(/\s+/g, "")),
-  pfNumber: optionalText(50),
   esiNumber: optionalText(50),
   bankAccountNo: optionalPattern(BANK_ACCOUNT_REGEX, "Bank account number must be 6-20 digits."),
   ifsc: optionalPattern(IFSC_REGEX, "Enter a valid IFSC code (e.g. HDFC0001234).", (v) => v.toUpperCase()),
   bankName: optionalText(150),
+  bankBranchName: optionalText(150),
 });
 
 export type EmployeeStatutoryDetailInput = z.infer<typeof employeeStatutoryDetailSchema>;
