@@ -35,20 +35,29 @@ export function GlobalCommandPalette() {
     return () => clearTimeout(t);
   }, [query, search]);
 
+  const close = useCallback(() => {
+    setOpen(false);
+    setQuery("");
+    setResults([]);
+    setActiveIndex(0);
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        setOpen((o) => !o);
+        setOpen((o) => {
+          if (o) close();
+          return !o;
+        });
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  }, [close]);
 
   const navigate = (href: string) => {
-    setOpen(false);
-    setQuery("");
+    close();
     router.push(href);
   };
 
@@ -57,12 +66,13 @@ export function GlobalCommandPalette() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="hidden items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted lg:flex"
+        className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
         aria-label="Open search"
+        title="Search"
       >
         <Search className="h-4 w-4" />
-        <span>Search</span>
-        <kbd className="rounded border border-border bg-background px-1.5 text-[10px]">⌘K</kbd>
+        <span className="hidden lg:inline">Search</span>
+        <kbd className="hidden rounded border border-border bg-background px-1.5 text-[10px] lg:inline">⌘K</kbd>
       </button>
     );
   }
@@ -92,7 +102,7 @@ export function GlobalCommandPalette() {
               if (e.key === "Enter" && results[activeIndex]) {
                 navigate(results[activeIndex].href);
               }
-              if (e.key === "Escape") setOpen(false);
+              if (e.key === "Escape") close();
             }}
             placeholder="Search employees, leave, audit…"
             className="h-12 flex-1 bg-transparent text-sm outline-none"
@@ -128,7 +138,7 @@ export function GlobalCommandPalette() {
         type="button"
         className="absolute inset-0 -z-10"
         aria-label="Close search"
-        onClick={() => setOpen(false)}
+        onClick={close}
       />
     </div>
   );
