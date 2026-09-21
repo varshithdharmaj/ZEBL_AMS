@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus, ChevronRight } from "lucide-react";
 import { createEmployeeAction, type ActionState } from "@/actions/employees";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,21 @@ export function EmployeeManagement({
   const [createOpen, setCreateOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 25;
+
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // Deep link from the HR Quick Actions menu (/admin/employees?create=1):
+  // open the dialog, then strip the param so refresh/back doesn't reopen it.
+  useEffect(() => {
+    if (searchParams.get("create") !== "1") return;
+    setCreateOpen(true);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("create");
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [searchParams, router, pathname]);
 
   // Reset to first page when search changes
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
