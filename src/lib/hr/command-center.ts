@@ -6,6 +6,8 @@ import { getIntegrationSettings } from "@/lib/integrations/integration-settings"
 import { getStuckWorkflowCount } from "@/lib/workflow/workflow-integrity";
 import { getPendingHrApprovals } from "@/lib/workflow/pending-approvals";
 import { getLeaveOverlapWarnings } from "@/lib/leave/leave-overlap";
+import { addDays } from "@/lib/utils";
+import { getISTDateParts } from "@/lib/integrations/biometric-attendance-derivation";
 
 const EMPTY_WORKFLOW_STUCK = 0;
 
@@ -19,10 +21,8 @@ async function safeLoad<T>(label: string, fallback: T, fn: () => Promise<T>): Pr
 }
 
 export async function getHrCommandCenterData() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  const today = getISTDateParts(new Date()).attendanceDate;
+  const tomorrow = addDays(today, 1);
 
   const [
     pendingHr,
@@ -31,6 +31,7 @@ export async function getHrCommandCenterData() {
     workflowStuckCount,
     absenceSnapshot,
     onLeaveToday,
+    employeeHeadcount,
   ] = await Promise.all([
     safeLoad("pendingHr", [], getPendingHrApprovals),
     safeLoad("notificationStats", { pending: 0, failed: 0, sent: 0 }, getNotificationStats),
@@ -57,10 +58,15 @@ export async function getHrCommandCenterData() {
         take: 15,
       })
     ),
+    safeLoad("employeeHeadcount", 0, () => prisma.employee.count({ where: { isActive: true } })),
   ]);
 
   const { absentToday, departmentsShortStaffed } = absenceSnapshot;
   const failedNotifications = notificationStats.failed;
+  const attendanceRateToday =
+    employeeHeadcount > 0
+      ? Math.round(((employeeHeadcount - absentToday) / employeeHeadcount) * 100)
+      : null;
 
   const escalationRisk = pendingHr.filter((l) => {
     if (!l.submittedAt) return false;
@@ -99,6 +105,8 @@ export async function getHrCommandCenterData() {
       submittedAt: l.submittedAt?.toISOString() ?? null,
     })),
     absentToday,
+    employeeHeadcount,
+    attendanceRateToday,
     onLeaveToday: onLeaveToday.map((l) => ({
       id: l.id,
       name: l.employee.name,

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { canAccessAdmin } from "@/lib/permissions";
+import { canAccessAdmin, isSuperAdmin } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/session";
 
 export type SearchResultItem = {
@@ -10,6 +10,36 @@ export type SearchResultItem = {
   href: string;
   meta?: string;
 };
+
+type AdminPageShortcut = { label: string; href: string; superAdminOnly?: boolean; keywords?: string[] };
+
+// Kept in sync manually with the admin nav in app-sidebar.tsx (a "use client"
+// component, so it can't be imported into this server-side search module).
+const ADMIN_PAGE_SHORTCUTS: AdminPageShortcut[] = [
+  { label: "Dashboard", href: "/admin/dashboard" },
+  { label: "Employees", href: "/admin/employees" },
+  { label: "Attendance", href: "/admin/attendance" },
+  { label: "Payroll Attendance", href: "/admin/payroll-attendance" },
+  { label: "Leaves", href: "/admin/leaves", keywords: ["approval", "approvals"] },
+  { label: "Calendar", href: "/admin/calendar" },
+  { label: "Helpdesk", href: "/admin/tickets" },
+  { label: "Upload Data", href: "/admin/upload" },
+  { label: "Analytics", href: "/admin/analytics" },
+  { label: "Operations", href: "/admin/operations", keywords: ["worker", "workforce"] },
+  { label: "Notifications", href: "/admin/notifications" },
+  { label: "Integrations", href: "/admin/integrations" },
+  { label: "Audit Log", href: "/admin/audit" },
+  { label: "Security & Sessions", href: "/admin/security" },
+  { label: "System Settings", href: "/admin/settings" },
+  { label: "Payroll Settings", href: "/admin/payroll-settings" },
+  { label: "Attendance Settings", href: "/admin/attendance-settings" },
+  { label: "Shift Settings", href: "/admin/shift-settings" },
+  { label: "Leave Settings", href: "/admin/leave-settings" },
+  { label: "Leave Policy", href: "/admin/leave-policy" },
+  { label: "User Guide", href: "/admin/help" },
+  { label: "User Management", href: "/admin/user-management", superAdminOnly: true },
+  { label: "Anonymous Tickets", href: "/admin/tickets/anonymous", superAdminOnly: true },
+];
 
 export async function globalSearch(
   session: SessionUser,
@@ -49,6 +79,23 @@ export async function globalSearch(
       subtitle: `${e.employeeCode}${e.department ? ` · ${e.department}` : ""}`,
       href: isAdmin ? `/admin/employees/${e.id}` : "/employee/dashboard",
     });
+  }
+
+  if (isAdmin) {
+    const lowerQ = q.toLowerCase();
+    const canSeeSuperAdminPages = isSuperAdmin(session.role);
+    for (const shortcut of ADMIN_PAGE_SHORTCUTS) {
+      if (shortcut.superAdminOnly && !canSeeSuperAdminPages) continue;
+      const haystacks = [shortcut.label, ...(shortcut.keywords ?? [])];
+      if (!haystacks.some((h) => h.toLowerCase().includes(lowerQ))) continue;
+      results.push({
+        id: `page-${shortcut.href.slice(1).replace(/\//g, "-")}`,
+        type: "page",
+        title: shortcut.label,
+        subtitle: "Admin",
+        href: shortcut.href,
+      });
+    }
   }
 
   const textMatch = {
@@ -106,25 +153,6 @@ export async function globalSearch(
         title: a.action,
         subtitle: `${a.entityType} / ${a.entityId}`,
         href: "/admin/audit",
-      });
-    }
-
-    if ("approval".includes(q.toLowerCase()) || "leave".includes(q.toLowerCase())) {
-      results.push({
-        id: "page-leaves",
-        type: "page",
-        title: "Leave management",
-        subtitle: "Admin",
-        href: "/admin/leaves",
-      });
-    }
-    if ("operation".includes(q.toLowerCase()) || "worker".includes(q.toLowerCase())) {
-      results.push({
-        id: "page-ops",
-        type: "page",
-        title: "Operations dashboard",
-        subtitle: "Admin",
-        href: "/admin/operations",
       });
     }
   }
