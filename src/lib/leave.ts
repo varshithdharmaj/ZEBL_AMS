@@ -766,46 +766,70 @@ export async function getLeaveTransactionHistory(employeeId: number, limit = 100
     } | null;
   };
 
-  const rows: HistoryRow[] = transactions.map((tx) => ({
-    id: `tx-${tx.id}`,
-    date: tx.createdAt,
-    leaveType: tx.leaveType,
-    transactionType: tx.transactionType,
-    amount:
-      tx.transactionType === "deduction"
-        ? -tx.amount
-        : tx.transactionType === "manual_adjustment"
-          ? tx.amount
-          : tx.amount,
-    reason: tx.reason ?? "—",
-    updatedBy: tx.createdBy ?? "system",
-    importBatchId: tx.importBatchId,
-    editableHistoricalEntry: null,
-  }));
+  // A "deduction" transaction with a leaveRequestId is the balance-impact half
+  // of an approval already represented by that request's own row below — fold
+  // the two into one row (keyed by effective/leave date, not entry date)
+  // instead of showing what looks like a duplicate. At most one such
+  // transaction exists per request (unique(leave_request_id, deduction)).
+  const deductionByRequestId = new Map<number, (typeof transactions)[number]>();
+  for (const tx of transactions) {
+    if (tx.transactionType === "deduction" && tx.leaveRequestId != null) {
+      deductionByRequestId.set(tx.leaveRequestId, tx);
+    }
+  }
 
+  const mergedTransactionIds = new Set<number>();
   const correctedRequestIds = new Set(
     requests.filter((r) => r.previousRequestId != null).map((r) => r.previousRequestId)
   );
 
+  const requestRows: HistoryRow[] = [];
   for (const req of requests) {
-    if (req.status === LeaveRequestStatus.approved) {
-      rows.push({
-        id: `req-${req.id}`,
-        date: req.reviewedAt ?? req.createdAt,
-        leaveType: req.leaveType,
-        transactionType: "leave_approval",
-        amount: -req.days,
-        reason: req.reason,
-        updatedBy: req.reviewedBy ?? "HR",
-        importBatchId: null,
-        editableHistoricalEntry:
-          req.isHistoricalEntry && !correctedRequestIds.has(req.id)
-            ? { leaveRequestId: req.id, startDate: req.startDate, endDate: req.endDate }
-            : null,
-      });
-    }
+    if (req.status !== LeaveRequestStatus.approved) continue;
+
+    const deductionTx = deductionByRequestId.get(req.id);
+    if (deductionTx) mergedTransactionIds.add(deductionTx.id);
+
+    requestRows.push({
+      id: `req-${req.id}`,
+      // Effective/leave date, not when it was entered — a backfilled entry
+      // must sort and display at the point in time it actually happened.
+      date: req.startDate,
+      leaveType: req.leaveType,
+      transactionType: "leave_approval",
+      // Prefer the deduction's actual amount (the real balance impact) over
+      // req.days, which overstates it when part of the request is LOP.
+      amount: deductionTx ? -deductionTx.amount : -req.days,
+      reason: req.reason,
+      updatedBy: req.reviewedBy ?? "HR",
+      importBatchId: null,
+      editableHistoricalEntry:
+        req.isHistoricalEntry && !correctedRequestIds.has(req.id)
+          ? { leaveRequestId: req.id, startDate: req.startDate, endDate: req.endDate }
+          : null,
+    });
   }
 
+  const transactionRows: HistoryRow[] = transactions
+    .filter((tx) => !mergedTransactionIds.has(tx.id))
+    .map((tx) => ({
+      id: `tx-${tx.id}`,
+      date: tx.createdAt,
+      leaveType: tx.leaveType,
+      transactionType: tx.transactionType,
+      amount:
+        tx.transactionType === "deduction"
+          ? -tx.amount
+          : tx.transactionType === "manual_adjustment"
+            ? tx.amount
+            : tx.amount,
+      reason: tx.reason ?? "—",
+      updatedBy: tx.createdBy ?? "system",
+      importBatchId: tx.importBatchId,
+      editableHistoricalEntry: null,
+    }));
+
+  const rows = [...transactionRows, ...requestRows];
   rows.sort((a, b) => b.date.getTime() - a.date.getTime());
   return rows.slice(0, limit);
 }
