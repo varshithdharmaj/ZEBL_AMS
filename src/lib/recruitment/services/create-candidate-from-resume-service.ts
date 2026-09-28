@@ -223,15 +223,27 @@ export function createCandidateFromResumeService(
       const bytes = Buffer.from(input.content);
       assertResumeUploadMeta(input.fileName, bytes.byteLength);
 
-      const { id: intakeId } = await repository.createIntake({
-        status: IntakeItemStatus.received,
-        source: CandidateSource.manual_upload,
-        fileName: input.fileName,
-        storageKey: null,
-        rawPayloadJson: {},
-        errorMessage: null,
-        createdByUserId: session.id,
-      });
+      let intakeId: string;
+      try {
+        ({ id: intakeId } = await repository.createIntake({
+          status: IntakeItemStatus.received,
+          source: CandidateSource.manual_upload,
+          fileName: input.fileName,
+          storageKey: null,
+          rawPayloadJson: {},
+          errorMessage: null,
+          createdByUserId: session.id,
+        }));
+      } catch (err) {
+        logger.error("recruitment.resume.intake_create_failed", {
+          entityType: "intake",
+          message: err instanceof Error ? err.message : String(err),
+        });
+        throw new RecruitmentDomainError(
+          "REC_INTERNAL",
+          "Could not start the resume intake record (database write failed). Please try again in a moment."
+        );
+      }
 
       const storageKey = buildIntakeResumeStorageKey(intakeId, input.fileName);
       try {
@@ -239,11 +251,19 @@ export function createCandidateFromResumeService(
           contentType: input.mimeType || "application/octet-stream",
         });
       } catch (err) {
+        logger.error("recruitment.resume.storage_save_failed", {
+          entityType: "intake",
+          entityId: intakeId,
+          message: err instanceof Error ? err.message : String(err),
+        });
         await repository.updateIntake(intakeId, {
           status: IntakeItemStatus.discarded,
           errorMessage: "Failed to store resume file.",
         });
-        throw err;
+        throw new RecruitmentDomainError(
+          "REC_INTERNAL",
+          "Could not save the uploaded resume file to storage. This usually means file storage isn't configured correctly for this environment — contact your administrator."
+        );
       }
 
       const { result, draftContent } = await parseResumeWithLlm({
@@ -265,14 +285,26 @@ export function createCandidateFromResumeService(
         checksum: checksumBuffer(bytes),
       };
 
-      await repository.updateIntake(intakeId, {
-        status: result.ok ? IntakeItemStatus.parse_ready : IntakeItemStatus.parse_pending,
-        storageKey,
-        rawPayloadJson: payload,
-        errorMessage: result.ok
-          ? null
-          : warnings.join(" ") || "Could not extract readable text from this resume.",
-      });
+      try {
+        await repository.updateIntake(intakeId, {
+          status: result.ok ? IntakeItemStatus.parse_ready : IntakeItemStatus.parse_pending,
+          storageKey,
+          rawPayloadJson: payload,
+          errorMessage: result.ok
+            ? null
+            : warnings.join(" ") || "Could not extract readable text from this resume.",
+        });
+      } catch (err) {
+        logger.error("recruitment.resume.intake_update_failed", {
+          entityType: "intake",
+          entityId: intakeId,
+          message: err instanceof Error ? err.message : String(err),
+        });
+        throw new RecruitmentDomainError(
+          "REC_INTERNAL",
+          "The resume was analyzed, but saving the result failed (database write error). Please try again."
+        );
+      }
 
       return {
         intakeId,

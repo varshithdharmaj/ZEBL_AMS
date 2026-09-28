@@ -3,8 +3,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
-      // Align with ATTENDANCE_UPLOAD_MAX_FILE_SIZE (5MB) in attendance import validation
-      bodySizeLimit: "5mb",
+      // Must cover the largest single file any upload Server Action accepts — 15MB
+      // employee/candidate documents (resumes and attachments are 10MB) — plus the
+      // multipart overhead around it. Per-feature limits are enforced by each validator.
+      bodySizeLimit: "16mb",
     },
   },
   // Apply on all hosts (ECS/ALB), not only Vercel.
