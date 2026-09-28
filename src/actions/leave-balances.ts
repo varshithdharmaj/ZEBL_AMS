@@ -11,6 +11,7 @@ import {
 } from "@/lib/leave";
 import { adminAdjustElBalance, adminSetElBalance } from "@/lib/leave/el-fifo";
 import { runElAccrualForEmployeeId } from "@/lib/leave/el-accrual-engine";
+import { getLeavePolicySettings } from "@/lib/leave/leave-policy";
 import { isValidLeaveType } from "@/lib/leave-types";
 import { prisma } from "@/lib/prisma";
 import { requireAdminSession } from "@/lib/auth-guards";
@@ -28,6 +29,13 @@ export async function adjustLeaveBalanceAction(
 ): Promise<ActionState> {
   try {
     const session = await requireAdminSession();
+
+    const { allowManualLeaveBalanceAdjustments } = await getLeavePolicySettings();
+    if (!allowManualLeaveBalanceAdjustments) {
+      return {
+        error: "Manual leave balance adjustments are disabled. Enable them from Leave Settings first.",
+      };
+    }
 
     const employeeId = parseInt(String(formData.get("employeeId")), 10);
     const leaveType = String(formData.get("leaveType") ?? "").trim();

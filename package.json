@@ -39,6 +39,7 @@
     "db:migrate-phase6": "tsx prisma/scripts/migrate-phase6-integrations.ts",
     "db:migrate-phase7": "tsx prisma/scripts/migrate-phase7-analytics.ts",
     "integrations:process": "tsx prisma/scripts/process-integrations.ts",
+    "sync:secondary-db": "tsx prisma/scripts/sync-to-secondary-db.ts",
     "analytics:process": "tsx prisma/scripts/process-analytics.ts",
     "notifications:process": "tsx prisma/scripts/process-notifications.ts",
     "db:validate": "tsx prisma/scripts/validate-migrations.ts",

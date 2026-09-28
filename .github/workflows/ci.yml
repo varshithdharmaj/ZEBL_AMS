@@ -20,6 +20,21 @@ env:
   APP_BASE_URL: http://localhost:3000
 
 jobs:
+  commitlint:
+    name: Commit message lint
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Lint commits against Conventional Commits
+        uses: wagoid/commitlint-github-action@v6
+
   quality:
     name: Typecheck · Lint · Test · Build
     runs-on: ubuntu-latest

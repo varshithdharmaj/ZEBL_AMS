@@ -43,7 +43,7 @@ const statusChangeSchema = z.object({
 
 const addUpdateSchema = z.object({
   ticketId: z.string().min(1),
-  body: z.string().min(1, "Update cannot be empty").max(5000, "Update too long"),
+  body: z.string().min(1, "Update cannot be empty.").max(5000, "Update too long."),
   visibility: z.enum(["public_update", "internal_note"]),
 });
 
@@ -111,7 +111,9 @@ export async function assignTicketAction(
     revalidatePath(`/admin/tickets/${ticketId}`);
     revalidatePath("/admin/tickets");
 
-    return { success: assignToUserId ? "Ticket assigned successfully" : "Ticket unassigned" };
+    return {
+      success: assignToUserId ? "Ticket assigned successfully." : "Ticket unassigned successfully.",
+    };
   } catch (error) {
     if (error instanceof PermissionError) {
       return { error: "You don't have permission to assign this ticket" };
@@ -217,7 +219,7 @@ export async function changeTicketStatusAction(
     revalidatePath("/admin/tickets");
     revalidatePath(`/employee/tickets/${ticketId}`);
 
-    return { success: "Status updated successfully" };
+    return { success: "Status updated successfully." };
   } catch (error) {
     if (error instanceof PermissionError) {
       return { error: "You don't have permission to modify this ticket" };
@@ -301,7 +303,10 @@ export async function addTicketUpdateAction(
     revalidatePath(`/employee/tickets/${ticketId}`);
 
     return {
-      success: visibility === "internal_note" ? "Internal note added" : "Update sent to employee",
+      success:
+        visibility === "internal_note"
+          ? "Internal note added successfully."
+          : "Update sent to employee successfully.",
     };
   } catch (error) {
     if (error instanceof PermissionError) {

@@ -188,7 +188,7 @@ export function CandidateTable({
           }
 
           if (successCount > 0) {
-            setSuccess(`Successfully archived ${successCount} candidates.`);
+            setSuccess(`${successCount} candidates archived successfully.`);
             setSelectedIds(new Set());
             router.refresh();
           }
@@ -225,7 +225,7 @@ export function CandidateTable({
           }
 
           if (successCount > 0) {
-            setSuccess(`Successfully restored ${successCount} candidates.`);
+            setSuccess(`${successCount} candidates restored successfully.`);
             setSelectedIds(new Set());
             router.refresh();
           }

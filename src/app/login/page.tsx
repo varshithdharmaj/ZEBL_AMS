@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { LoginForm } from "@/components/auth/login-form";
+import { PreLoginHelp } from "@/components/auth/pre-login-help";
 import { isMicrosoftAuthEnabled } from "@/lib/auth/auth-config";
 
 export default function LoginPage() {
@@ -22,6 +23,9 @@ export default function LoginPage() {
         <Suspense fallback={<div className="h-48 animate-pulse rounded-xl bg-muted" />}>
           <LoginForm microsoftEnabled={microsoftEnabled} />
         </Suspense>
+        <div className="mt-4 flex justify-center">
+          <PreLoginHelp />
+        </div>
       </div>
     </div>
   );

@@ -8,3 +8,8 @@ export {
   getRecruitmentStorageRoot,
   setRecruitmentStorageForTests,
 } from "./recruitment-storage";
+export {
+  getEmployeeStorage,
+  getEmployeeStorageRoot,
+  setEmployeeStorageForTests,
+} from "./employee-storage";

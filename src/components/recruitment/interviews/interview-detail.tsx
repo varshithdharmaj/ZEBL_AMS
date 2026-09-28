@@ -10,6 +10,7 @@ import {
 } from "@/actions/recruitment-interviews";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { AlertDialog } from "@/components/ui/alert-dialog";
 import {
   Calendar,
   Clock,
@@ -46,13 +47,15 @@ export function InterviewDetailView({
   >(null);
   const [error, setError] = React.useState<string | null>(null);
   const [showFeedbackForm, setShowFeedbackForm] = React.useState(false);
+  const [confirmAction, setConfirmAction] = React.useState<
+    "cancel" | "complete" | "noShow" | null
+  >(null);
   const application = interview.application;
   const candidate = application?.candidate;
   const jobOpening = application?.jobOpening;
   const candidateName = candidate?.fullName ?? "Unknown";
 
-  const handleCancel = () => {
-    if (!confirm("Are you sure you want to cancel this interview?")) return;
+  const runCancel = () => {
     setError(null);
     setPendingAction("cancel");
     startTransition(async () => {
@@ -69,8 +72,7 @@ export function InterviewDetailView({
     });
   };
 
-  const handleComplete = () => {
-    if (!confirm("Are you sure you want to mark this interview as completed?")) return;
+  const runComplete = () => {
     setError(null);
     setPendingAction("complete");
     startTransition(async () => {
@@ -87,8 +89,7 @@ export function InterviewDetailView({
     });
   };
 
-  const handleNoShow = () => {
-    if (!confirm("Mark this interview as no-show? The candidate did not attend.")) return;
+  const runNoShow = () => {
     setError(null);
     setPendingAction("noShow");
     startTransition(async () => {
@@ -104,6 +105,30 @@ export function InterviewDetailView({
       }
     });
   };
+
+  const confirmDialogConfig = {
+    cancel: {
+      title: "Cancel Interview",
+      description: "Are you sure you want to cancel this interview?",
+      actionLabel: "Cancel Interview",
+      isActionDestructive: true,
+      onAction: runCancel,
+    },
+    complete: {
+      title: "Mark Interview as Completed",
+      description: "Are you sure you want to mark this interview as completed?",
+      actionLabel: "Mark as Completed",
+      isActionDestructive: false,
+      onAction: runComplete,
+    },
+    noShow: {
+      title: "Mark Interview as No-Show",
+      description: "The candidate did not attend. Mark this interview as a no-show?",
+      actionLabel: "Mark No Show",
+      isActionDestructive: false,
+      onAction: runNoShow,
+    },
+  } as const;
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -192,7 +217,7 @@ export function InterviewDetailView({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleCancel}
+                onClick={() => setConfirmAction("cancel")}
                 loading={isPending && pendingAction === "cancel"}
                 disabled={isPending}
                 className="font-semibold text-xs rounded-lg text-red-700 hover:bg-red-50 hover:text-red-800 border-red-200 shadow-subtle"
@@ -202,7 +227,7 @@ export function InterviewDetailView({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleNoShow}
+                onClick={() => setConfirmAction("noShow")}
                 loading={isPending && pendingAction === "noShow"}
                 disabled={isPending}
                 className="font-semibold text-xs rounded-lg text-amber-700 hover:bg-amber-50 hover:text-amber-800 border-amber-200 shadow-subtle"
@@ -211,7 +236,7 @@ export function InterviewDetailView({
               </Button>
               <Button
                 size="sm"
-                onClick={handleComplete}
+                onClick={() => setConfirmAction("complete")}
                 loading={isPending && pendingAction === "complete"}
                 disabled={isPending}
                 className="font-semibold text-xs rounded-lg shadow-subtle"
@@ -492,6 +517,23 @@ export function InterviewDetailView({
           </div>
         </div>
       </div>
+
+      {confirmAction && (
+        <AlertDialog
+          isOpen
+          onOpenChange={(open) => {
+            if (!open) setConfirmAction(null);
+          }}
+          title={confirmDialogConfig[confirmAction].title}
+          description={confirmDialogConfig[confirmAction].description}
+          actionLabel={confirmDialogConfig[confirmAction].actionLabel}
+          isActionDestructive={confirmDialogConfig[confirmAction].isActionDestructive}
+          onAction={() => {
+            confirmDialogConfig[confirmAction].onAction();
+            setConfirmAction(null);
+          }}
+        />
+      )}
     </div>
   );
 }

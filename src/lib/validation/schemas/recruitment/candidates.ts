@@ -87,7 +87,7 @@ const preferredWorkModeSchema = z.preprocess((value) => {
 
 export const createCandidateSchema = z.object({
   tenantId: optionalTrimmed,
-  fullName: z.string().trim().min(2, "Full name is required (at least 2 characters).").max(200),
+  fullName: z.string().trim().min(2, "Full name must be at least 2 characters.").max(200),
   firstName: optionalTrimmed,
   lastName: optionalTrimmed,
   preferredName: optionalTrimmed,

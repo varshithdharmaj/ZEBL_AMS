@@ -77,7 +77,7 @@ export default async function EmployeeTicketsPage({
         <EmptyState
           icon={Headset}
           title="No tickets yet"
-          description="You haven't raised any tickets. Need help? Create your first ticket to get started."
+          description="You haven't raised any tickets yet."
           action={
             <Button asChild>
               <Link href="/employee/tickets/new">

@@ -16,6 +16,14 @@ import type { ShiftSummary } from "@/lib/shifts";
 import type { AppUserRole } from "@/lib/roles";
 import type { AccountStatus, AuthProvider } from "@/generated/prisma/enums";
 import { AccountManagementTab } from "@/components/admin/employee-profile/account-management-tab";
+import {
+  StatutoryDetailsTab,
+  type StatutoryFields,
+} from "@/components/admin/employee-profile/statutory-details-tab";
+import {
+  DocumentsTab,
+  type EmployeeDocumentRow,
+} from "@/components/admin/employee-profile/documents-tab";
 import { ProfileAvatar } from "@/components/shared/profile-avatar";
 import { EmployeePhotoAvatar } from "@/components/shared/employee-photo-avatar";
 import { canEditEmployeeProfilePhoto } from "@/lib/permissions";
@@ -94,6 +102,8 @@ const TABS: TabDef[] = [
   { id: "attendance", label: "Attendance" },
   { id: "balances", label: "Leave balances" },
   { id: "history", label: "Leave history" },
+  { id: "statutory", label: "Statutory Details" },
+  { id: "documents", label: "Documents" },
   { id: "account", label: "Account Management" },
 ];
 
@@ -102,6 +112,9 @@ export function EmployeeProfileShell({
   attendance,
   balances,
   history,
+  canAdjustLeaveBalance,
+  canAddHistoricalLeave,
+  canEditHistoricalLeave,
   defaultStart,
   defaultEnd,
   managerCandidates,
@@ -110,11 +123,16 @@ export function EmployeeProfileShell({
   currentUserId,
   currentUserRole,
   currentUserEmployeeId = null,
+  statutory,
+  documents,
 }: {
   employee: ProfileEmployee;
   attendance: AttendanceSummary;
   balances: LeaveBalanceSummary[];
   history: HistoryRow[];
+  canAdjustLeaveBalance: boolean;
+  canAddHistoricalLeave: boolean;
+  canEditHistoricalLeave: boolean;
   defaultStart: string;
   defaultEnd: string;
   managerCandidates: ManagerSummary[];
@@ -128,6 +146,13 @@ export function EmployeeProfileShell({
   currentUserId: string;
   currentUserRole: AppUserRole;
   currentUserEmployeeId?: number | null;
+  statutory: {
+    masked: StatutoryFields;
+    unmasked: StatutoryFields | null;
+    canEdit: boolean;
+    canUnmask: boolean;
+  };
+  documents: EmployeeDocumentRow[];
 }) {
   const [activeTab, setActiveTab] = useState("overview");
   const targetUserId = employee.user?.id ?? null;
@@ -186,9 +211,36 @@ export function EmployeeProfileShell({
           />
         )}
         {activeTab === "balances" && (
-          <LeaveBalancesTab employeeId={employee.id} balances={balances} />
+          <LeaveBalancesTab
+            employeeId={employee.id}
+            balances={balances}
+            canAdjust={canAdjustLeaveBalance}
+          />
         )}
-        {activeTab === "history" && <LeaveHistoryTab history={history} />}
+        {activeTab === "history" && (
+          <LeaveHistoryTab
+            employeeId={employee.id}
+            history={history}
+            canAddHistorical={canAddHistoricalLeave}
+            canEditHistorical={canEditHistoricalLeave}
+          />
+        )}
+        {activeTab === "statutory" && (
+          <StatutoryDetailsTab
+            employeeId={employee.id}
+            masked={statutory.masked}
+            unmasked={statutory.unmasked}
+            canEdit={statutory.canEdit}
+            canUnmask={statutory.canUnmask}
+          />
+        )}
+        {activeTab === "documents" && (
+          <DocumentsTab
+            employeeId={employee.id}
+            documents={documents}
+            canManage={statutory.canEdit}
+          />
+        )}
         {activeTab === "account" && (
           <AccountManagementTab
             employee={employee}

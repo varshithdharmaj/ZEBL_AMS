@@ -22,8 +22,7 @@ export default async function EditCandidatePage({
       return (
         <div className="space-y-6 lg:space-y-8">
           <WorkspacePageHeader
-            title="Access Denied"
-            description="You do not have permissions to edit this candidate profile."
+            title="Candidate"
             backHref="/admin/recruitment/candidates"
             backLabel="Back to candidates"
           />
@@ -36,8 +35,7 @@ export default async function EditCandidatePage({
         return (
           <div className="space-y-6 lg:space-y-8">
             <WorkspacePageHeader
-              title="Candidate Not Found"
-              description="The requested candidate profile could not be located."
+              title="Candidate"
               backHref="/admin/recruitment/candidates"
               backLabel="Back to candidates"
             />
@@ -49,8 +47,7 @@ export default async function EditCandidatePage({
         return (
           <div className="space-y-6 lg:space-y-8">
             <WorkspacePageHeader
-              title="Access Denied"
-              description="You do not have permissions to edit this candidate profile."
+              title="Candidate"
               backHref="/admin/recruitment/candidates"
               backLabel="Back to candidates"
             />
@@ -62,8 +59,7 @@ export default async function EditCandidatePage({
     return (
       <div className="space-y-6 lg:space-y-8">
         <WorkspacePageHeader
-          title="Error"
-          description="An unexpected error occurred."
+          title="Candidate"
           backHref="/admin/recruitment/candidates"
           backLabel="Back to candidates"
         />

@@ -104,6 +104,21 @@ export function canEditEmployeeProfilePhoto(input: {
 }
 
 /**
+ * Contact-detail fields (phone, alternate phone, address, emergency contact)
+ * an employee may self-edit on their own profile — identity fields (name,
+ * DOB, gender, email) stay HR-managed via {@link canManageEmployee}.
+ */
+export function canEditEmployeeContactInfo(input: {
+  actorRole: AppUserRole;
+  actorEmployeeId: number | null | undefined;
+  targetEmployeeId: number;
+}): boolean {
+  if (canManageEmployee(input.actorRole)) return true;
+  if (input.actorEmployeeId == null) return false;
+  return input.actorEmployeeId === input.targetEmployeeId;
+}
+
+/**
  * Account-level administration is target-aware: HR may administer employee and
  * Manager accounts (password reset, lock/unlock — account lifecycle, not role
  * assignment), while only Super Admin may administer HR or Super Admin accounts.
@@ -121,6 +136,22 @@ export function canAdministerEmployeeAccount(
 /** Org-wide analytics (approval insights, workforce metrics). Super Admin + HR. */
 export function canViewOrgAnalytics(role: AppUserRole): boolean {
   return canAccessHRAdministration(role);
+}
+
+/**
+ * Statutory/financial PII (PAN, Aadhaar, bank details) is masked by default
+ * everywhere. Only HR/Super Admin or the employee viewing their own record
+ * may see the unmasked value — explicitly NOT a manager, even for direct
+ * reports (unlike other profile fields).
+ */
+export function canViewUnmaskedStatutoryDetails(input: {
+  actorRole: AppUserRole;
+  actorEmployeeId: number | null | undefined;
+  targetEmployeeId: number;
+}): boolean {
+  if (canManageEmployee(input.actorRole)) return true;
+  if (input.actorEmployeeId == null) return false;
+  return input.actorEmployeeId === input.targetEmployeeId;
 }
 
 // --- User & role administration (Super Admin only) -----------------------

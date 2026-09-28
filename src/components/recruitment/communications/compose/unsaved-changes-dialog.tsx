@@ -15,7 +15,7 @@ export function UnsavedChangesDialog({
     <AlertDialog
       isOpen={open}
       onOpenChange={onOpenChange}
-      title="Discard unsaved changes?"
+      title="Discard Unsaved Changes"
       description="You have unsaved edits in this draft. Leave without saving, or save first."
       cancelLabel="Keep editing"
       actionLabel="Discard changes"
@@ -40,7 +40,7 @@ export function UnsavedSavePrompt({
     <AlertDialog
       isOpen={open}
       onOpenChange={onOpenChange}
-      title="Save draft before leaving?"
+      title="Save Draft Before Leaving"
       description="Save your current draft, then return to the Communication Center."
       cancelLabel="Cancel"
       actionLabel={pending ? "Saving…" : "Save & leave"}
