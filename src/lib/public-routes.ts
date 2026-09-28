@@ -16,6 +16,9 @@ export const CRON_PUBLIC_PATHS = [
   "/api/analytics/process",
   "/api/health/deep",
   "/api/integrations/attendance/ingest",
+  "/api/leave/accrual/process",
+  "/api/leave/expiry/process",
+  "/api/recruitment/public-apply/expiry/process",
 ] as const;
 
 export const APPROVAL_PUBLIC_PATHS = ["/approve", "/api/approve"] as const;
