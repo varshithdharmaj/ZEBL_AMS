@@ -147,6 +147,12 @@ export const managerHelpChapters: HelpChapter[] = [
           "Track progress on the same page.",
         ],
       },
+      {
+        type: "callout",
+        kind: "note",
+        label: "NOTE",
+        text: "If you don't have enough balance for the leave type you pick, the request still goes for approval — the days beyond your balance are automatically recorded as unpaid Loss of Pay (LOP). Requests that would exceed the monthly leave limit are blocked at submission instead.",
+      },
       { type: "sectionHeading", text: "Leave Policy" },
       { type: "paragraph", text: "Leave Policy is the read-only, published version of your organization's leave rules." },
     ],
@@ -174,6 +180,12 @@ export const managerHelpChapters: HelpChapter[] = [
           "Approve or reject, adding a comment if useful.",
           "The requester is notified automatically and the request moves to its next step (further approval, or done).",
         ],
+      },
+      {
+        type: "callout",
+        kind: "note",
+        label: "UNPAID DAYS",
+        text: "A request marked \"· N unpaid\" means the employee didn't have enough balance to cover every day. If you approve it, those days are recorded as Loss of Pay (LOP) for payroll — approving or rejecting works exactly as for any other request.",
       },
       {
         type: "callout",
