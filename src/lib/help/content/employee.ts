@@ -146,7 +146,13 @@ export const employeeHelpChapters: HelpChapter[] = [
         type: "callout",
         kind: "note",
         label: "NOTE",
-        text: "If your Earned Leave balance runs out, the system can automatically convert unpaid days to Loss of Pay (LOP) per policy — check your balance before requesting extended leave.",
+        text: "If you don't have enough balance for the leave type you pick (Earned, Casual, or Sick Leave), your request isn't rejected — it goes for approval as normal, and the days beyond your balance are automatically recorded as unpaid Loss of Pay (LOP). You'll see a message confirming how many days are unpaid when you submit, and the request shows \"· N unpaid\" in your leave list.",
+      },
+      {
+        type: "callout",
+        kind: "warning",
+        label: "MONTHLY LIMIT",
+        text: "The monthly leave limit is a separate rule. If a request would take you over the maximum leave days allowed in one leave cycle month, it is blocked at submission rather than converted to LOP — reduce the days or contact HR.",
       },
       { type: "sectionHeading", text: "Leave Policy" },
       {

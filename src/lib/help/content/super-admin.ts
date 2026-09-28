@@ -115,7 +115,28 @@ export const superAdminHelpChapters: HelpChapter[] = [
         type: "callout",
         kind: "tip",
         label: "TIP",
-        text: "The per-employee balance-adjustment form on an employee's profile (Chapter 3) also supports this \"set to\" mode alongside the existing add/deduct delta — use the bulk importer for a one-time migration, and the profile form for individual corrections.",
+        text: "The per-employee balance-adjustment form on an employee's profile (Chapter 3) also supports this \"set to\" mode alongside the existing add/deduct delta — use the bulk importer for a one-time migration, and the profile form for individual corrections. The profile form only appears while \"Allow HR to manually adjust leave balances\" is on in Leave Settings.",
+      },
+      {
+        type: "callout",
+        kind: "note",
+        label: "UNPAID DAYS (LOP)",
+        text: "When an employee requests more days than their balance covers, the request is not rejected — it goes through the normal approval chain, and the days beyond the balance are recorded as Loss of Pay (LOP) on that same request. These show as \"· N unpaid\" in the request list, the approval record, and leave history, and flow into payroll. Requests over the monthly leave limit are different: they're blocked at submission.",
+      },
+      { type: "sectionHeading", text: "Migration controls — manual balances and historical leave" },
+      {
+        type: "paragraph",
+        text: "Three switches under Settings → Leave Settings control how much HR can change directly on an employee's profile. They're meant for the migration period; turn them off once opening data is settled.",
+      },
+      {
+        type: "table",
+        columns: ["Setting", "What it allows on the employee profile"],
+        widths: [35, 65],
+        rows: [
+          ["Allow HR to manually adjust leave balances", "The balance form on the Leave Balances tab — add/deduct, or \"set to\" a value. When off, the tab says manual adjustments are disabled and balances only change through accrual and approved requests."],
+          ["Allow HR to add historical leave entries", "An \"Add historical leave\" form on the Leave History tab for leave taken before go-live, with its real dates and reason. It's recorded as already approved and deducts the balance immediately — no approval chain."],
+          ["Allow HR to correct historical leave entries", "An edit option on existing historical entries. The original is reversed and kept on record, and a corrected entry is created in its place — nothing is silently overwritten."],
+        ],
       },
       { type: "sectionHeading", text: "Leave Policy vs. Leave Settings" },
       {
@@ -261,7 +282,7 @@ export const superAdminHelpChapters: HelpChapter[] = [
           ["/admin/payroll-settings", "Payroll cycle start day, required office time, grace period, overtime thresholds, per-shift overrides."],
           ["/admin/shift-settings (edit: you only)", "Named shifts — start/end time, grace period, expected work minutes. HR can view this screen, but only you can save changes."],
           ["/admin/attendance-settings (edit: you only)", "Default weekly working-day schedule and date-specific exceptions. HR can view this screen, but only you can save changes."],
-          ["/admin/leave-settings", "Leave cycle, Earned Leave accrual, Sick Leave policy — feeds the read-only Leave Policy page."],
+          ["/admin/leave-settings", "Leave cycle, Earned Leave accrual, Sick Leave policy, monthly and consecutive-day limits, advance notice, and the migration switches for manual balance adjustments and historical leave entries — feeds the read-only Leave Policy page."],
         ],
       },
     ],
