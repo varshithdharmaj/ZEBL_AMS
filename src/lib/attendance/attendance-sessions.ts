@@ -1,5 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { deriveAttendanceStatus } from "@/lib/attendance";
+import { evaluateLateArrivalsForDays } from "@/lib/attendance/late-arrival-policy";
 import {
   currentLocalTimeString,
   openSessionElapsedMinutes,
@@ -141,7 +142,7 @@ export async function checkInEmployeeSession(
   const attendanceDate = startOfDay(asOf);
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const record = await getOrCreateTodayRecord(employeeId, tx, attendanceDate);
 
       const open = await tx.attendanceSession.findFirst({
@@ -174,6 +175,12 @@ export async function checkInEmployeeSession(
         sessionId: session.id,
       };
     });
+
+    // After commit and never throws — a policy failure must not undo the check-in.
+    if (result.ok) {
+      await evaluateLateArrivalsForDays([{ employeeId, attendanceDate }]);
+    }
+    return result;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (msg.includes("attendance_sessions_one_open_per_day_idx")) {

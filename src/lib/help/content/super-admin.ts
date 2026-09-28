@@ -374,6 +374,17 @@ export const superAdminHelpChapters: HelpChapter[] = [
         type: "paragraph",
         text: "Only you, at `/admin/shift-settings`. HR can view the list but the save action is disabled for them by design — same pattern as attendance scheduling.",
       },
+      { type: "sectionHeading", text: "How does the late arrival policy work?" },
+      {
+        type: "paragraph",
+        text: "It's off by default; switch it on from the Late arrival policy card on `/admin/shift-settings`. A check-in after the employee's shift start plus its grace period counts as late. After the free allowance for the calendar month (2 by default), every further late arrival automatically records an approved 0.5-day Casual Leave — or loss of pay if the CL balance can't cover it. Holidays, weekly offs, days that already have leave on them, and regularised days are skipped, and it only applies from the day after you switch it on.",
+      },
+      {
+        type: "callout",
+        kind: "note",
+        label: "NOTE",
+        text: "It can only judge employees who have an active shift assigned — the card shows how many active employees don't. Employees contest a specific day through Attendance Regularization; when HR approves it, the half-day is cancelled and the balance refunded.",
+      },
       { type: "sectionHeading", text: "Where's the definitive record of who did what?" },
       {
         type: "paragraph",

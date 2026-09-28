@@ -10,6 +10,7 @@ import {
   totalWorkedMinutesFromSessions,
 } from "@/lib/attendance/session-duration";
 import { getAttendanceSettings } from "@/lib/attendance/attendance-settings";
+import { evaluateLateArrivalsForDays } from "@/lib/attendance/late-arrival-policy";
 import { resolveEmployeeShift, shiftCrossesMidnight, shiftDayOffset } from "@/lib/attendance/shift-lookup";
 import type { ShiftSummary } from "@/lib/shifts";
 import { prisma } from "@/lib/prisma";
@@ -471,7 +472,13 @@ export async function deriveAttendanceForAffectedGroups(
   const uniqueGroups = Array.from(uniqueGroupsMap.values());
   const concurrency = Math.max(1, resolveDatabasePoolMax() - 1);
 
-  await runWithConcurrency(uniqueGroups, concurrency, (group) =>
-    deriveAttendanceForEmployeeDate(group.employeeId, group.attendanceDate)
-  );
+  try {
+    await runWithConcurrency(uniqueGroups, concurrency, (group) =>
+      deriveAttendanceForEmployeeDate(group.employeeId, group.attendanceDate)
+    );
+  } finally {
+    // After the day rebuilds commit — oldest first, and never throws — so the
+    // late-arrival policy can neither fail nor slow down ingestion itself.
+    await evaluateLateArrivalsForDays(uniqueGroups);
+  }
 }

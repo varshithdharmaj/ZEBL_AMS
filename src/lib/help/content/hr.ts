@@ -97,6 +97,12 @@ export const hrHelpChapters: HelpChapter[] = [
         label: "NOTE",
         text: "Keeping the raw record intact is deliberate — it keeps every correction auditable later, including by Super Admin via the Audit Log (Chapter 10).",
       },
+      {
+        type: "callout",
+        kind: "note",
+        label: "LATE ARRIVALS",
+        text: "When Super Admin has the late arrival policy on, repeated late arrivals auto-record a 0.5-day CL (reviewer shown as \"System (Late Arrival Policy)\"). Approving a regularization for that day cancels the half-day and refunds the balance automatically — no separate leave cancellation needed.",
+      },
     ],
   },
   {

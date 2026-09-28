@@ -2,6 +2,7 @@ import "server-only";
 
 import { LeaveWorkflowStatus } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
+import { findLateArrivalAutoLeaveId } from "@/lib/attendance/late-arrival-policy";
 import { getISTDateParts } from "@/lib/integrations/biometric-attendance-derivation";
 
 export class RegularizationEligibilityError extends Error {
@@ -45,6 +46,10 @@ export async function assertRegularizationEligible(params: {
     );
   }
 
+  // The late-arrival policy's own auto half-day must not block the employee from
+  // contesting the very late arrival it penalised — regularization is the contest path.
+  const lateArrivalLeaveId = await findLateArrivalAutoLeaveId(employeeId, dateParts.attendanceDate);
+
   const [holiday, override, approvedLeave] = await Promise.all([
     prisma.holiday.findUnique({ where: { holidayDate: dateParts.attendanceDate } }),
     prisma.attendanceDateOverride.findUnique({ where: { date: dateParts.attendanceDate } }),
@@ -54,6 +59,7 @@ export async function assertRegularizationEligible(params: {
         workflowStatus: LeaveWorkflowStatus.approved,
         startDate: { lte: dateParts.attendanceDate },
         endDate: { gte: dateParts.attendanceDate },
+        ...(lateArrivalLeaveId !== null ? { id: { not: lateArrivalLeaveId } } : {}),
       },
       select: { id: true },
     }),

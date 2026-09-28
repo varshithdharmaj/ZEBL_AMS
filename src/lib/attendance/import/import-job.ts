@@ -6,6 +6,7 @@ import {
   UserManagementError,
 } from "@/lib/admin/user-management";
 import { EXCEL_UPLOAD_DEFAULT_PASSWORD } from "@/lib/admin/account-lifecycle";
+import { evaluateLateArrivalsForUpload } from "@/lib/attendance/late-arrival-policy";
 import { backfillBiometricPunchesForEmployee } from "@/lib/integrations/biometric-ingestion";
 import type { SessionUser } from "@/lib/session";
 import { startOfDay } from "@/lib/utils";
@@ -394,6 +395,8 @@ export async function processAttendanceImportJob(
       },
     });
 
+    await evaluateLateArrivalsForUpload(upload.id);
+
     return {
       ok: true,
       jobId,
@@ -425,6 +428,9 @@ export async function processAttendanceImportJob(
       } catch {
         // best-effort
       }
+      // Chunks committed before the failure stay imported under this run's upload;
+      // a resume writes to a new upload, so evaluate these now or they never are.
+      await evaluateLateArrivalsForUpload(uploadId);
     }
 
     await prisma.attendanceImportJob.update({

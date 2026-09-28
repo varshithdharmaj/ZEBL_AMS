@@ -119,6 +119,12 @@ export const employeeHelpChapters: HelpChapter[] = [
         label: "TIP",
         text: "If HR approves your request, the day shows both the original punch record and the approved correction — nothing is silently overwritten, so the history stays auditable.",
       },
+      {
+        type: "callout",
+        kind: "note",
+        label: "LATE ARRIVALS",
+        text: "If your organization has the late arrival policy on, a few late arrivals each month are free; after that, each late arrival records a half-day Casual Leave (or unpaid leave if your CL balance is empty), shown in your leave history with the reason. If a late arrival was recorded wrongly, request a correction for that day — once HR approves it, the half-day is cancelled and your balance restored.",
+      },
     ],
   },
   {
