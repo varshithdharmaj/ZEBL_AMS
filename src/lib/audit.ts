@@ -160,6 +160,9 @@ export const AUDIT_ACTIONS = {
   RECRUITMENT_TEMPLATE_UPDATED: "recruitment.template.updated",
   RECRUITMENT_TEMPLATE_DELETED: "recruitment.template.deleted",
   LEAVE_POLICY_SETTINGS_UPDATED: "leave.policy_settings.updated",
+  LATE_ARRIVAL_POLICY_SETTINGS_UPDATED: "attendance.late_arrival_policy.updated",
+  LATE_ARRIVAL_HALF_DAY_APPLIED: "attendance.late_arrival.half_day_applied",
+  LATE_ARRIVAL_HALF_DAY_REVERSED: "attendance.late_arrival.half_day_reversed",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

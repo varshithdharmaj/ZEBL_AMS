@@ -7,6 +7,7 @@ import {
   UserManagementError,
 } from "@/lib/admin/user-management";
 import { EXCEL_UPLOAD_DEFAULT_PASSWORD } from "@/lib/admin/account-lifecycle";
+import { evaluateLateArrivalsForUpload } from "@/lib/attendance/late-arrival-policy";
 import { backfillBiometricPunchesForEmployee } from "@/lib/integrations/biometric-ingestion";
 import type { SessionUser } from "@/lib/session";
 import { ATTENDANCE_UPLOAD_MAX_ROWS } from "./file-validation";
@@ -163,6 +164,8 @@ export async function importAttendanceRows(params: {
         provisioningErrors.push(`${created.employeeCode}: ${message}`);
       }
     }
+
+    await evaluateLateArrivalsForUpload(txResult.uploadId);
 
     return {
       ok: true,

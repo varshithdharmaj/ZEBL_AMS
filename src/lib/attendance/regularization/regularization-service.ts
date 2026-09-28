@@ -10,6 +10,7 @@ import {
   type OverlaySession,
 } from "@/lib/attendance/regularization/overlay";
 import { assertRegularizationEligible } from "@/lib/attendance/regularization/eligibility";
+import { reverseLateArrivalPenaltyForRegularization } from "@/lib/attendance/late-arrival-policy";
 import {
   queueRegularizationDecisionNotice,
   queueRegularizationSubmittedAlert,
@@ -389,6 +390,14 @@ export async function approveRegularizationRequest(params: {
       },
       tx
     );
+  });
+
+  // After commit: cancelWorkflow runs its own transaction. Best-effort, never throws.
+  await reverseLateArrivalPenaltyForRegularization({
+    employeeId: request.employeeId,
+    attendanceDate: getISTDateParts(request.attendanceDate).attendanceDate,
+    regularizationRequestId: request.id,
+    actor: params.actor,
   });
 
   await queueRegularizationDecisionNotice({
