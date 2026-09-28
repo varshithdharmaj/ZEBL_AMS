@@ -434,8 +434,9 @@ export function NewCandidateResumeReview({ draft, file, onBack, onContinueManual
           </p>
         )}
 
-        {/* Three-pane layout: 40% document / 35% form / 25% AI insights on desktop, stacked below lg. */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[40%_35%_25%] lg:items-start">
+        {/* Three-pane layout: 40% document / 35% form / 25% AI insights on desktop, stacked below lg.
+            fr units (not %) so the gaps fit inside the card instead of pushing the insights pane past its edge. */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,8fr)_minmax(0,7fr)_minmax(0,5fr)] lg:items-start">
           <div className="h-[70vh] lg:sticky lg:top-4">
             <DocumentPreviewPane file={file} fileName={draft.fileName} />
           </div>
@@ -1130,7 +1131,9 @@ export function NewCandidateResumeReview({ draft, file, onBack, onContinueManual
             </section>
           </div>
 
-          <div className="max-h-[70vh] lg:sticky lg:top-4">
+          {/* Definite height (not max-h) so the pane's h-full resolves and it scrolls internally;
+              with max-h the pane grew past the grid and covered the Create Candidate button. */}
+          <div className="lg:sticky lg:top-4 lg:h-[70vh]">
             <AiInsightsPane draft={draft} />
           </div>
         </div>
