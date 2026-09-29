@@ -11,7 +11,7 @@ import { CandidateMetaRow } from "../candidates/candidate-meta-row";
 import { Button } from "@/components/ui/button";
 import { ErrorAlert } from "@/components/ui/error-alert";
 import { AlertDialog } from "@/components/ui/alert-dialog";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ApplicationAssessmentForm } from "@/components/recruitment/applications/application-assessment-form";
@@ -96,7 +96,7 @@ export function ApplicationDetailView({
     actionLabel?: string;
     onAction: () => void;
     isDestructive?: boolean;
-    children?: React.ReactNode;
+    reasonField?: "reject" | "withdraw";
   } | null>(null);
 
   const employeeMap = React.useMemo(() => {
@@ -532,17 +532,7 @@ export function ApplicationDetailView({
                             actionLabel: "Reject",
                             isDestructive: true,
                             onAction: handleReject,
-                            children: (
-                              <div className="space-y-2 mt-3">
-                                <Label htmlFor="reject-reason">Rejection Reason</Label>
-                                <Input
-                                  id="reject-reason"
-                                  value={rejectReason}
-                                  onChange={(e) => setRejectReason(e.target.value)}
-                                  placeholder="e.g. Failed technical round"
-                                />
-                              </div>
-                            ),
+                            reasonField: "reject",
                           })
                         }
                         disabled={isPending}
@@ -560,17 +550,7 @@ export function ApplicationDetailView({
                             description: "Please provide a reason for withdrawing this application.",
                             actionLabel: "Withdraw",
                             onAction: handleWithdraw,
-                            children: (
-                              <div className="space-y-2 mt-3">
-                                <Label htmlFor="withdraw-reason">Withdrawal Reason</Label>
-                                <Input
-                                  id="withdraw-reason"
-                                  value={withdrawReason}
-                                  onChange={(e) => setWithdrawReason(e.target.value)}
-                                  placeholder="e.g. Accepted another offer"
-                                />
-                              </div>
-                            ),
+                            reasonField: "withdraw",
                           })
                         }
                         disabled={isPending}
@@ -607,10 +587,45 @@ export function ApplicationDetailView({
           description={alertConfig.description}
           actionLabel={alertConfig.actionLabel}
           isActionDestructive={alertConfig.isDestructive}
+          isActionDisabled={
+            (alertConfig.reasonField === "reject" && !rejectReason.trim()) ||
+            (alertConfig.reasonField === "withdraw" && !withdrawReason.trim())
+          }
           isPending={isPending}
-          onAction={alertConfig.onAction}
+          onAction={
+            alertConfig.reasonField === "reject"
+              ? handleReject
+              : alertConfig.reasonField === "withdraw"
+                ? handleWithdraw
+                : alertConfig.onAction
+          }
         >
-          {alertConfig.children}
+          {alertConfig.reasonField === "reject" && (
+            <div className="space-y-2">
+              <Label htmlFor="reject-reason">Rejection Reason</Label>
+              <Textarea
+                id="reject-reason"
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="e.g. Failed technical round"
+                rows={3}
+                autoFocus
+              />
+            </div>
+          )}
+          {alertConfig.reasonField === "withdraw" && (
+            <div className="space-y-2">
+              <Label htmlFor="withdraw-reason">Withdrawal Reason</Label>
+              <Textarea
+                id="withdraw-reason"
+                value={withdrawReason}
+                onChange={(e) => setWithdrawReason(e.target.value)}
+                placeholder="e.g. Accepted another offer"
+                rows={3}
+                autoFocus
+              />
+            </div>
+          )}
         </AlertDialog>
       )}
     </div>
