@@ -10,12 +10,12 @@ export const CANDIDATE_STATUS_LABELS: Record<CandidateStatus, string> = {
 };
 
 export const CANDIDATE_SOURCE_LABELS: Record<CandidateSource, string> = {
-  manual_upload: "Manual Upload",
+  manual_upload: "Resume Upload",
   referral: "Referral",
   csv_import: "CSV Import",
   google_forms_csv: "Google Forms CSV",
   other: "Other",
-  manual: "Manual",
+  manual: "Manual Entry",
   import: "Import",
   employee_referral: "Employee Referral",
   career_portal_future: "Career Portal Future",
