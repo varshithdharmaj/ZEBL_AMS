@@ -62,7 +62,7 @@ export function CandidateForm({
 
   const [status, setStatus] = useState<CandidateStatus>(candidate?.status ?? CandidateStatus.active);
   const [source, setSource] = useState<CandidateSource>(
-    candidate?.source ?? CandidateSource.manual_upload
+    candidate?.source ?? CandidateSource.manual
   );
   const [recruiterUserId, setRecruiterUserId] = useState<string>(
     candidate?.primaryRecruiterUserId ?? ""
