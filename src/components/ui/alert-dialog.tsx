@@ -15,7 +15,9 @@ export interface AlertDialogProps {
   actionLabel?: string;
   onAction: () => void;
   isActionDestructive?: boolean;
+  isActionDisabled?: boolean;
   isPending?: boolean;
+  children?: React.ReactNode;
 }
 
 type AlertDialogRootProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.Root>;
@@ -35,7 +37,9 @@ function ControlledAlertDialog({
   actionLabel = "Confirm",
   onAction,
   isActionDestructive = false,
+  isActionDisabled = false,
   isPending = false,
+  children,
 }: AlertDialogProps) {
   return (
     <DialogPrimitive.Root open={isOpen} onOpenChange={onOpenChange}>
@@ -53,6 +57,7 @@ function ControlledAlertDialog({
                 </DialogPrimitive.Description>
               )}
             </div>
+            {children}
             <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 gap-2 sm:gap-0">
               <DialogPrimitive.Close asChild>
                 <Button variant="outline" size="sm" disabled={isPending}>
@@ -66,6 +71,7 @@ function ControlledAlertDialog({
                   onAction();
                 }}
                 loading={isPending}
+                disabled={isActionDisabled}
               >
                 {isPending ? "Processing…" : actionLabel}
               </Button>
