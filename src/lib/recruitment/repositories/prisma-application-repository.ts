@@ -207,6 +207,32 @@ function needsAttentionWhere(
   };
 }
 
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Start of a YYYY-MM-DD calendar day in IST (UTC+5:30), or undefined if malformed. */
+function istDayStart(value: string | undefined): Date | undefined {
+  if (!value || !DATE_ONLY_PATTERN.test(value)) return undefined;
+  const date = new Date(`${value}T00:00:00.000+05:30`);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+/**
+ * Applied-date window for the hiring-batch filter. Both ends are inclusive
+ * calendar days, so the upper bound is the start of the following IST day.
+ */
+export function appliedDateWhere(
+  appliedFrom?: string,
+  appliedTo?: string
+): Prisma.DateTimeFilter | undefined {
+  const from = istDayStart(appliedFrom);
+  const toDayStart = istDayStart(appliedTo);
+  if (!from && !toDayStart) return undefined;
+  const range: Prisma.DateTimeFilter = {};
+  if (from) range.gte = from;
+  if (toDayStart) range.lt = new Date(toDayStart.getTime() + 24 * 60 * 60 * 1000);
+  return range;
+}
+
 function filtersWhere(
   filters?: ApplicationListFilters | SearchFilters
 ): Prisma.ApplicationWhereInput {
@@ -248,6 +274,13 @@ function filtersWhere(
   const priority = readStringFilter(filters, "priority");
   if (priority) {
     where.priority = priority as ApplicationPriority;
+  }
+  const appliedRange = appliedDateWhere(
+    readStringFilter(filters, "appliedFrom"),
+    readStringFilter(filters, "appliedTo")
+  );
+  if (appliedRange) {
+    where.createdAt = appliedRange;
   }
   const andConditions: Prisma.ApplicationWhereInput[] = [];
 

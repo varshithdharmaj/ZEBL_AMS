@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { LayoutGrid, List, UserRound, AlertTriangle } from "lucide-react";
+import { LayoutGrid, List, UserRound, AlertTriangle, X } from "lucide-react";
 
 export type ApplicationListFilterState = {
   q?: string;
@@ -22,6 +22,9 @@ export type ApplicationListFilterState = {
   pageSize?: number;
   mine?: boolean;
   needsAttention?: boolean;
+  /** Hiring-batch window on applied date, inclusive YYYY-MM-DD. */
+  appliedFrom?: string;
+  appliedTo?: string;
 };
 
 export function applicationListHref(
@@ -40,6 +43,8 @@ export function applicationListHref(
   if (filters.pageSize) params.set("pageSize", String(filters.pageSize));
   if (filters.mine) params.set("mine", "1");
   if (filters.needsAttention) params.set("needsAttention", "1");
+  if (filters.appliedFrom) params.set("appliedFrom", filters.appliedFrom);
+  if (filters.appliedTo) params.set("appliedTo", filters.appliedTo);
   if (page) params.set("page", String(page));
   const qs = params.toString();
   return qs ? `${basePath}?${qs}` : basePath;
@@ -62,6 +67,8 @@ export function ApplicationFilters({
   const [view, setView] = useState<"board" | "list">(filters.view ?? "board");
   const [mine, setMine] = useState(filters.mine ?? false);
   const [needsAttention, setNeedsAttention] = useState(filters.needsAttention ?? false);
+  const [appliedFrom, setAppliedFrom] = useState(filters.appliedFrom ?? "");
+  const [appliedTo, setAppliedTo] = useState(filters.appliedTo ?? "");
 
   /**
    * Every control here navigates immediately — Select/Button onChange
@@ -84,6 +91,8 @@ export function ApplicationFilters({
           pageSize: filters.pageSize,
           mine,
           needsAttention,
+          appliedFrom,
+          appliedTo,
           ...overrides,
         },
         undefined,
@@ -188,6 +197,57 @@ export function ApplicationFilters({
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      <div className="min-w-[260px] flex-1 space-y-1.5">
+        <span
+          className="block text-xs font-bold uppercase tracking-wider text-muted-foreground"
+          title="Applied date — separates this hiring round from earlier ones on a reused opening"
+        >
+          Hiring Batch (Applied)
+        </span>
+        <div className="flex items-center gap-1.5">
+          <Input
+            type="date"
+            value={appliedFrom}
+            max={appliedTo || undefined}
+            onChange={(e) => {
+              setAppliedFrom(e.target.value);
+              navigate({ appliedFrom: e.target.value });
+            }}
+            className="h-10 min-w-0 bg-background"
+            aria-label="Applied from"
+          />
+          <span className="text-xs text-muted-foreground">to</span>
+          <Input
+            type="date"
+            value={appliedTo}
+            min={appliedFrom || undefined}
+            onChange={(e) => {
+              setAppliedTo(e.target.value);
+              navigate({ appliedTo: e.target.value });
+            }}
+            className="h-10 min-w-0 bg-background"
+            aria-label="Applied to"
+          />
+          {appliedFrom || appliedTo ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                setAppliedFrom("");
+                setAppliedTo("");
+                navigate({ appliedFrom: "", appliedTo: "" });
+              }}
+              className="h-8 w-8 shrink-0"
+              title="Clear hiring batch dates"
+              aria-label="Clear hiring batch dates"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <div className="flex w-full flex-col justify-end gap-2 sm:w-auto">
