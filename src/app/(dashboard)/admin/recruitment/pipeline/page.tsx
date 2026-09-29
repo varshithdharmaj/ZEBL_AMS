@@ -46,6 +46,10 @@ function normalizeListPageSize(raw: string | string[] | undefined): number {
     : DEFAULT_PAGE_SIZE;
 }
 
+function parseDateOnly(raw: string | string[] | undefined): string | undefined {
+  return typeof raw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : undefined;
+}
+
 export default async function RecruitmentPipelinePage({
   searchParams,
 }: {
@@ -59,6 +63,8 @@ export default async function RecruitmentPipelinePage({
   const applicationId = typeof raw.applicationId === "string" ? raw.applicationId : undefined;
   const mine = raw.mine === "1";
   const needsAttention = raw.needsAttention === "1";
+  const appliedFrom = parseDateOnly(raw.appliedFrom);
+  const appliedTo = parseDateOnly(raw.appliedTo);
 
   const requestedPage = Math.max(1, Number(typeof raw.page === "string" ? raw.page : "1") || 1);
   const listPageSize = normalizeListPageSize(raw.pageSize);
@@ -72,6 +78,8 @@ export default async function RecruitmentPipelinePage({
     view: view as "board" | "list",
     mine,
     needsAttention,
+    appliedFrom,
+    appliedTo,
     pageSize: listPageSize,
   };
 
@@ -89,6 +97,8 @@ export default async function RecruitmentPipelinePage({
     jobOpeningId: jobFilter,
     assignedRecruiterUserId: mine ? session.id : undefined,
     needsAttention: needsAttention ? true : undefined,
+    appliedFrom,
+    appliedTo,
   };
 
   // A job-scoped board renders one column per JobOpeningStage instead of the
@@ -268,6 +278,8 @@ export default async function RecruitmentPipelinePage({
     view: filters.view,
     mine: filters.mine,
     needsAttention: filters.needsAttention,
+    appliedFrom: filters.appliedFrom,
+    appliedTo: filters.appliedTo,
     pageSize: filters.pageSize,
   };
 
@@ -335,6 +347,8 @@ export default async function RecruitmentPipelinePage({
                           : {}),
                         ...(mine ? { mine: "1" } : {}),
                         ...(needsAttention ? { needsAttention: "1" } : {}),
+                        ...(appliedFrom ? { appliedFrom } : {}),
+                        ...(appliedTo ? { appliedTo } : {}),
                         view: "board",
                         page: String(boardTake.page + 1),
                         ...(applicationId ? { applicationId } : {}),
