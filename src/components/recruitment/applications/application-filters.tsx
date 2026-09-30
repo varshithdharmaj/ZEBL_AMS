@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { LayoutGrid, List, UserRound, AlertTriangle, X } from "lucide-react";
+import { LayoutGrid, List, UserRound, AlertTriangle, CalendarRange } from "lucide-react";
+import { HIRING_BATCH_PRESETS, type HiringBatch } from "@/lib/recruitment/shared/hiring-batch";
 
 export type ApplicationListFilterState = {
   q?: string;
@@ -22,7 +23,9 @@ export type ApplicationListFilterState = {
   pageSize?: number;
   mine?: boolean;
   needsAttention?: boolean;
-  /** Hiring-batch window on applied date, inclusive YYYY-MM-DD. */
+  /** Hiring-batch preset; "custom" uses appliedFrom/appliedTo. */
+  batch?: HiringBatch;
+  /** Custom hiring-batch window on applied date, inclusive YYYY-MM-DD. */
   appliedFrom?: string;
   appliedTo?: string;
 };
@@ -43,8 +46,11 @@ export function applicationListHref(
   if (filters.pageSize) params.set("pageSize", String(filters.pageSize));
   if (filters.mine) params.set("mine", "1");
   if (filters.needsAttention) params.set("needsAttention", "1");
-  if (filters.appliedFrom) params.set("appliedFrom", filters.appliedFrom);
-  if (filters.appliedTo) params.set("appliedTo", filters.appliedTo);
+  if (filters.batch && filters.batch !== "all") params.set("batch", filters.batch);
+  if (filters.batch === "custom") {
+    if (filters.appliedFrom) params.set("appliedFrom", filters.appliedFrom);
+    if (filters.appliedTo) params.set("appliedTo", filters.appliedTo);
+  }
   if (page) params.set("page", String(page));
   const qs = params.toString();
   return qs ? `${basePath}?${qs}` : basePath;
@@ -54,10 +60,13 @@ export function ApplicationFilters({
   filters,
   jobs,
   basePath = "/admin/recruitment/pipeline",
+  batchHint,
 }: {
   filters: ApplicationListFilterState;
   jobs: { id: string; title: string }[];
   basePath?: string;
+  /** Resolved window for the selected batch, e.g. "Applied 24 Sep 2026 – today". */
+  batchHint?: string | null;
 }) {
   const router = useRouter();
   const [q, setQ] = useState(filters.q ?? "");
@@ -67,6 +76,7 @@ export function ApplicationFilters({
   const [view, setView] = useState<"board" | "list">(filters.view ?? "board");
   const [mine, setMine] = useState(filters.mine ?? false);
   const [needsAttention, setNeedsAttention] = useState(filters.needsAttention ?? false);
+  const [batch, setBatch] = useState<HiringBatch>(filters.batch ?? "all");
   const [appliedFrom, setAppliedFrom] = useState(filters.appliedFrom ?? "");
   const [appliedTo, setAppliedTo] = useState(filters.appliedTo ?? "");
 
@@ -91,6 +101,7 @@ export function ApplicationFilters({
           pageSize: filters.pageSize,
           mine,
           needsAttention,
+          batch,
           appliedFrom,
           appliedTo,
           ...overrides,
@@ -199,56 +210,71 @@ export function ApplicationFilters({
         </Select>
       </div>
 
-      <div className="min-w-[260px] flex-1 space-y-1.5">
+      <div className="min-w-[170px] flex-1 space-y-1.5">
         <span
           className="block text-xs font-bold uppercase tracking-wider text-muted-foreground"
-          title="Applied date — separates this hiring round from earlier ones on a reused opening"
+          title="When candidates applied — separates this hiring round from earlier ones on a reused opening"
         >
-          Hiring Batch (Applied)
+          Hiring Batch
         </span>
-        <div className="flex items-center gap-1.5">
-          <Input
-            type="date"
-            value={appliedFrom}
-            max={appliedTo || undefined}
-            onChange={(e) => {
-              setAppliedFrom(e.target.value);
-              navigate({ appliedFrom: e.target.value });
-            }}
-            className="h-10 min-w-0 bg-background"
-            aria-label="Applied from"
-          />
-          <span className="text-xs text-muted-foreground">to</span>
-          <Input
-            type="date"
-            value={appliedTo}
-            min={appliedFrom || undefined}
-            onChange={(e) => {
-              setAppliedTo(e.target.value);
-              navigate({ appliedTo: e.target.value });
-            }}
-            className="h-10 min-w-0 bg-background"
-            aria-label="Applied to"
-          />
-          {appliedFrom || appliedTo ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                setAppliedFrom("");
-                setAppliedTo("");
-                navigate({ appliedFrom: "", appliedTo: "" });
-              }}
-              className="h-8 w-8 shrink-0"
-              title="Clear hiring batch dates"
-              aria-label="Clear hiring batch dates"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          ) : null}
-        </div>
+        <Select
+          value={batch}
+          onValueChange={(v) => {
+            const next = v as HiringBatch;
+            setBatch(next);
+            // Custom waits for a date to be picked; presets apply immediately.
+            if (next !== "custom") navigate({ batch: next });
+          }}
+        >
+          <SelectTrigger className="h-10 bg-background" aria-label="Hiring batch filter">
+            <CalendarRange className="mr-1 h-4 w-4 shrink-0 text-muted-foreground" />
+            <SelectValue placeholder="All time" />
+          </SelectTrigger>
+          <SelectContent>
+            {HIRING_BATCH_PRESETS.map((p) => (
+              <SelectItem key={p.value} value={p.value}>
+                {p.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {batch !== "custom" && batchHint ? (
+          <p className="text-[11px] text-muted-foreground">{batchHint}</p>
+        ) : null}
       </div>
+
+      {batch === "custom" ? (
+        <div className="min-w-[260px] flex-1 space-y-1.5">
+          <span className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            Applied Between
+          </span>
+          <div className="flex items-center gap-1.5">
+            <Input
+              type="date"
+              value={appliedFrom}
+              max={appliedTo || undefined}
+              onChange={(e) => {
+                setAppliedFrom(e.target.value);
+                navigate({ batch: "custom", appliedFrom: e.target.value });
+              }}
+              className="h-10 min-w-0 bg-background"
+              aria-label="Applied from"
+            />
+            <span className="text-xs text-muted-foreground">to</span>
+            <Input
+              type="date"
+              value={appliedTo}
+              min={appliedFrom || undefined}
+              onChange={(e) => {
+                setAppliedTo(e.target.value);
+                navigate({ batch: "custom", appliedTo: e.target.value });
+              }}
+              className="h-10 min-w-0 bg-background"
+              aria-label="Applied to"
+            />
+          </div>
+        </div>
+      ) : null}
 
       <div className="flex w-full flex-col justify-end gap-2 sm:w-auto">
         <span className="block text-xs font-bold uppercase tracking-wider text-muted-foreground md:hidden">

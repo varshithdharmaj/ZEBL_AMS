@@ -38,16 +38,13 @@ import {
   resolveRecruitmentReturnTo,
   returnToLabel,
 } from "@/lib/recruitment/navigation/return-to";
+import { describeHiringBatch, resolveHiringBatch } from "@/lib/recruitment/shared/hiring-batch";
 
 function normalizeListPageSize(raw: string | string[] | undefined): number {
   const n = Number(typeof raw === "string" ? raw : "");
   return LIST_PAGE_SIZE_OPTIONS.includes(n as (typeof LIST_PAGE_SIZE_OPTIONS)[number])
     ? n
     : DEFAULT_PAGE_SIZE;
-}
-
-function parseDateOnly(raw: string | string[] | undefined): string | undefined {
-  return typeof raw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : undefined;
 }
 
 export default async function RecruitmentPipelinePage({
@@ -63,8 +60,11 @@ export default async function RecruitmentPipelinePage({
   const applicationId = typeof raw.applicationId === "string" ? raw.applicationId : undefined;
   const mine = raw.mine === "1";
   const needsAttention = raw.needsAttention === "1";
-  const appliedFrom = parseDateOnly(raw.appliedFrom);
-  const appliedTo = parseDateOnly(raw.appliedTo);
+  const hiringBatch = resolveHiringBatch(raw);
+  const { appliedFrom, appliedTo } = hiringBatch;
+  // Only custom ranges carry explicit dates in the URL; presets stay rolling.
+  const customFrom = hiringBatch.batch === "custom" ? appliedFrom : undefined;
+  const customTo = hiringBatch.batch === "custom" ? appliedTo : undefined;
 
   const requestedPage = Math.max(1, Number(typeof raw.page === "string" ? raw.page : "1") || 1);
   const listPageSize = normalizeListPageSize(raw.pageSize);
@@ -78,8 +78,9 @@ export default async function RecruitmentPipelinePage({
     view: view as "board" | "list",
     mine,
     needsAttention,
-    appliedFrom,
-    appliedTo,
+    batch: hiringBatch.batch,
+    appliedFrom: customFrom,
+    appliedTo: customTo,
     pageSize: listPageSize,
   };
 
@@ -278,6 +279,7 @@ export default async function RecruitmentPipelinePage({
     view: filters.view,
     mine: filters.mine,
     needsAttention: filters.needsAttention,
+    batch: filters.batch,
     appliedFrom: filters.appliedFrom,
     appliedTo: filters.appliedTo,
     pageSize: filters.pageSize,
@@ -308,7 +310,12 @@ export default async function RecruitmentPipelinePage({
         }
       />
 
-      <ApplicationFilters filters={filterState} jobs={jobs} basePath="/admin/recruitment/pipeline" />
+      <ApplicationFilters
+        filters={filterState}
+        jobs={jobs}
+        basePath="/admin/recruitment/pipeline"
+        batchHint={describeHiringBatch(hiringBatch)}
+      />
 
       {view === "board" ? (
         <Suspense fallback={<div className="text-sm text-muted-foreground">Loading board…</div>}>
@@ -347,8 +354,9 @@ export default async function RecruitmentPipelinePage({
                           : {}),
                         ...(mine ? { mine: "1" } : {}),
                         ...(needsAttention ? { needsAttention: "1" } : {}),
-                        ...(appliedFrom ? { appliedFrom } : {}),
-                        ...(appliedTo ? { appliedTo } : {}),
+                        ...(hiringBatch.batch !== "all" ? { batch: hiringBatch.batch } : {}),
+                        ...(customFrom ? { appliedFrom: customFrom } : {}),
+                        ...(customTo ? { appliedTo: customTo } : {}),
                         view: "board",
                         page: String(boardTake.page + 1),
                         ...(applicationId ? { applicationId } : {}),
