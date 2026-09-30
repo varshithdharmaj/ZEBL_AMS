@@ -1081,6 +1081,31 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+/// Server errors persisted for the admin Error Log page, keyed by the
+/// reference shown to users ("Server-side error. Ref: …" or an error-page
+/// digest), so prod failures can be diagnosed without server log access.
+model AppErrorLog {
+  id        String   @id @default(cuid())
+  ref       String
+  /// "log" = logger.error call; "request" = uncaught error via onRequestError.
+  source    String
+  event     String
+  message   String
+  errorName String?  @map("error_name")
+  stack     String?
+  path      String?
+  method    String?
+  routeType String?  @map("route_type")
+  userId    String?  @map("user_id")
+  userEmail String?  @map("user_email")
+  context   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([ref])
+  @@index([createdAt])
+  @@map("app_error_logs")
+}
+
 model LoginSession {
   id              String             @id @default(cuid())
   userId          String?            @map("user_id")

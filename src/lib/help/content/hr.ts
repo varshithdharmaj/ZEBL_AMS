@@ -279,6 +279,7 @@ export const hrHelpChapters: HelpChapter[] = [
         rows: [
           ["/admin/analytics", "Workforce intelligence — an offline-computed executive snapshot: anomalies and operational metrics."],
           ["/admin/operations", "Background worker health, queue depth, failed jobs, and workflow integrity checks."],
+          ["/admin/operations/errors", "Error Log: server errors with full details. Paste the Ref from a red error message to find it."],
           ["/admin/notifications", "The email/Teams notification delivery queue — failures and retries."],
           ["/admin/integrations", "Microsoft Teams webhook configuration, Outlook calendar sync status, Graph API health, escalation automation."],
           ["/admin/audit", "The centralized audit trail: auth events, employee/role changes, leave workflow, tickets, approval tokens, calendar sync, Teams, org sync."],
