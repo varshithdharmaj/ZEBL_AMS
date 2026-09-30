@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LayoutGrid, List, UserRound, AlertTriangle } from "lucide-react";
+import type { HiringBatch } from "@/lib/recruitment/shared/hiring-batch";
+import { HiringBatchPicker } from "@/components/recruitment/applications/hiring-batch-picker";
 
 export type ApplicationListFilterState = {
   q?: string;
@@ -22,6 +24,11 @@ export type ApplicationListFilterState = {
   pageSize?: number;
   mine?: boolean;
   needsAttention?: boolean;
+  /** Hiring-batch preset; "custom" uses appliedFrom/appliedTo. */
+  batch?: HiringBatch;
+  /** Custom hiring-batch window on applied date, inclusive YYYY-MM-DD. */
+  appliedFrom?: string;
+  appliedTo?: string;
 };
 
 export function applicationListHref(
@@ -40,6 +47,11 @@ export function applicationListHref(
   if (filters.pageSize) params.set("pageSize", String(filters.pageSize));
   if (filters.mine) params.set("mine", "1");
   if (filters.needsAttention) params.set("needsAttention", "1");
+  if (filters.batch && filters.batch !== "all") params.set("batch", filters.batch);
+  if (filters.batch === "custom") {
+    if (filters.appliedFrom) params.set("appliedFrom", filters.appliedFrom);
+    if (filters.appliedTo) params.set("appliedTo", filters.appliedTo);
+  }
   if (page) params.set("page", String(page));
   const qs = params.toString();
   return qs ? `${basePath}?${qs}` : basePath;
@@ -62,6 +74,11 @@ export function ApplicationFilters({
   const [view, setView] = useState<"board" | "list">(filters.view ?? "board");
   const [mine, setMine] = useState(filters.mine ?? false);
   const [needsAttention, setNeedsAttention] = useState(filters.needsAttention ?? false);
+  const [hiringBatch, setHiringBatch] = useState({
+    batch: filters.batch ?? ("all" as HiringBatch),
+    appliedFrom: filters.appliedFrom,
+    appliedTo: filters.appliedTo,
+  });
 
   /**
    * Every control here navigates immediately — Select/Button onChange
@@ -84,6 +101,7 @@ export function ApplicationFilters({
           pageSize: filters.pageSize,
           mine,
           needsAttention,
+          ...hiringBatch,
           ...overrides,
         },
         undefined,
@@ -188,6 +206,27 @@ export function ApplicationFilters({
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      <div className="min-w-[200px] flex-1 space-y-1.5">
+        <span
+          className="block text-xs font-bold uppercase tracking-wider text-muted-foreground"
+          title="When candidates applied — separates this hiring round from earlier ones on a reused opening"
+        >
+          Hiring Batch
+        </span>
+        <HiringBatchPicker
+          value={hiringBatch}
+          onChange={(next) => {
+            const value = {
+              batch: next.batch,
+              appliedFrom: next.appliedFrom,
+              appliedTo: next.appliedTo,
+            };
+            setHiringBatch(value);
+            navigate(value);
+          }}
+        />
       </div>
 
       <div className="flex w-full flex-col justify-end gap-2 sm:w-auto">

@@ -98,6 +98,13 @@ export type ApplicationListFilters = {
   q?: string;
   /** Decision-pending, feedback-missing, or stagnant-in-stage — see needsAttentionWhere(). */
   needsAttention?: boolean;
+  /**
+   * Hiring-batch window on the application's applied date (`createdAt`),
+   * as inclusive YYYY-MM-DD IST calendar days. Lets a long-lived opening
+   * (e.g. "Senior Biller", reused for years) be split into hiring rounds.
+   */
+  appliedFrom?: string;
+  appliedTo?: string;
 };
 
 export type ApplicationRepository = {
