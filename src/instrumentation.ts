@@ -81,27 +81,32 @@ const CONTROL_FLOW_DIGEST = /^(NEXT_REDIRECT|NEXT_NOT_FOUND|NEXT_HTTP_ERROR_FALL
  * the dashboard error page shows — so admins can look it up in the Error Log.
  */
 export const onRequestError: Instrumentation.onRequestError = async (error, request, context) => {
-  if (process.env.NEXT_RUNTIME !== "nodejs") return;
-  const digest = (error as { digest?: unknown } | null)?.digest;
-  if (typeof digest === "string" && CONTROL_FLOW_DIGEST.test(digest)) return;
+  // Imports must stay inside this positive NEXT_RUNTIME check (like register()):
+  // Next compiles this file for the edge runtime too, and only a statically
+  // false branch keeps Prisma/pg (fs, path) out of the edge bundle. An early
+  // `return` does not.
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    const digest = (error as { digest?: unknown } | null)?.digest;
+    if (typeof digest === "string" && CONTROL_FLOW_DIGEST.test(digest)) return;
 
-  const [{ recordAppError }, { createCorrelationId }] = await Promise.all([
-    import("@/lib/observability/error-log"),
-    import("@/lib/observability/correlation"),
-  ]);
-  await recordAppError({
-    ref: typeof digest === "string" && digest ? digest : createCorrelationId("request-error"),
-    source: "request",
-    event: `request.unhandled_error.${context.routeType}`,
-    error,
-    path: request.path,
-    method: request.method,
-    routeType: context.routeType,
-    context: {
-      routePath: context.routePath,
-      routerKind: context.routerKind,
-      renderSource: context.renderSource,
-      revalidateReason: context.revalidateReason,
-    },
-  });
+    const [{ recordAppError }, { createCorrelationId }] = await Promise.all([
+      import("@/lib/observability/error-log"),
+      import("@/lib/observability/correlation"),
+    ]);
+    await recordAppError({
+      ref: typeof digest === "string" && digest ? digest : createCorrelationId("request-error"),
+      source: "request",
+      event: `request.unhandled_error.${context.routeType}`,
+      error,
+      path: request.path,
+      method: request.method,
+      routeType: context.routeType,
+      context: {
+        routePath: context.routePath,
+        routerKind: context.routerKind,
+        renderSource: context.renderSource,
+        revalidateReason: context.revalidateReason,
+      },
+    });
+  }
 };
