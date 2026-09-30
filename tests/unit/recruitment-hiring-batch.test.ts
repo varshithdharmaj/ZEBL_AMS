@@ -1,41 +1,53 @@
 import { describe, expect, it } from "vitest";
 import {
-  describeHiringBatch,
   istToday,
+  quickPickRange,
   resolveHiringBatch,
 } from "@/lib/recruitment/shared/hiring-batch";
 
 // 29 Sep 2026 20:00 UTC is already 30 Sep 2026 01:30 in IST.
 const NOW = new Date("2026-09-29T20:00:00.000Z");
 
-describe("resolveHiringBatch", () => {
+describe("quickPickRange", () => {
   it("uses the IST calendar day as today", () => {
     expect(istToday(NOW)).toBe("2026-09-30");
   });
 
-  it("resolves rolling presets that end today", () => {
-    expect(resolveHiringBatch({ batch: "today" }, NOW)).toEqual({
-      batch: "today",
-      appliedFrom: "2026-09-30",
-    });
-    expect(resolveHiringBatch({ batch: "7d" }, NOW).appliedFrom).toBe("2026-09-24");
-    expect(resolveHiringBatch({ batch: "30d" }, NOW).appliedFrom).toBe("2026-09-01");
-    expect(resolveHiringBatch({ batch: "3m" }, NOW).appliedFrom).toBe("2026-06-30");
-    expect(resolveHiringBatch({ batch: "12m" }, NOW).appliedFrom).toBe("2025-09-30");
+  it("resolves every quick pick to inclusive day bounds", () => {
+    expect(quickPickRange("all", NOW)).toBeNull();
+    expect(quickPickRange("today", NOW)).toEqual({ from: "2026-09-30", to: "2026-09-30" });
+    expect(quickPickRange("7d", NOW)).toEqual({ from: "2026-09-24", to: "2026-09-30" });
+    expect(quickPickRange("this-month", NOW)).toEqual({ from: "2026-09-01", to: "2026-09-30" });
+    expect(quickPickRange("last-month", NOW)).toEqual({ from: "2026-08-01", to: "2026-08-31" });
+    expect(quickPickRange("3m", NOW)).toEqual({ from: "2026-06-30", to: "2026-09-30" });
+    expect(quickPickRange("this-year", NOW)).toEqual({ from: "2026-01-01", to: "2026-09-30" });
   });
 
-  it("clamps month presets to the end of shorter months", () => {
+  it("handles year and month-length edges", () => {
+    const jan15 = new Date("2026-01-15T06:00:00.000Z");
+    expect(quickPickRange("last-month", jan15)).toEqual({ from: "2025-12-01", to: "2025-12-31" });
     const may31 = new Date("2026-05-31T06:00:00.000Z");
-    expect(resolveHiringBatch({ batch: "3m" }, may31).appliedFrom).toBe("2026-02-28");
+    expect(quickPickRange("3m", may31)?.from).toBe("2026-02-28");
   });
+});
 
-  it("ignores stray dates on presets and keeps them for custom", () => {
+describe("resolveHiringBatch", () => {
+  it("resolves quick picks and ignores stray dates on them", () => {
+    expect(resolveHiringBatch({ batch: "last-month", appliedFrom: "2020-01-01" }, NOW)).toEqual({
+      batch: "last-month",
+      appliedFrom: "2026-08-01",
+      appliedTo: "2026-08-31",
+    });
     expect(resolveHiringBatch({ batch: "all", appliedFrom: "2026-01-01" }, NOW)).toEqual({
       batch: "all",
     });
+  });
+
+  it("keeps calendar-picked custom ranges", () => {
     expect(
       resolveHiringBatch({ batch: "custom", appliedFrom: "2026-01-01", appliedTo: "2026-01-31" }, NOW)
     ).toEqual({ batch: "custom", appliedFrom: "2026-01-01", appliedTo: "2026-01-31" });
+    expect(resolveHiringBatch({ batch: "custom" }, NOW)).toEqual({ batch: "all" });
   });
 
   it("treats legacy date-only links as custom and bad input as all time", () => {
@@ -44,20 +56,8 @@ describe("resolveHiringBatch", () => {
       appliedFrom: "2026-09-01",
       appliedTo: undefined,
     });
-    expect(resolveHiringBatch({ batch: "forever", appliedFrom: "bad" }, NOW)).toEqual({
+    expect(resolveHiringBatch({ batch: "forever", appliedFrom: "2026-09-01" }, NOW)).toEqual({
       batch: "all",
     });
-  });
-});
-
-describe("describeHiringBatch", () => {
-  it("summarises the resolved window", () => {
-    expect(describeHiringBatch({ batch: "all" }, NOW)).toBeNull();
-    expect(describeHiringBatch(resolveHiringBatch({ batch: "today" }, NOW), NOW)).toBe(
-      "Applied today"
-    );
-    expect(describeHiringBatch(resolveHiringBatch({ batch: "7d" }, NOW), NOW)).toBe(
-      "Applied 24 Sept 2026 – today"
-    );
   });
 });

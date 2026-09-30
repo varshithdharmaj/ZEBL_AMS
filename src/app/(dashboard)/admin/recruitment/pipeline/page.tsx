@@ -38,7 +38,7 @@ import {
   resolveRecruitmentReturnTo,
   returnToLabel,
 } from "@/lib/recruitment/navigation/return-to";
-import { describeHiringBatch, resolveHiringBatch } from "@/lib/recruitment/shared/hiring-batch";
+import { resolveHiringBatch } from "@/lib/recruitment/shared/hiring-batch";
 
 function normalizeListPageSize(raw: string | string[] | undefined): number {
   const n = Number(typeof raw === "string" ? raw : "");
@@ -314,7 +314,6 @@ export default async function RecruitmentPipelinePage({
         filters={filterState}
         jobs={jobs}
         basePath="/admin/recruitment/pipeline"
-        batchHint={describeHiringBatch(hiringBatch)}
       />
 
       {view === "board" ? (
