@@ -13,7 +13,11 @@ import {
   employeeSelfContactUpdateSchema,
 } from "@/lib/validation/schemas/employee-account";
 import { safeParseWithSchema } from "@/lib/validation/parse";
-import { canAdministerEmployeeAccount, canEditEmployeeContactInfo } from "@/lib/permissions";
+import {
+  canAdministerEmployeeAccount,
+  canEditEmployeeContactInfo,
+  PermissionError,
+} from "@/lib/permissions";
 import { toAppUserRole } from "@/lib/roles";
 import { getRequestSecurityContext } from "@/lib/security/request-context";
 import { invalidateUserSessions } from "@/lib/auth";
@@ -27,6 +31,8 @@ import {
   UserManagementError,
 } from "@/lib/admin/user-management";
 import { backfillBiometricPunchesForEmployee } from "@/lib/integrations/biometric-ingestion";
+import { logger } from "@/lib/observability/logger";
+import { createCorrelationId } from "@/lib/observability/correlation";
 
 export type ActionState = {
   error?: string;
@@ -38,10 +44,30 @@ function parseInitialBalance(formData: FormData, field: string): number {
   return Number.isNaN(val) ? 0 : Math.max(0, val);
 }
 
+/** Short, admin-readable cause for the database errors a schema/sequence mismatch produces. */
+function describeCreateFailure(error: unknown): string {
+  const code = (error as { code?: unknown } | null)?.code;
+  const meta = (error as { meta?: Record<string, unknown> } | null)?.meta ?? {};
+  const detail = (key: string) => (meta[key] != null ? ` (${String(meta[key])})` : "");
+  switch (code) {
+    case "P2002":
+      return `a duplicate value was rejected by the database${detail("target")}`;
+    case "P2021":
+      return `a database table is missing${detail("table")}`;
+    case "P2022":
+      return `a database column is missing${detail("column")}`;
+    default:
+      return "an unexpected server error occurred";
+  }
+}
+
 export async function createEmployeeAction(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
+  // Set once the employee row exists, so a later failure (leave setup, audit)
+  // is reported as a partial create instead of implying nothing was saved.
+  let createdEmployeeId: number | null = null;
   try {
     const session = await requireManageEmployeeSession();
 
@@ -102,6 +128,7 @@ export async function createEmployeeAction(
         isActive: statusToIsActive(employeeStatus),
       },
     });
+    createdEmployeeId = employee.id;
 
     try {
       await backfillBiometricPunchesForEmployee(employee.id, employeeCode);
@@ -165,8 +192,31 @@ export async function createEmployeeAction(
       };
     }
     return { success: "Employee created successfully." };
-  } catch {
-    return { error: "Failed to create employee." };
+  } catch (error) {
+    if (error instanceof PermissionError) {
+      return { error: error.message };
+    }
+    // Logged at error level so it lands in the admin Error Log under this ref.
+    const ref = createCorrelationId("employee-create");
+    logger.error("employee.create_failed", {
+      correlationId: ref,
+      entityType: "employee",
+      entityId: createdEmployeeId != null ? String(createdEmployeeId) : undefined,
+      employeeCode: String(formData.get("employeeCode") ?? "").trim(),
+      employeeCreated: createdEmployeeId != null,
+      prismaCode: (error as { code?: unknown } | null)?.code,
+      prismaMeta: (error as { meta?: unknown } | null)?.meta,
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    const cause = describeCreateFailure(error);
+    if (createdEmployeeId != null) {
+      revalidatePath("/admin/employees");
+      return {
+        error: `The employee was saved, but finishing setup failed: ${cause}. Check their leave balances and login before retrying. (Ref: ${ref})`,
+      };
+    }
+    return { error: `Failed to create employee: ${cause}. (Ref: ${ref})` };
   }
 }
 
