@@ -15,6 +15,7 @@ import {
   BarChart3,
   ScrollText,
   Activity,
+  Bug,
   Settings,
   Menu,
   X,
@@ -123,6 +124,7 @@ function groupedNavForRole(
           items: [
             { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
             { href: "/admin/operations", label: "Operations", icon: Activity },
+            { href: "/admin/operations/errors", label: "Error Log", icon: Bug },
             { href: "/admin/notifications", label: "Notifications", icon: Bell },
             { href: "/admin/integrations", label: "Integrations", icon: Plug },
             { href: "/admin/audit", label: "Audit Log", icon: ScrollText },

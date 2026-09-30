@@ -26,6 +26,7 @@ const ADMIN_PAGE_SHORTCUTS: AdminPageShortcut[] = [
   { label: "Upload Data", href: "/admin/upload" },
   { label: "Analytics", href: "/admin/analytics" },
   { label: "Operations", href: "/admin/operations", keywords: ["worker", "workforce"] },
+  { label: "Error Log", href: "/admin/operations/errors", keywords: ["error", "bug", "ref", "debug"] },
   { label: "Notifications", href: "/admin/notifications" },
   { label: "Integrations", href: "/admin/integrations" },
   { label: "Audit Log", href: "/admin/audit" },

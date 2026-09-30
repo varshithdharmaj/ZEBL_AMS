@@ -1,3 +1,5 @@
+import type { Instrumentation } from "next";
+
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     // Vercel's Node.js functions default to UTC, unlike local dev (which inherits the
@@ -69,3 +71,37 @@ export async function register() {
     }
   }
 }
+
+/** Next.js control-flow signals (redirect(), notFound(), dynamic bailout) — not real errors. */
+const CONTROL_FLOW_DIGEST = /^(NEXT_REDIRECT|NEXT_NOT_FOUND|NEXT_HTTP_ERROR_FALLBACK|DYNAMIC_SERVER_USAGE|BAILOUT_TO_CLIENT_SIDE_RENDERING)/;
+
+/**
+ * Uncaught errors from pages, route handlers, server actions and middleware.
+ * Saved to app_error_logs under the error's digest — the same "Reference"
+ * the dashboard error page shows — so admins can look it up in the Error Log.
+ */
+export const onRequestError: Instrumentation.onRequestError = async (error, request, context) => {
+  if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  const digest = (error as { digest?: unknown } | null)?.digest;
+  if (typeof digest === "string" && CONTROL_FLOW_DIGEST.test(digest)) return;
+
+  const [{ recordAppError }, { createCorrelationId }] = await Promise.all([
+    import("@/lib/observability/error-log"),
+    import("@/lib/observability/correlation"),
+  ]);
+  await recordAppError({
+    ref: typeof digest === "string" && digest ? digest : createCorrelationId("request-error"),
+    source: "request",
+    event: `request.unhandled_error.${context.routeType}`,
+    error,
+    path: request.path,
+    method: request.method,
+    routeType: context.routeType,
+    context: {
+      routePath: context.routePath,
+      routerKind: context.routerKind,
+      renderSource: context.renderSource,
+      revalidateReason: context.revalidateReason,
+    },
+  });
+};

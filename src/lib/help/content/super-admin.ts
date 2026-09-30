@@ -233,6 +233,7 @@ export const superAdminHelpChapters: HelpChapter[] = [
         rows: [
           ["/admin/analytics", "Workforce intelligence — offline-computed executive snapshot, anomalies, operational metrics."],
           ["/admin/operations", "Background worker health, queue depth, failed jobs, workflow integrity."],
+          ["/admin/operations/errors", "Error Log: server errors with full details. Paste the Ref from a red error message to find it."],
           ["/admin/notifications", "Email/Teams notification delivery queue — failures and retries."],
           ["/admin/integrations", "Microsoft Teams webhook, Outlook calendar sync status, Graph API health, escalation automation."],
           ["/admin/audit", "The centralized audit trail across auth, employee/role admin, leave workflow, tickets, approval tokens, calendar sync, Teams, org sync."],

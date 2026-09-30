@@ -36,6 +36,34 @@ function emit(level: LogLevel, message: string, context?: LogContext): void {
   if (level === "error") console.error(line);
   else if (level === "warn") console.warn(line);
   else console.log(line);
+
+  if (level === "error") persistError(message, entry.correlationId, safe);
+}
+
+/**
+ * Mirror errors into app_error_logs (admin Error Log page) under the same
+ * correlation id users see as "Ref: …". Fire-and-forget; recordAppError
+ * never throws and never logs through this logger, so it can't recurse.
+ */
+function persistError(event: string, ref: string, context?: LogContext): void {
+  const { message, error, stack, correlationId: _ref, ...rest } = context ?? {};
+  void _ref;
+  const detail = message ?? error;
+  void import("@/lib/observability/error-log")
+    .then(({ recordAppError }) =>
+      recordAppError({
+        ref,
+        source: "log",
+        event,
+        error:
+          typeof stack === "string"
+            ? Object.assign(new Error(String(detail ?? event)), { stack })
+            : undefined,
+        message: detail !== undefined ? String(detail) : event,
+        context: rest,
+      })
+    )
+    .catch(() => {});
 }
 
 export const logger = {
