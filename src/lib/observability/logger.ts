@@ -37,7 +37,11 @@ function emit(level: LogLevel, message: string, context?: LogContext): void {
   else if (level === "warn") console.warn(line);
   else console.log(line);
 
-  if (level === "error") persistError(message, entry.correlationId, safe);
+  // Statically false in edge bundles, so the Prisma-backed store is never
+  // bundled there (see onRequestError in instrumentation.ts).
+  if (level === "error" && process.env.NEXT_RUNTIME !== "edge") {
+    persistError(message, entry.correlationId, safe);
+  }
 }
 
 /**
