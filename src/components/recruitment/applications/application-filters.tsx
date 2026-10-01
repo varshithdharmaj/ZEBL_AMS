@@ -211,9 +211,9 @@ export function ApplicationFilters({
       <div className="min-w-[200px] flex-1 space-y-1.5">
         <span
           className="block text-xs font-bold uppercase tracking-wider text-muted-foreground"
-          title="When candidates applied — separates this hiring round from earlier ones on a reused opening"
+          title="When the candidate applied — use it to separate this hiring round from earlier ones on a reused opening"
         >
-          Hiring Batch
+          Applied Date
         </span>
         <HiringBatchPicker
           value={hiringBatch}
