@@ -335,10 +335,11 @@ export function createInterviewService(
         interviewId: string;
         overallRating: number;
         recommendation: string;
+        consideredForPosition: boolean;
         strengths: string;
         concerns?: string;
         privateNotes?: string;
-        ratingsJson?: Record<string, number>;
+        ratingsJson: Record<string, number>;
       }
     ): Promise<{ id: string }> {
       RecruitmentPermissionService.requireModuleEnabled();
@@ -390,7 +391,12 @@ export function createInterviewService(
             eventType: "interview_feedback_submitted",
             summary: `Feedback submitted for interview: ${interview.title}`,
             actorUserId: session.id,
-            metadata: { interviewId: parsed.interviewId, feedbackId: id, rating: parsed.overallRating },
+            metadata: {
+              interviewId: parsed.interviewId,
+              feedbackId: id,
+              rating: parsed.overallRating,
+              consideredForPosition: parsed.consideredForPosition,
+            },
           },
           tx
         );

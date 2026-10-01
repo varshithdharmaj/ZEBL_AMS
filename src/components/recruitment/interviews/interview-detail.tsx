@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import type { InterviewDetail } from "@/lib/recruitment/repositories/interview-repository";
 import { FeedbackForm } from "./feedback-form";
+import { ScorecardSummary, FeedbackScorecardDetails } from "./scorecard-summary";
 import { buildRecruitmentEntityHref } from "@/lib/recruitment/navigation/return-to";
 
 interface InterviewDetailViewProps {
@@ -185,6 +186,8 @@ export function InterviewDetailView({
   );
   const canSubmitFeedback =
     interview.status !== "cancelled" && (canManage || isAssignedPanelist);
+  const myFeedback =
+    interview.feedback.find((f) => f.author.user?.id === currentUserId) ?? null;
 
   return (
     <div className="space-y-6">
@@ -341,7 +344,15 @@ export function InterviewDetailView({
                   onClick={() => setShowFeedbackForm(true)}
                   className="font-semibold text-xs rounded-lg gap-1 shadow-subtle"
                 >
-                  <Plus className="h-4 w-4" /> Submit Scorecard
+                  {myFeedback ? (
+                    <>
+                      <Pencil className="h-4 w-4" /> Edit My Scorecard
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-4 w-4" /> Submit Scorecard
+                    </>
+                  )}
                 </Button>
               ) : null}
             </div>
@@ -350,7 +361,7 @@ export function InterviewDetailView({
               <div className="bg-muted/10 rounded-xl border border-border/60 p-5">
                 <div className="flex items-center justify-between border-b border-border/60 pb-3 mb-4">
                   <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
-                    Submit Scorecard
+                    {myFeedback ? "Edit My Scorecard" : "Submit Scorecard"}
                   </h4>
                   <Button
                     variant="ghost"
@@ -364,12 +375,17 @@ export function InterviewDetailView({
                 <FeedbackForm
                   interviewId={interview.id}
                   applicationId={interview.applicationId}
+                  initialValues={myFeedback}
                   onSuccess={() => {
                     setShowFeedbackForm(false);
                     router.refresh();
                   }}
                 />
               </div>
+            ) : null}
+
+            {interview.feedback.length > 0 ? (
+              <ScorecardSummary feedback={interview.feedback} />
             ) : null}
 
             {interview.feedback.length === 0 ? (
@@ -397,10 +413,11 @@ export function InterviewDetailView({
                           Rating: {feed.overallRating}/5
                         </Badge>
                         <Badge variant="secondary" className="font-bold text-xs capitalize">
-                          {feed.recommendation?.replace("_", " ")}
+                          {feed.recommendation?.replaceAll("_", " ")}
                         </Badge>
                       </div>
                     </div>
+                    <FeedbackScorecardDetails feedback={feed} />
                     <div className="grid gap-3 sm:grid-cols-2 text-xs">
                       <div>
                         <span className="font-bold text-muted-foreground block text-[10px] uppercase tracking-wider mb-1">

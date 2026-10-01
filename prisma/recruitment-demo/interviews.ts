@@ -109,7 +109,13 @@ export async function seedInterviews(ctx: DemoCtx): Promise<void> {
         concerns: (spec.rec ?? "").includes("no_hire")
           ? "Gaps vs bar for this level."
           : undefined,
-        ratingsJson: { technical: rating, communication: rating - 0.2 },
+        consideredForPosition: !(spec.rec ?? "").includes("no_hire"),
+        ratingsJson: {
+          communication: Math.round(rating),
+          process_knowledge: Math.floor(rating),
+          smartness: Math.round(rating),
+          eagerness_to_learn: Math.min(5, Math.ceil(rating)),
+        },
       });
     } else if (spec.status === InterviewStatus.cancelled) {
       await svc.cancelInterview(ctx.session, id);
