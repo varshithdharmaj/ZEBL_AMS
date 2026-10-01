@@ -98,7 +98,7 @@ export function HiringBatchPicker({
       )}
       aria-haspopup="dialog"
       aria-expanded={open || mobileOpen}
-      aria-label={`Hiring batch: ${pickLabel}${rangeLabel ? `, ${rangeLabel}` : ""}`}
+      aria-label={`Applied date: ${pickLabel}${rangeLabel ? `, ${rangeLabel}` : ""}`}
       onClick={() => (open || mobileOpen ? close() : openPanel())}
     >
       <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -175,8 +175,8 @@ export function HiringBatchPicker({
         onChange({ batch: "all" });
       }}
       className="absolute right-2 top-1/2 z-10 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-      title="Clear hiring batch"
-      aria-label="Clear hiring batch"
+      title="Clear applied date"
+      aria-label="Clear applied date"
     >
       <X className="h-3.5 w-3.5" />
     </button>
@@ -201,7 +201,7 @@ export function HiringBatchPicker({
         <Sheet
           open={mobileOpen}
           onClose={close}
-          title="Hiring batch"
+          title="Applied date"
           description="Pick a quick range or choose dates on the calendar."
         >
           {panel}
