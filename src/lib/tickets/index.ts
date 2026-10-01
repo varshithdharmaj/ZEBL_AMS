@@ -60,7 +60,16 @@ export {
 //   "@/lib/tickets/admin-ticket-list-data"
 // in Server Components / tests only.
 
-export { CATEGORY_LABELS, PRIORITY_COLORS } from "./labels";
+export {
+  CATEGORY_LABELS,
+  CATEGORY_OPTIONS,
+  PRIORITY_COLORS,
+  PRIORITY_OPTIONS,
+  TYPE_LABELS,
+  TYPE_OPTIONS,
+  type TicketCategoryOption,
+  type TicketChoiceOption,
+} from "./labels";
 
 export {
   ticketListSearchParamsFromFilters,

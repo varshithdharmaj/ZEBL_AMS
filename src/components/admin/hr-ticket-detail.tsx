@@ -20,7 +20,7 @@ import {
   canManageTicket,
   canViewInternalNotes,
 } from "@/lib/tickets/ticket-permissions";
-import { CATEGORY_LABELS, PRIORITY_COLORS } from "@/lib/tickets/labels";
+import { CATEGORY_LABELS, PRIORITY_COLORS, TYPE_LABELS } from "@/lib/tickets/labels";
 import { isSuperAdmin } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/session";
 import { Clock, User, Eye, EyeOff, History, ShieldAlert } from "lucide-react";
@@ -155,7 +155,7 @@ export function HRTicketDetail({
             </div>
             <div>
               <p className="text-xs font-semibold text-muted-foreground">Type</p>
-              <p className="mt-1 text-sm capitalize text-foreground">{ticket.type.replace(/_/g, " ")}</p>
+              <p className="mt-1 text-sm text-foreground">{TYPE_LABELS[ticket.type] || ticket.type}</p>
             </div>
             <div>
               <p className="text-xs font-semibold text-muted-foreground">Priority</p>

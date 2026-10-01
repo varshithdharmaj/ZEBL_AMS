@@ -180,9 +180,25 @@ export const employeeHelpChapters: HelpChapter[] = [
         type: "steps",
         items: [
           "Select New ticket.",
-          "Pick a category and priority, then add a subject and description.",
+          "Choose what it's about and what you need, then add a short summary and the details.",
+          "Set how urgent it is: High only if you can't do your work until it's fixed.",
           "Submit — HR is notified and the ticket appears in your list.",
           "Reply in the thread as needed; you'll see HR's public replies, though any internal HR-only notes stay hidden from you.",
+        ],
+      },
+      {
+        type: "table",
+        columns: ["If your issue is…", "Choose"],
+        widths: [55, 45],
+        rows: [
+          ["A monitor, laptop, cable, internet, software or login problem", "IT & Equipment → Help / fix something"],
+          ["A missed punch or wrong shift timing", "Attendance & Shifts → Help / fix something"],
+          ["A leave balance that looks wrong", "Leave → Help / fix something"],
+          ["A payslip, salary or deduction question", "Payroll → Help / fix something"],
+          ["A letter, document or profile correction", "HR & Documents → Help / fix something"],
+          ["AC, seating, cleaning or office access", "Office & Facilities → Help / fix something"],
+          ["A concern about conduct or your team", "Workplace & Colleagues → Raise a complaint"],
+          ["An idea to improve something", "The closest topic → Share an idea"],
         ],
       },
       {

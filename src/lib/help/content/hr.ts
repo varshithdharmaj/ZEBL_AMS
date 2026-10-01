@@ -188,7 +188,7 @@ export const hrHelpChapters: HelpChapter[] = [
         type: "callout",
         kind: "tip",
         label: "TIP",
-        text: "Filter the queue by category (Attendance, Leave, Payroll, IT/Technical, HR, Workplace, Facilities, Suggestion, Other), status, or priority to triage quickly. Tickets move New → Open → In Progress → Resolved → Closed, with Waiting for Employee and On Hold available when you're blocked on their reply.",
+        text: "Filter the queue by category (Attendance & Shifts, Leave, Payroll, IT & Equipment, HR & Documents, Workplace & Colleagues, Office & Facilities, Other — plus Salary and Suggestion on older tickets), status, or priority to triage quickly. Tickets move New → Open → In Progress → Resolved → Closed, with Waiting for Employee and On Hold available when you're blocked on their reply.",
       },
       {
         type: "steps",

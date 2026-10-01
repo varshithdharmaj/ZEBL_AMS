@@ -25,14 +25,14 @@ export const ticketTypeSchema = z.enum([
 export const ticketPrioritySchema = z.enum(["low", "medium", "high"]);
 
 export const createTicketSchema = z.object({
-  subject: z.string().min(3, "Subject must be at least 3 characters.").max(200, "Subject too long."),
+  subject: z.string().min(3, "Summary must be at least 3 characters.").max(200, "Summary too long."),
   description: z
     .string()
-    .min(10, "Description must be at least 10 characters.")
-    .max(5000, "Description too long."),
-  category: ticketCategorySchema,
-  type: ticketTypeSchema,
-  priority: ticketPrioritySchema,
+    .min(10, "Details must be at least 10 characters.")
+    .max(5000, "Details too long."),
+  category: z.enum(ticketCategorySchema.options, { error: "Choose what your ticket is about." }),
+  type: z.enum(ticketTypeSchema.options, { error: "Choose what you need." }),
+  priority: z.enum(ticketPrioritySchema.options, { error: "Choose how urgent this is." }),
   isAnonymous: z.boolean().default(false),
 });
 
