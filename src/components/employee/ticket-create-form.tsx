@@ -10,54 +10,44 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SectionCard } from "@/components/ui/section-card";
 import { ErrorAlert } from "@/components/ui/error-alert";
+import { CATEGORY_OPTIONS, PRIORITY_OPTIONS, TYPE_OPTIONS } from "@/lib/tickets/labels";
 import { Info } from "lucide-react";
 // import { AlertTriangle, Info } from "lucide-react"; // AlertTriangle used by anonymous UI
 
 const initialState: TicketActionState = {};
 
-const CATEGORIES = [
-  { value: "attendance", label: "Attendance" },
-  { value: "leave", label: "Leave" },
-  { value: "payroll", label: "Payroll" },
-  { value: "salary", label: "Salary" },
-  { value: "it_technical", label: "IT / Technical" },
-  { value: "hr", label: "HR" },
-  { value: "workplace", label: "Workplace" },
-  { value: "facilities", label: "Facilities" },
-  { value: "suggestion", label: "Suggestion" },
-  { value: "other", label: "Other" },
-];
-
-const TYPES = [
-  { value: "complaint", label: "Complaint" },
-  { value: "service_request", label: "Service Request" },
-  { value: "suggestion", label: "Suggestion" },
-  { value: "meeting_request", label: "Meeting Request" },
-  // Anonymous feature temporarily disabled
-  // { value: "anonymous_complaint", label: "Anonymous Complaint" },
-  { value: "other", label: "Other" },
-];
-
-const PRIORITIES = [
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-];
+const DEFAULT_SUMMARY_PLACEHOLDER = "e.g. Monitor not displaying – HDMI cable issue";
+const DEFAULT_DETAILS_HINT = "Include relevant dates, names, or other information that will help us assist you.";
 
 export function TicketCreateForm() {
   const [state, formAction, pending] = useActionState(createTicketAction, initialState);
-  const [category, setCategory] = useState("other");
+  // No default category: a pre-picked one gets submitted unchanged and lands
+  // the ticket in the wrong queue.
+  const [category, setCategory] = useState("");
   const [type, setType] = useState("service_request");
   const [priority, setPriority] = useState("medium");
+  const [categoryMissing, setCategoryMissing] = useState(false);
   // Anonymous feature temporarily disabled
   // const [isAnonymous, setIsAnonymous] = useState(false);
+
+  const selectedCategory = CATEGORY_OPTIONS.find((c) => c.value === category);
+  const selectedPriority = PRIORITY_OPTIONS.find((p) => p.value === priority);
 
   return (
     <SectionCard
       title="Ticket Details"
-      description="Provide as much detail as possible to help us resolve your request quickly."
+      description="Tell us what it's about and what you need. The more specific you are, the faster we can help."
     >
-      <form action={formAction} className="max-w-2xl space-y-6">
+      <form
+        action={formAction}
+        onSubmit={(e) => {
+          if (!category) {
+            e.preventDefault();
+            setCategoryMissing(true);
+          }
+        }}
+        className="max-w-2xl space-y-6"
+      >
         <input type="hidden" name="category" value={category} />
         <input type="hidden" name="type" value={type} />
         <input type="hidden" name="priority" value={priority} />
@@ -67,30 +57,52 @@ export function TicketCreateForm() {
 
         <div className="grid gap-6 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-slate-700">Category</Label>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger>
-                <SelectValue />
+            <Label htmlFor="ticket-category" className="text-xs font-semibold text-slate-700">
+              What is it about?
+            </Label>
+            <Select
+              value={category}
+              onValueChange={(v) => {
+                setCategory(v);
+                setCategoryMissing(false);
+              }}
+            >
+              <SelectTrigger
+                id="ticket-category"
+                aria-invalid={categoryMissing || undefined}
+                aria-describedby={categoryMissing ? "ticket-category-error" : undefined}
+                className={categoryMissing ? "border-danger" : undefined}
+              >
+                <SelectValue placeholder="Choose a topic" />
               </SelectTrigger>
               <SelectContent>
-                {CATEGORIES.map((c) => (
-                  <SelectItem key={c.value} value={c.value}>
+                {CATEGORY_OPTIONS.map((c) => (
+                  <SelectItem key={c.value} value={c.value} description={c.hint}>
                     {c.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {categoryMissing ? (
+              <p id="ticket-category-error" className="text-xs text-danger">
+                Choose what your ticket is about.
+              </p>
+            ) : (
+              selectedCategory && <p className="text-xs text-muted-foreground">{selectedCategory.hint}</p>
+            )}
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-slate-700">Type</Label>
+            <Label htmlFor="ticket-type" className="text-xs font-semibold text-slate-700">
+              What do you need?
+            </Label>
             <Select value={type} onValueChange={setType}>
-              <SelectTrigger>
+              <SelectTrigger id="ticket-type">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {TYPES.map((t) => (
-                  <SelectItem key={t.value} value={t.value}>
+                {TYPE_OPTIONS.map((t) => (
+                  <SelectItem key={t.value} value={t.value} description={t.hint}>
                     {t.label}
                   </SelectItem>
                 ))}
@@ -101,49 +113,55 @@ export function TicketCreateForm() {
 
         <div className="space-y-1.5">
           <Label htmlFor="subject" className="text-xs font-semibold text-slate-700">
-            Concern Raised / Subject
+            Short summary
           </Label>
           <Input
             id="subject"
             name="subject"
             type="text"
             required
-            placeholder="Brief summary of your concern"
+            placeholder={selectedCategory?.summaryExample ?? DEFAULT_SUMMARY_PLACEHOLDER}
+            minLength={3}
             maxLength={200}
           />
         </div>
 
         <div className="space-y-1.5">
           <Label htmlFor="description" className="text-xs font-semibold text-slate-700">
-            Detailed Description
+            Details
           </Label>
           <Textarea
             id="description"
             name="description"
             required
-            placeholder="Provide as much detail as possible..."
+            placeholder="Describe the problem or request…"
             rows={6}
+            minLength={10}
             maxLength={5000}
+            aria-describedby="description-hint"
           />
-          <p className="text-xs text-muted-foreground">
-            Include relevant dates, names, or other information that will help us assist you.
+          <p id="description-hint" className="text-xs text-muted-foreground">
+            {selectedCategory?.detailsHint ?? DEFAULT_DETAILS_HINT}
           </p>
         </div>
 
         <div className="space-y-1.5">
-          <Label className="text-xs font-semibold text-slate-700">Priority</Label>
+          <Label htmlFor="ticket-priority" className="text-xs font-semibold text-slate-700">
+            How urgent is it?
+          </Label>
           <Select value={priority} onValueChange={setPriority}>
-            <SelectTrigger>
+            <SelectTrigger id="ticket-priority">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {PRIORITIES.map((p) => (
-                <SelectItem key={p.value} value={p.value}>
+              {PRIORITY_OPTIONS.map((p) => (
+                <SelectItem key={p.value} value={p.value} description={p.hint}>
                   {p.label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {selectedPriority && <p className="text-xs text-muted-foreground">{selectedPriority.hint}</p>}
         </div>
 
         {/* Anonymous feature temporarily disabled

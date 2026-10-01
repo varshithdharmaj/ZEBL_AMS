@@ -228,7 +228,8 @@ export const managerHelpChapters: HelpChapter[] = [
         type: "steps",
         items: [
           "Select New ticket.",
-          "Pick a category and priority, then add a subject and description.",
+          "Choose what it's about (e.g. IT & Equipment for a broken monitor) and what you need, then add a short summary and the details.",
+          "Set how urgent it is: High only if you can't do your work until it's fixed.",
           "Submit — HR is notified.",
           "Reply in the thread; you'll see HR's public replies, but internal HR-only notes stay hidden.",
         ],
