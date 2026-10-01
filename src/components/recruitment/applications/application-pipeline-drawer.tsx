@@ -16,6 +16,8 @@ import { canCreateOfferFromDecisionState } from "@/lib/recruitment/decision/elig
 import { CandidateTagsInput, type CandidateTagView } from "@/components/recruitment/applications/candidate-tags-input";
 import { Clock, ExternalLink } from "lucide-react";
 import { pipelineStageLabel } from "@/lib/recruitment/shared/pipeline-stage-groups";
+import { CloseApplicationDialog } from "@/components/recruitment/applications/close-application-dialog";
+import { CloseReasonSummary } from "@/components/recruitment/applications/close-reason-summary";
 import {
   buildRecruitmentEntityHref,
   currentPathWithSearch,
@@ -42,6 +44,11 @@ export type PipelineDrawerApplication = {
   /** The job's own name for `currentStage`, when known. */
   currentStageLabel?: string | null;
   status: string;
+  rejectedReason?: string | null;
+  rejectionReasonCode?: string | null;
+  withdrawnReason?: string | null;
+  withdrawalReasonCode?: string | null;
+  stageEnteredAt?: Date | string | null;
   priority?: string | null;
   createdAt: Date | string;
   candidate: {
@@ -98,6 +105,7 @@ export function ApplicationPipelineDrawer({
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [closeKind, setCloseKind] = useState<"reject" | "withdraw" | null>(null);
   const pipelineReturnTo = (() => {
     const path = currentPathWithSearch(pathname, searchParams.toString());
     return isSafeRecruitmentReturnTo(path) ? path : "/admin/recruitment/pipeline";
@@ -118,6 +126,7 @@ export function ApplicationPipelineDrawer({
 
   const currentStageName =
     application.currentStageLabel?.trim() || pipelineStageLabel(application.currentStage);
+  const isOpenApplication = application.status === "active" || application.status === "on_hold";
   const acceptedOffer = application.offers?.find((o) => o.status === OfferStatus.accepted);
   const canCreateOffer = canCreateOfferFromDecisionState(
     application.requireDecisionForOffer ?? true,
@@ -142,6 +151,7 @@ export function ApplicationPipelineDrawer({
     >
       <div className="space-y-6">
         {error && <ErrorAlert message={error} />}
+        <CloseReasonSummary application={application} closedAt={application.stageEnteredAt} />
 
         <section className="space-y-3">
           <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Candidate</h3>
@@ -239,24 +249,48 @@ export function ApplicationPipelineDrawer({
               </Button>
             ) : null}
           </div>
-          <label className="block space-y-1.5">
-            <span className="text-xs font-semibold text-muted-foreground">Move stage</span>
-            <select
-              className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
-              disabled={isPending}
-              value={String(application.currentStage)}
-              onChange={(e) => moveStage(e.target.value as RecruitmentPipelineStage)}
-            >
-              {STAGE_OPTIONS.includes(application.currentStage as RecruitmentPipelineStage) ? null : (
-                <option value={String(application.currentStage)}>{currentStageName}</option>
-              )}
-              {STAGE_OPTIONS.map((stage) => (
-                <option key={stage} value={stage}>
-                  {stage.replace(/_/g, " ")}
-                </option>
-              ))}
-            </select>
-          </label>
+          {isOpenApplication ? (
+            <>
+              <label className="block space-y-1.5">
+                <span className="text-xs font-semibold text-muted-foreground">Move stage</span>
+                <select
+                  className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                  disabled={isPending}
+                  value={String(application.currentStage)}
+                  onChange={(e) => moveStage(e.target.value as RecruitmentPipelineStage)}
+                >
+                  {STAGE_OPTIONS.includes(application.currentStage as RecruitmentPipelineStage) ? null : (
+                    <option value={String(application.currentStage)}>{currentStageName}</option>
+                  )}
+                  {STAGE_OPTIONS.map((stage) => (
+                    <option key={stage} value={stage}>
+                      {stage.replace(/_/g, " ")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isPending}
+                  onClick={() => setCloseKind("reject")}
+                  className="text-xs font-semibold text-red-600 hover:bg-red-50/50 hover:text-red-700"
+                >
+                  Reject
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isPending}
+                  onClick={() => setCloseKind("withdraw")}
+                  className="text-xs font-semibold text-amber-600 hover:bg-amber-50/50 hover:text-amber-700"
+                >
+                  Withdraw
+                </Button>
+              </div>
+            </>
+          ) : null}
         </section>
 
         <ApplicationAssessmentForm
@@ -345,6 +379,18 @@ export function ApplicationPipelineDrawer({
           )}
         </section>
       </div>
+
+      <CloseApplicationDialog
+        kind={closeKind ?? "reject"}
+        applicationId={application.id}
+        candidateName={application.candidate.fullName}
+        jobTitle={application.jobOpening.title}
+        open={closeKind !== null}
+        onOpenChange={(next) => {
+          if (!next) setCloseKind(null);
+        }}
+        onDone={() => router.refresh()}
+      />
     </Sheet>
   );
 }

@@ -11,7 +11,6 @@ import { CandidateMetaRow } from "../candidates/candidate-meta-row";
 import { Button } from "@/components/ui/button";
 import { ErrorAlert } from "@/components/ui/error-alert";
 import { AlertDialog } from "@/components/ui/alert-dialog";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ApplicationAssessmentForm } from "@/components/recruitment/applications/application-assessment-form";
@@ -20,13 +19,13 @@ import type { HiringDecisionRecord } from "@/lib/recruitment/repositories/decisi
 import { canCreateOfferFromDecisionState } from "@/lib/recruitment/decision/eligibility";
 import {
   moveApplicationStageAction,
-  rejectApplicationAction,
-  withdrawApplicationAction,
   reopenApplicationAction,
 } from "@/actions/recruitment-applications";
 import type { ApplicationDetail } from "@/lib/recruitment/repositories/application-repository";
 import { pipelineStageLabel } from "@/lib/recruitment/shared/pipeline-stage-groups";
 import type { InterviewListItem } from "@/lib/recruitment/repositories/interview-repository";
+import { CloseApplicationDialog } from "./close-application-dialog";
+import { CloseReasonSummary } from "./close-reason-summary";
 import type { OfferByApplication } from "@/lib/recruitment/repositories/offer-repository";
 import {
   User,
@@ -87,8 +86,7 @@ export function ApplicationDetailView({
   const [success, setSuccess] = useState<string | null>(null);
 
   // Dialog States
-  const [rejectReason, setRejectReason] = useState("");
-  const [withdrawReason, setWithdrawReason] = useState("");
+  const [closeKind, setCloseKind] = useState<"reject" | "withdraw" | null>(null);
 
   const [alertConfig, setAlertConfig] = useState<{
     isOpen: boolean;
@@ -97,7 +95,6 @@ export function ApplicationDetailView({
     actionLabel?: string;
     onAction: () => void;
     isDestructive?: boolean;
-    reasonField?: "reject" | "withdraw";
   } | null>(null);
 
   const employeeMap = React.useMemo(() => {
@@ -128,45 +125,12 @@ export function ApplicationDetailView({
     });
   };
 
-  const handleReject = () => {
-    if (!rejectReason.trim()) return;
-    setAlertConfig(null);
-    setError(null);
-    setSuccess(null);
-    startTransition(async () => {
-      const res = await rejectApplicationAction({}, { id: application.id, reason: rejectReason.trim() });
-      if (res.error) {
-        setError(res.error);
-      } else {
-        setSuccess("Application rejected.");
-        setRejectReason("");
-        router.refresh();
-      }
-    });
-  };
-
-  const handleWithdraw = () => {
-    if (!withdrawReason.trim()) return;
-    setAlertConfig(null);
-    setError(null);
-    setSuccess(null);
-    startTransition(async () => {
-      const res = await withdrawApplicationAction({}, { id: application.id, reason: withdrawReason.trim() });
-      if (res.error) {
-        setError(res.error);
-      } else {
-        setSuccess("Application withdrawn.");
-        setWithdrawReason("");
-        router.refresh();
-      }
-    });
-  };
-
   const handleReopen = () => {
     setAlertConfig({
       isOpen: true,
       title: "Reopen Application",
-      description: "Are you sure you want to reopen this application? This will return the candidate to the active pipeline.",
+      description:
+        "This returns the candidate to the first stage of the pipeline and clears the rejection/withdrawal reason.",
       actionLabel: "Reopen Application",
       onAction: () => {
         setError(null);
@@ -185,6 +149,11 @@ export function ApplicationDetailView({
   };
 
   const acceptedOffer = offers.find((o) => o.status === OfferStatus.accepted);
+  // stageHistory is newest-first; the latest move into the current terminal stage is the close.
+  const closingEntry = application.stageHistory.find((h) => h.toStage === application.currentStage);
+  const closedBy = closingEntry?.actor
+    ? employeeMap.get(closingEntry.actor.id) ?? closingEntry.actor.email
+    : null;
   const canCreateOffer = canCreateOfferFromDecisionState(
     requireDecisionForOffer,
     currentDecision?.outcome
@@ -453,6 +422,13 @@ export function ApplicationDetailView({
                 >
                   {application.status.replace(/_/g, " ").toUpperCase()}
                 </span>
+                <div className="mt-2.5 empty:hidden">
+                  <CloseReasonSummary
+                    application={application}
+                    closedBy={closedBy}
+                    closedAt={application.stageEnteredAt}
+                  />
+                </div>
               </div>
 
               <div>
@@ -525,17 +501,7 @@ export function ApplicationDetailView({
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() =>
-                          setAlertConfig({
-                            isOpen: true,
-                            title: "Reject Application",
-                            description: "Please provide a reason for rejecting this application.",
-                            actionLabel: "Reject",
-                            isDestructive: true,
-                            onAction: handleReject,
-                            reasonField: "reject",
-                          })
-                        }
+                        onClick={() => setCloseKind("reject")}
                         disabled={isPending}
                         className="font-semibold text-xs text-red-600 hover:bg-red-50/50 hover:text-red-700"
                       >
@@ -544,16 +510,7 @@ export function ApplicationDetailView({
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() =>
-                          setAlertConfig({
-                            isOpen: true,
-                            title: "Withdraw Application",
-                            description: "Please provide a reason for withdrawing this application.",
-                            actionLabel: "Withdraw",
-                            onAction: handleWithdraw,
-                            reasonField: "withdraw",
-                          })
-                        }
+                        onClick={() => setCloseKind("withdraw")}
                         disabled={isPending}
                         className="font-semibold text-xs text-amber-600 hover:bg-amber-50/50 hover:text-amber-700"
                       >
@@ -588,47 +545,29 @@ export function ApplicationDetailView({
           description={alertConfig.description}
           actionLabel={alertConfig.actionLabel}
           isActionDestructive={alertConfig.isDestructive}
-          isActionDisabled={
-            (alertConfig.reasonField === "reject" && !rejectReason.trim()) ||
-            (alertConfig.reasonField === "withdraw" && !withdrawReason.trim())
-          }
           isPending={isPending}
-          onAction={
-            alertConfig.reasonField === "reject"
-              ? handleReject
-              : alertConfig.reasonField === "withdraw"
-                ? handleWithdraw
-                : alertConfig.onAction
-          }
-        >
-          {alertConfig.reasonField === "reject" && (
-            <div className="space-y-2">
-              <Label htmlFor="reject-reason">Rejection Reason</Label>
-              <Textarea
-                id="reject-reason"
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="e.g. Failed technical round"
-                rows={3}
-                autoFocus
-              />
-            </div>
-          )}
-          {alertConfig.reasonField === "withdraw" && (
-            <div className="space-y-2">
-              <Label htmlFor="withdraw-reason">Withdrawal Reason</Label>
-              <Textarea
-                id="withdraw-reason"
-                value={withdrawReason}
-                onChange={(e) => setWithdrawReason(e.target.value)}
-                placeholder="e.g. Accepted another offer"
-                rows={3}
-                autoFocus
-              />
-            </div>
-          )}
-        </AlertDialog>
+          onAction={() => {
+            setAlertConfig(null);
+            alertConfig.onAction();
+          }}
+        />
       )}
+
+      <CloseApplicationDialog
+        kind={closeKind ?? "reject"}
+        applicationId={application.id}
+        candidateName={candidateName}
+        jobTitle={jobOpening?.title}
+        open={closeKind !== null}
+        onOpenChange={(open) => {
+          if (!open) setCloseKind(null);
+        }}
+        onDone={(message) => {
+          setError(null);
+          setSuccess(message);
+          router.refresh();
+        }}
+      />
     </div>
   );
 }

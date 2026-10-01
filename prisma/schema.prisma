@@ -2218,9 +2218,15 @@ model Application {
   source                    CandidateSource?
   riskFlagsJson             Json                     @default("[]") @map("risk_flags_json")
   aggregateScore            Float?                   @map("aggregate_score")
+  /// Optional free-text note; the structured reason is `rejectionReasonCode`.
   rejectedReason            String?                  @map("rejected_reason")
+  /// Code from REJECTION_REASONS (src/lib/recruitment/application/close-reasons.ts).
+  rejectionReasonCode       String?                  @map("rejection_reason_code")
   holdReason                String?                  @map("hold_reason")
+  /// Optional free-text note; the structured reason is `withdrawalReasonCode`.
   withdrawnReason           String?                  @map("withdrawn_reason")
+  /// Code from WITHDRAWAL_REASONS (src/lib/recruitment/application/close-reasons.ts).
+  withdrawalReasonCode      String?                  @map("withdrawal_reason_code")
   /// Recruiter assessment for this application (role-specific evaluation)
   assessment                String?
   assessmentUpdatedAt       DateTime?                @map("assessment_updated_at")
