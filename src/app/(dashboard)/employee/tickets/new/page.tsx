@@ -3,9 +3,14 @@ import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { TicketCreateForm } from "@/components/employee/ticket-create-form";
 import { getSession } from "@/lib/auth";
 
-export default async function NewTicketPage() {
+export default async function NewTicketPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ topic?: string }>;
+}) {
   const session = await getSession();
   if (!session?.employeeId) redirect("/login");
+  const { topic } = await searchParams;
 
   return (
     <div className="space-y-6 lg:space-y-8">
@@ -14,7 +19,7 @@ export default async function NewTicketPage() {
         description="Submit a helpdesk request or raise a concern."
       />
 
-      <TicketCreateForm />
+      <TicketCreateForm topic={topic} />
     </div>
   );
 }

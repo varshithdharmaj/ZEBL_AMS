@@ -16,10 +16,8 @@ import type { ShiftSummary } from "@/lib/shifts";
 import type { AppUserRole } from "@/lib/roles";
 import type { AccountStatus, AuthProvider } from "@/generated/prisma/enums";
 import { AccountManagementTab } from "@/components/admin/employee-profile/account-management-tab";
-import {
-  StatutoryDetailsTab,
-  type StatutoryFields,
-} from "@/components/admin/employee-profile/statutory-details-tab";
+import { StatutoryDetailsTab } from "@/components/admin/employee-profile/statutory-details-tab";
+import type { StatutoryDetailProblem, StatutoryFields } from "@/lib/security/statutory-details";
 import {
   DocumentsTab,
   type EmployeeDocumentRow,
@@ -147,8 +145,9 @@ export function EmployeeProfileShell({
   currentUserRole: AppUserRole;
   currentUserEmployeeId?: number | null;
   statutory: {
-    masked: StatutoryFields;
-    unmasked: StatutoryFields | null;
+    problem: StatutoryDetailProblem | null;
+    masked: StatutoryFields | null;
+    editValues: StatutoryFields | null;
     canEdit: boolean;
     canUnmask: boolean;
   };
@@ -228,8 +227,9 @@ export function EmployeeProfileShell({
         {activeTab === "statutory" && (
           <StatutoryDetailsTab
             employeeId={employee.id}
+            problem={statutory.problem}
             masked={statutory.masked}
-            unmasked={statutory.unmasked}
+            editValues={statutory.editValues}
             canEdit={statutory.canEdit}
             canUnmask={statutory.canUnmask}
           />

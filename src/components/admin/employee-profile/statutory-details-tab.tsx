@@ -1,48 +1,38 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { startTransition, useActionState, type FormEvent } from "react";
 import { upsertEmployeeStatutoryDetailAction } from "@/actions/employee-statutory";
 import type { ActionState } from "@/actions/types";
+import type { StatutoryDetailProblem, StatutoryFields } from "@/lib/security/statutory-details";
+import { StatutoryDetailsCard } from "@/components/shared/statutory-details-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SectionCard } from "@/components/ui/section-card";
 import { ErrorAlert } from "@/components/ui/error-alert";
 
-export type StatutoryFields = {
-  pan: string | null;
-  aadhaar: string | null;
-  uan: string | null;
-  esiNumber: string | null;
-  bankAccountNo: string | null;
-  ifsc: string | null;
-  bankName: string | null;
-  bankBranchName: string | null;
+const PROBLEM_MESSAGES: Record<StatutoryDetailProblem, string> = {
+  missing_key:
+    "Statutory details can't be viewed or saved because the server's encryption key (EMPLOYEE_FIELD_ENCRYPTION_KEY) isn't configured. Ask your system administrator to set it.",
+  undecryptable:
+    "These statutory details were saved with a different encryption key, so they can't be read or changed. Check that EMPLOYEE_FIELD_ENCRYPTION_KEY matches the key used when they were saved.",
 };
-
-const FIELD_LABELS: { key: keyof StatutoryFields; label: string }[] = [
-  { key: "pan", label: "PAN" },
-  { key: "aadhaar", label: "Aadhaar" },
-  { key: "uan", label: "UAN" },
-  { key: "esiNumber", label: "ESI number" },
-  { key: "bankAccountNo", label: "Bank account number" },
-  { key: "ifsc", label: "IFSC code" },
-  { key: "bankName", label: "Bank name" },
-  { key: "bankBranchName", label: "Bank branch name" },
-];
 
 const initialState: ActionState = {};
 
 export function StatutoryDetailsTab({
   employeeId,
+  problem,
   masked,
-  unmasked,
+  editValues,
   canEdit,
   canUnmask,
 }: {
   employeeId: number;
-  masked: StatutoryFields;
-  unmasked: StatutoryFields | null;
+  problem: StatutoryDetailProblem | null;
+  masked: StatutoryFields | null;
+  /** Current values to pre-fill the edit form; only passed to users who can edit. */
+  editValues: StatutoryFields | null;
   canEdit: boolean;
   canUnmask: boolean;
 }) {
@@ -50,40 +40,37 @@ export function StatutoryDetailsTab({
     upsertEmployeeStatutoryDetailAction,
     initialState
   );
-  const [showUnmasked, setShowUnmasked] = useState(false);
-  const displayed = showUnmasked && unmasked ? unmasked : masked;
+
+  if (problem || !masked) {
+    return (
+      <SectionCard title="Statutory details">
+        <p className="rounded-lg border border-warning/20 bg-warning-muted px-4 py-3 text-sm text-warning">
+          {PROBLEM_MESSAGES[problem ?? "undecryptable"]}
+        </p>
+      </SectionCard>
+    );
+  }
+
+  // Dispatch manually instead of <form action>: React resets uncontrolled inputs after a
+  // form action completes, which would wipe everything HR typed when validation fails.
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    startTransition(() => formAction(formData));
+  }
 
   return (
     <div className="space-y-6">
-      <SectionCard
-        title="Statutory details"
+      <StatutoryDetailsCard
+        employeeId={employeeId}
+        masked={masked}
+        canUnmask={canUnmask}
         description="PAN, Aadhaar and bank details are masked by default."
-        action={
-          canUnmask ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setShowUnmasked((v) => !v)}
-            >
-              {showUnmasked ? "Hide" : "Show"} unmasked
-            </Button>
-          ) : undefined
-        }
-      >
-        <dl className="grid gap-4 sm:grid-cols-2">
-          {FIELD_LABELS.map(({ key, label }) => (
-            <div key={key} className="space-y-1">
-              <dt className="text-sm text-muted-foreground">{label}</dt>
-              <dd className="text-sm font-medium text-foreground">{displayed[key] ?? "—"}</dd>
-            </div>
-          ))}
-        </dl>
-      </SectionCard>
+      />
 
       {canEdit && (
         <SectionCard title="Edit statutory details" description="Visible only to HR/Super Admin.">
-          <form action={formAction} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-5">
             <input type="hidden" name="employeeId" value={employeeId} />
             {state.error && <ErrorAlert message={state.error} />}
             {state.success && (
@@ -94,47 +81,47 @@ export function StatutoryDetailsTab({
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="pan">PAN</Label>
-                <Input id="pan" name="pan" defaultValue={unmasked?.pan ?? ""} placeholder="ABCDE1234F" />
+                <Input id="pan" name="pan" defaultValue={editValues?.pan ?? ""} placeholder="ABCDE1234F" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="aadhaar">Aadhaar</Label>
                 <Input
                   id="aadhaar"
                   name="aadhaar"
-                  defaultValue={unmasked?.aadhaar ?? ""}
+                  defaultValue={editValues?.aadhaar ?? ""}
                   placeholder="123456789012"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="uan">UAN</Label>
-                <Input id="uan" name="uan" defaultValue={unmasked?.uan ?? ""} />
+                <Input id="uan" name="uan" defaultValue={editValues?.uan ?? ""} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="esiNumber">ESI number</Label>
-                <Input id="esiNumber" name="esiNumber" defaultValue={unmasked?.esiNumber ?? ""} />
+                <Input id="esiNumber" name="esiNumber" defaultValue={editValues?.esiNumber ?? ""} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="bankAccountNo">Bank account number</Label>
                 <Input
                   id="bankAccountNo"
                   name="bankAccountNo"
-                  defaultValue={unmasked?.bankAccountNo ?? ""}
+                  defaultValue={editValues?.bankAccountNo ?? ""}
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="ifsc">IFSC code</Label>
-                <Input id="ifsc" name="ifsc" defaultValue={unmasked?.ifsc ?? ""} placeholder="HDFC0001234" />
+                <Input id="ifsc" name="ifsc" defaultValue={editValues?.ifsc ?? ""} placeholder="HDFC0001234" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="bankName">Bank name</Label>
-                <Input id="bankName" name="bankName" defaultValue={unmasked?.bankName ?? ""} />
+                <Input id="bankName" name="bankName" defaultValue={editValues?.bankName ?? ""} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="bankBranchName">Bank branch name</Label>
                 <Input
                   id="bankBranchName"
                   name="bankBranchName"
-                  defaultValue={unmasked?.bankBranchName ?? ""}
+                  defaultValue={editValues?.bankBranchName ?? ""}
                 />
               </div>
             </div>

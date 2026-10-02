@@ -13,14 +13,7 @@ import type { EmployeeStatus } from "@/lib/employee-types";
 import { getSession } from "@/lib/auth";
 import { toAppUserRole } from "@/lib/roles";
 import { canManageEmployee, canViewUnmaskedStatutoryDetails } from "@/lib/permissions";
-import { decryptField } from "@/lib/security/field-encryption";
-import { maskAadhaar, maskBankAccount, maskPan } from "@/lib/security/field-masking";
-import { AUDIT_ACTIONS, writeAuditLog } from "@/lib/audit";
-import { getRequestSecurityContext } from "@/lib/security/request-context";
-
-function decryptOrNull(value: string | null | undefined): string | null {
-  return value ? decryptField(value) : null;
-}
+import { maskStatutoryDetail, readStatutoryDetail } from "@/lib/security/statutory-details";
 
 export default async function EmployeeProfilePage({
   params,
@@ -69,49 +62,18 @@ export default async function EmployeeProfilePage({
       }),
     ]);
 
-  const plainStatutory = {
-    pan: decryptOrNull(statutoryDetail?.panEnc),
-    aadhaar: decryptOrNull(statutoryDetail?.aadhaarEnc),
-    uan: decryptOrNull(statutoryDetail?.uanEnc),
-    esiNumber: decryptOrNull(statutoryDetail?.esiNumberEnc),
-    bankAccountNo: decryptOrNull(statutoryDetail?.bankAccountNoEnc),
-    ifsc: decryptOrNull(statutoryDetail?.ifscEnc),
-    bankName: statutoryDetail?.bankName ?? null,
-    bankBranchName: statutoryDetail?.bankBranchName ?? null,
-  };
-
-  const maskedStatutory = {
-    pan: plainStatutory.pan ? maskPan(plainStatutory.pan) : null,
-    aadhaar: plainStatutory.aadhaar ? maskAadhaar(plainStatutory.aadhaar) : null,
-    uan: plainStatutory.uan ? maskAadhaar(plainStatutory.uan) : null,
-    esiNumber: plainStatutory.esiNumber ? maskBankAccount(plainStatutory.esiNumber) : null,
-    bankAccountNo: plainStatutory.bankAccountNo ? maskBankAccount(plainStatutory.bankAccountNo) : null,
-    ifsc: plainStatutory.ifsc,
-    bankName: plainStatutory.bankName,
-    bankBranchName: plainStatutory.bankBranchName,
-  };
+  const { problem: statutoryProblem, plain: plainStatutory } = readStatutoryDetail(statutoryDetail);
+  const maskedStatutory = plainStatutory ? maskStatutoryDetail(plainStatutory) : null;
 
   const canEditStatutory = canManageEmployee(session.role);
-  const canUnmaskStatutory = canViewUnmaskedStatutoryDetails({
-    actorRole: session.role,
-    actorEmployeeId: session.employeeId,
-    targetEmployeeId: id,
-  });
-
-  if (canUnmaskStatutory && statutoryDetail) {
-    const requestContext = await getRequestSecurityContext();
-    await writeAuditLog({
-      entityType: "employee",
-      entityId: String(id),
-      action: AUDIT_ACTIONS.EMPLOYEE_STATUTORY_VIEWED,
-      actorUserId: session.id,
-      actorEmail: session.email,
-      employeeId: id,
-      module: "employees",
-      description: "Employee statutory details were viewed unmasked.",
-      requestContext,
+  // Unmasked values are fetched (and audit-logged) only when "Show unmasked" is clicked.
+  const canUnmaskStatutory =
+    statutoryDetail !== null &&
+    canViewUnmaskedStatutoryDetails({
+      actorRole: session.role,
+      actorEmployeeId: session.employeeId,
+      targetEmployeeId: id,
     });
-  }
 
   const documentRows = documents.map((doc) => ({
     id: doc.id,
@@ -191,8 +153,9 @@ export default async function EmployeeProfilePage({
       currentUserRole={session.role}
       currentUserEmployeeId={session.employeeId}
       statutory={{
+        problem: statutoryProblem,
         masked: maskedStatutory,
-        unmasked: canUnmaskStatutory ? plainStatutory : null,
+        editValues: canEditStatutory ? plainStatutory : null,
         canEdit: canEditStatutory,
         canUnmask: canUnmaskStatutory,
       }}

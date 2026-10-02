@@ -8,6 +8,7 @@ import { requireManageEmployeeSession } from "@/lib/auth-guards";
 import { AUDIT_ACTIONS, writeAuditLog } from "@/lib/audit";
 import { safeParseWithSchema } from "@/lib/validation/parse";
 import {
+  checkEmployeeDocumentFile,
   employeeDocumentIdSchema,
   uploadEmployeeDocumentMetaSchema,
 } from "@/lib/validation/schemas/employee-document";
@@ -16,33 +17,8 @@ import { getEmployeeStorage } from "@/lib/recruitment/storage/employee-storage";
 import { getRequestSecurityContext } from "@/lib/security/request-context";
 import { EmployeeDocumentType } from "@/generated/prisma/enums";
 
-const MAX_FILE_SIZE = 15 * 1024 * 1024;
-const ALLOWED_EXTENSIONS = [".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png", ".webp"];
-const ALLOWED_MIMES = [
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-];
-
 function checksumBuffer(data: Buffer): string {
   return createHash("sha256").update(data).digest("hex");
-}
-
-function assertValidUploadFile(fileName: string, mimeType: string, sizeBytes: number): string | null {
-  if (sizeBytes > MAX_FILE_SIZE) {
-    return "File size exceeds the maximum limit of 15MB.";
-  }
-  const lowerFileName = fileName.toLowerCase();
-  const mime = mimeType.trim().toLowerCase();
-  const hasAllowedExt = ALLOWED_EXTENSIONS.some((ext) => lowerFileName.endsWith(ext));
-  const mimeOk = ALLOWED_MIMES.includes(mime) || mime === "application/octet-stream";
-  if (!hasAllowedExt || !mimeOk) {
-    return "File type is not allowed. Supported formats: PDF, DOC, DOCX, JPG, PNG, WEBP.";
-  }
-  return null;
 }
 
 export async function uploadEmployeeDocumentAction(
@@ -69,7 +45,7 @@ export async function uploadEmployeeDocumentAction(
     if (!meta.ok) return { error: meta.error };
     const data = meta.data;
 
-    const validationError = assertValidUploadFile(data.fileName, data.mimeType, data.sizeBytes);
+    const validationError = checkEmployeeDocumentFile(data.fileName, data.mimeType, data.sizeBytes);
     if (validationError) return { error: validationError };
 
     const employee = await prisma.employee.findUnique({ where: { id: data.employeeId } });
@@ -118,7 +94,8 @@ export async function uploadEmployeeDocumentAction(
 
     revalidatePath(`/admin/employees/${data.employeeId}`);
     return { success: "Document uploaded successfully." };
-  } catch {
+  } catch (error) {
+    console.error("[employee-documents] upload failed:", error instanceof Error ? error.message : error);
     return { error: "Failed to upload document." };
   }
 }
@@ -166,9 +143,21 @@ export async function deleteEmployeeDocumentAction(
       );
     });
 
+    // The soft-deleted row stays as a record that the document existed; the file itself is
+    // removed so a deleted document is really gone.
+    await getEmployeeStorage()
+      .delete(doc.storageKey)
+      .catch((error: unknown) =>
+        console.error(
+          "[employee-documents] file removal failed:",
+          error instanceof Error ? error.message : error
+        )
+      );
+
     revalidatePath(`/admin/employees/${employeeId}`);
     return { success: "Document deleted successfully." };
-  } catch {
+  } catch (error) {
+    console.error("[employee-documents] delete failed:", error instanceof Error ? error.message : error);
     return { error: "Failed to delete document." };
   }
 }

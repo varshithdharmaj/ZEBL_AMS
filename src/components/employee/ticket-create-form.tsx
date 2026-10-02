@@ -19,12 +19,35 @@ const initialState: TicketActionState = {};
 const DEFAULT_SUMMARY_PLACEHOLDER = "e.g. Monitor not displaying – HDMI cable issue";
 const DEFAULT_DETAILS_HINT = "Include relevant dates, names, or other information that will help us assist you.";
 
-export function TicketCreateForm() {
+type TicketPreset = {
+  category: string;
+  type: string;
+  subject: string;
+  description: string;
+  note: string;
+};
+
+/** Pre-filled tickets linked from elsewhere in the app, e.g. My Profile → "Request a change". */
+const TOPIC_PRESETS = new Map<string, TicketPreset>([
+  [
+    "statutory-details",
+    {
+      category: "payroll",
+      type: "service_request",
+      subject: "Update my bank or statutory details",
+      description: "What needs to change (e.g. bank account, IFSC, PAN, UAN, ESI number):\n",
+      note: "Don't type full account or ID numbers here. HR will contact you to collect the new details and any proof, such as a cancelled cheque.",
+    },
+  ],
+]);
+
+export function TicketCreateForm({ topic }: { topic?: string }) {
+  const preset = topic ? TOPIC_PRESETS.get(topic) : undefined;
   const [state, formAction, pending] = useActionState(createTicketAction, initialState);
   // No default category: a pre-picked one gets submitted unchanged and lands
-  // the ticket in the wrong queue.
-  const [category, setCategory] = useState("");
-  const [type, setType] = useState("service_request");
+  // the ticket in the wrong queue. Presets still pick theirs.
+  const [category, setCategory] = useState(preset?.category ?? "");
+  const [type, setType] = useState(preset?.type ?? "service_request");
   const [priority, setPriority] = useState("medium");
   const [categoryMissing, setCategoryMissing] = useState(false);
   // Anonymous feature temporarily disabled
@@ -123,6 +146,7 @@ export function TicketCreateForm() {
             placeholder={selectedCategory?.summaryExample ?? DEFAULT_SUMMARY_PLACEHOLDER}
             minLength={3}
             maxLength={200}
+            defaultValue={preset?.subject}
           />
         </div>
 
@@ -138,6 +162,7 @@ export function TicketCreateForm() {
             rows={6}
             minLength={10}
             maxLength={5000}
+            defaultValue={preset?.description}
             aria-describedby="description-hint"
           />
           <p id="description-hint" className="text-xs text-muted-foreground">
@@ -196,6 +221,13 @@ export function TicketCreateForm() {
           )}
         </div>
         */}
+
+        {preset && (
+          <div className="flex gap-2 rounded-md border border-warning/20 bg-warning-muted p-3 text-xs text-warning">
+            <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />
+            <p>{preset.note}</p>
+          </div>
+        )}
 
         <div className="flex gap-2 rounded-md bg-blue-50 p-3 text-xs text-blue-800">
           <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />

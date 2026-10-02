@@ -1,21 +1,27 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { EmployeePhotoAvatar } from "@/components/shared/employee-photo-avatar";
+import { StatutoryDetailsCard } from "@/components/shared/statutory-details-card";
+import { Button } from "@/components/ui/button";
+import { DataTable, DataTableCell, DataTableRow } from "@/components/ui/data-table";
 import { SectionCard } from "@/components/ui/section-card";
 import { ContactInfoForm } from "@/components/employee/contact-info-form";
 import { LeaveBalanceGrid } from "@/components/leave/leave-balance-grid";
 import { LeaveHistoryTab } from "@/components/admin/employee-profile/leave-history-tab";
 import { getEmployeeProfileLeaveData } from "@/actions/leave-balances";
 import { getSession } from "@/lib/auth";
-import { canEditEmployeeProfilePhoto } from "@/lib/permissions";
+import { canEditEmployeeProfilePhoto, canViewUnmaskedStatutoryDetails } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import { maskStatutoryDetail, readStatutoryDetail } from "@/lib/security/statutory-details";
 import { formatDate } from "@/lib/utils";
+import { EMPLOYEE_DOCUMENT_TYPE_LABELS } from "@/lib/validation/schemas/employee-document";
 
 export default async function EmployeeSelfProfilePage() {
   const session = await getSession();
   if (!session?.employeeId) redirect("/login");
 
-  const [employee, leaveData] = await Promise.all([
+  const [employee, leaveData, statutoryRow, documents] = await Promise.all([
     prisma.employee.findUnique({
       where: { id: session.employeeId },
       select: {
@@ -36,6 +42,12 @@ export default async function EmployeeSelfProfilePage() {
       },
     }),
     getEmployeeProfileLeaveData(session.employeeId),
+    prisma.employeeStatutoryDetail.findUnique({ where: { employeeId: session.employeeId } }),
+    prisma.employeeDocument.findMany({
+      where: { employeeId: session.employeeId, deletedAt: null },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, documentType: true, fileName: true, createdAt: true },
+    }),
   ]);
 
   const displayName = session.employeeName ?? session.email;
@@ -44,6 +56,14 @@ export default async function EmployeeSelfProfilePage() {
     actorEmployeeId: session.employeeId,
     targetEmployeeId: session.employeeId,
   });
+  const { plain: statutory } = readStatutoryDetail(statutoryRow);
+  const canUnmaskStatutory =
+    statutoryRow !== null &&
+    canViewUnmaskedStatutoryDetails({
+      actorRole: session.role,
+      actorEmployeeId: session.employeeId,
+      targetEmployeeId: session.employeeId,
+    });
 
   return (
     <div className="space-y-8">
@@ -135,6 +155,58 @@ export default async function EmployeeSelfProfilePage() {
               address={employee.address}
               emergencyContact={employee.emergencyContact}
             />
+          </SectionCard>
+
+          {statutory ? (
+            <StatutoryDetailsCard
+              employeeId={session.employeeId}
+              masked={maskStatutoryDetail(statutory)}
+              canUnmask={canUnmaskStatutory}
+              title="Bank & statutory details"
+              description={
+                statutoryRow
+                  ? "Masked for your privacy. HR keeps these up to date."
+                  : "HR hasn't added these details yet."
+              }
+              footer={
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+                  <p className="text-sm text-muted-foreground">Something missing or out of date?</p>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href="/employee/tickets/new?topic=statutory-details">Request a change</Link>
+                  </Button>
+                </div>
+              }
+            />
+          ) : (
+            <SectionCard title="Bank & statutory details">
+              <p className="text-sm text-muted-foreground">
+                Your bank and statutory details can&apos;t be shown right now. Please contact HR.
+              </p>
+            </SectionCard>
+          )}
+
+          <SectionCard title="My documents" description="Documents HR keeps on file for you." noPadding>
+            <DataTable
+              columns={["Type", "File name", "Uploaded", "Actions"]}
+              emptyMessage="HR hasn't uploaded any documents for you yet."
+            >
+              {documents.map((doc) => (
+                <DataTableRow key={doc.id}>
+                  <DataTableCell>{EMPLOYEE_DOCUMENT_TYPE_LABELS[doc.documentType]}</DataTableCell>
+                  <DataTableCell className="max-w-[240px] truncate">{doc.fileName}</DataTableCell>
+                  <DataTableCell className="text-xs text-muted-foreground">
+                    {formatDate(doc.createdAt)}
+                  </DataTableCell>
+                  <DataTableCell>
+                    <Button variant="outline" size="sm" asChild>
+                      <a href={`/api/employee-documents/download?id=${encodeURIComponent(doc.id)}`}>
+                        Download
+                      </a>
+                    </Button>
+                  </DataTableCell>
+                </DataTableRow>
+              ))}
+            </DataTable>
           </SectionCard>
 
           <SectionCard title="Leave balance" description="Managed by HR — read-only">
