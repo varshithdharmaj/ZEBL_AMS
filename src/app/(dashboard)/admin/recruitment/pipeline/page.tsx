@@ -39,6 +39,8 @@ import {
   returnToLabel,
 } from "@/lib/recruitment/navigation/return-to";
 import { resolveHiringBatch } from "@/lib/recruitment/shared/hiring-batch";
+import { movableStageOptions } from "@/lib/recruitment/shared/next-stage";
+import { loadApplicationScoreSummaries } from "@/lib/recruitment/interview/score-summaries";
 
 function normalizeListPageSize(raw: string | string[] | undefined): number {
   const n = Number(typeof raw === "string" ? raw : "");
@@ -208,6 +210,33 @@ export default async function RecruitmentPipelinePage({
     }));
   }
 
+  const listScoreSummaries =
+    view === "list" ? await loadApplicationScoreSummaries(listItems.map((a) => a.id)) : undefined;
+
+  // Side-panel extras: the job's own stage order, every round's scorecards, the resume.
+  const [selectedJob, selectedFeedback] = selectedDetail
+    ? await Promise.all([
+        jobDetail?.id === selectedDetail.jobOpeningId
+          ? Promise.resolve(jobDetail)
+          : prismaJobRepository.getJob(selectedDetail.jobOpeningId),
+        prisma.interviewFeedback.findMany({
+          where: { interview: { applicationId: selectedDetail.id } },
+          include: {
+            author: { select: { name: true } },
+            interview: { select: { title: true, scheduledStart: true } },
+          },
+          orderBy: { createdAt: "asc" },
+        }),
+      ])
+    : [null, []];
+  const selectedResume =
+    selectedDetail?.candidate?.documents
+      ?.filter((d) => d.documentType === "resume")
+      .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary))[0] ?? null;
+  const recruiterName = selectedDetail?.assignedRecruiterUserId
+    ? employeeOptions.find((e) => e.user?.id === selectedDetail.assignedRecruiterUserId)?.name ?? null
+    : null;
+
   const selectedTags = selectedDetail?.candidate?.id
     ? await TagService.listCandidateTags(String(selectedDetail.candidate.id))
     : [];
@@ -223,6 +252,25 @@ export default async function RecruitmentPipelinePage({
         withdrawnReason: selectedDetail.withdrawnReason ?? null,
         withdrawalReasonCode: selectedDetail.withdrawalReasonCode ?? null,
         stageEnteredAt: selectedDetail.stageEnteredAt as Date | string,
+        source: selectedDetail.source ?? null,
+        recruiterName,
+        stageOptions: movableStageOptions(selectedJob?.stages),
+        resume: selectedResume
+          ? { id: selectedResume.id, fileName: selectedResume.fileName, mimeType: selectedResume.mimeType }
+          : null,
+        feedback: selectedFeedback.map((f) => ({
+          id: f.id,
+          authorName: f.author.name,
+          interviewTitle: f.interview.title ?? "Interview",
+          submittedAt: f.submittedAt,
+          ratingsJson: f.ratingsJson,
+          recommendation: f.recommendation,
+          consideredForPosition: f.consideredForPosition,
+          overallRating: f.overallRating,
+          strengths: f.strengths,
+          concerns: f.concerns,
+          privateNotes: f.privateNotes,
+        })),
         priority: (selectedDetail as { priority?: string | null }).priority ?? null,
         createdAt: selectedDetail.createdAt as Date | string,
         tags: selectedTags,
@@ -259,6 +307,8 @@ export default async function RecruitmentPipelinePage({
               toStage: (h.toStage as string | null) ?? null,
               fromStage: (h.fromStage as string | null) ?? null,
               createdAt: h.createdAt as Date | string,
+              note: (h.note as string | null) ?? null,
+              actorEmail: (h.actor as { email?: string | null } | null)?.email ?? null,
             }))
           : [],
         assessment: (selectedDetail.assessment as string | null) ?? null,
@@ -386,6 +436,7 @@ export default async function RecruitmentPipelinePage({
             totalPages: listResult?.totalPages ?? 0,
           }}
           filters={filterState}
+          scoreSummaries={listScoreSummaries}
         />
       )}
     </div>

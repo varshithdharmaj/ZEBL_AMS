@@ -25,6 +25,7 @@ import type { ApplicationDetail } from "@/lib/recruitment/repositories/applicati
 import { pipelineStageLabel } from "@/lib/recruitment/shared/pipeline-stage-groups";
 import type { InterviewListItem } from "@/lib/recruitment/repositories/interview-repository";
 import { CloseApplicationDialog } from "./close-application-dialog";
+import { movableStageOptions, nextStageAfter, type StageOption } from "@/lib/recruitment/shared/next-stage";
 import { CloseReasonSummary } from "./close-reason-summary";
 import type { OfferByApplication } from "@/lib/recruitment/repositories/offer-repository";
 import {
@@ -52,13 +53,6 @@ function formatDate(value: Date | string | null): string {
   });
 }
 
-const NON_MOVABLE_STAGES: readonly RecruitmentPipelineStage[] = [
-  RecruitmentPipelineStage.rejected,
-  RecruitmentPipelineStage.withdrawn,
-  RecruitmentPipelineStage.hired,
-  RecruitmentPipelineStage.on_hold,
-];
-
 export function ApplicationDetailView({
   application,
   employeeOptions,
@@ -66,6 +60,7 @@ export function ApplicationDetailView({
   offers = [],
   currentDecision = null,
   requireDecisionForOffer = true,
+  stageOptions,
   navigation,
 }: {
   application: ApplicationDetail;
@@ -74,6 +69,8 @@ export function ApplicationDetailView({
   offers?: readonly OfferByApplication[];
   currentDecision?: HiringDecisionRecord | null;
   requireDecisionForOffer?: boolean;
+  /** The job's own stage order and names. */
+  stageOptions?: StageOption[];
   navigation?: {
     candidateHref: string;
     jobHref: string;
@@ -149,6 +146,8 @@ export function ApplicationDetailView({
   };
 
   const acceptedOffer = offers.find((o) => o.status === OfferStatus.accepted);
+  const resolvedStageOptions = stageOptions ?? movableStageOptions(null);
+  const nextStage = nextStageAfter(application.currentStage, resolvedStageOptions);
   // stageHistory is newest-first; the latest move into the current terminal stage is the close.
   const closingEntry = application.stageHistory.find((h) => h.toStage === application.currentStage);
   const closedBy = closingEntry?.actor
@@ -455,30 +454,37 @@ export function ApplicationDetailView({
               {application.status === ApplicationStatus.active || application.status === ApplicationStatus.on_hold ? (
                 <div className="pt-4 border-t border-border/40 space-y-3">
                   <Label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
-                    Move to Next Stage
+                    Move Stage
                   </Label>
-                  <div className="grid grid-cols-1 gap-2">
-                    {Object.values(RecruitmentPipelineStage)
-                      .filter(
-                        (stage) =>
-                          stage !== application.currentStage &&
-                          !NON_MOVABLE_STAGES.includes(stage)
-                      )
-                      .slice(0, 3) // Show next few logical stages
-                      .map((stage) => (
-                        <Button
-                          key={stage}
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleMoveStage(stage)}
-                          disabled={isPending}
-                          className="w-full justify-between font-semibold text-xs"
-                        >
-                          <span>Move to {stage.replace(/_/g, " ").toUpperCase()}</span>
-                          <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-                        </Button>
+                  {nextStage ? (
+                    <Button
+                      size="sm"
+                      onClick={() => handleMoveStage(nextStage.stage)}
+                      disabled={isPending}
+                      className="w-full justify-between font-semibold text-xs"
+                    >
+                      <span>Move to {nextStage.label}</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Button>
+                  ) : null}
+                  <select
+                    aria-label="Move to any stage"
+                    className="h-9 w-full rounded-md border border-border bg-background px-2 text-xs font-semibold"
+                    disabled={isPending}
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) handleMoveStage(e.target.value as RecruitmentPipelineStage);
+                    }}
+                  >
+                    <option value="">Move to another stage…</option>
+                    {resolvedStageOptions
+                      .filter((o) => o.stage !== application.currentStage)
+                      .map((o) => (
+                        <option key={o.stage} value={o.stage}>
+                          {o.label}
+                        </option>
                       ))}
-                  </div>
+                  </select>
 
                   <div className="flex flex-col gap-2 pt-2">
                     {acceptedOffer ? (

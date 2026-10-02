@@ -12,6 +12,8 @@ export function Sheet({
   description,
   children,
   side = "right",
+  size = "md",
+  headerActions,
 }: {
   open: boolean;
   onClose: () => void;
@@ -19,6 +21,10 @@ export function Sheet({
   description?: string;
   children: React.ReactNode;
   side?: "right" | "left";
+  /** "lg" fits side-by-side reading (e.g. a resume preview). */
+  size?: "md" | "lg";
+  /** Extra buttons shown next to the close button. */
+  headerActions?: React.ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -50,7 +56,9 @@ export function Sheet({
         ref={panelRef}
         tabIndex={-1}
         className={cn(
-          "relative ml-auto flex h-full w-full max-w-lg flex-col border-border bg-background/80 shadow-xl outline-none backdrop-blur-2xl",
+          "relative ml-auto flex h-full w-full flex-col",
+          size === "lg" ? "max-w-2xl" : "max-w-lg",
+          "border-border bg-background/80 shadow-xl outline-none backdrop-blur-2xl",
           "animate-in slide-in-from-right duration-200",
           side === "left" && "mr-auto ml-0 slide-in-from-left"
         )}
@@ -64,9 +72,12 @@ export function Sheet({
               <p className="mt-1 text-sm text-muted-foreground">{description}</p>
             )}
           </div>
-          <Button type="button" variant="ghost" size="sm" onClick={onClose} aria-label="Close">
-            <X className="h-4 w-4" />
-          </Button>
+          <div className="flex shrink-0 items-center gap-1">
+            {headerActions}
+            <Button type="button" variant="ghost" size="sm" onClick={onClose} aria-label="Close">
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">{children}</div>
       </div>

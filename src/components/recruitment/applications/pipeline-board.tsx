@@ -100,6 +100,13 @@ type EmployeeOption = { id: number; name: string; user: { id: string; email: str
 const JOINED_STAGE_ERROR =
   "Joined is for converted hires only. Accept an offer, then use Convert to Employee.";
 
+/** Previous/next candidate ids within the same column, for the side panel's ‹ › and J/K. */
+function columnNeighbours(columnIds: string[], selectedId: string | null) {
+  const index = selectedId ? columnIds.indexOf(selectedId) : -1;
+  if (index === -1) return { prevId: null, nextId: null };
+  return { prevId: columnIds[index - 1] ?? null, nextId: columnIds[index + 1] ?? null };
+}
+
 function useEmployeeMap(employeeOptions: EmployeeOption[]) {
   return React.useMemo(() => {
     const map = new Map<string, string>();
@@ -323,6 +330,16 @@ function StaticBoard({
 
   const drawerApp = selectedApplication ?? applications.find((a) => a.id === selectedId) ?? null;
   const closeDialog = useBoardCloseDialog();
+  const selectedStage = applications.find((a) => a.id === selectedId)?.currentStage;
+  const selectedColumn = COLUMNS.find((c) => c.stages.includes(selectedStage as RecruitmentPipelineStage));
+  const neighbours = columnNeighbours(
+    selectedColumn
+      ? applications
+          .filter((a) => selectedColumn.stages.includes(a.currentStage as RecruitmentPipelineStage))
+          .map((a) => a.id)
+      : [],
+    selectedId
+  );
 
   const handleDragStart = (e: React.DragEvent, id: string) => {
     setDraggedId(id);
@@ -432,6 +449,9 @@ function StaticBoard({
         open={Boolean(selectedId)}
         application={drawerApp}
         onClose={() => setApplicationId(null)}
+        prevId={neighbours.prevId}
+        nextId={neighbours.nextId}
+        onNavigate={setApplicationId}
       />
     </div>
   );
@@ -481,6 +501,10 @@ function DynamicBoard({
   const allItems = columns.flatMap((c) => c.items);
   const drawerApp = selectedApplication ?? allItems.find((a) => a.id === selectedId) ?? null;
   const closeDialog = useBoardCloseDialog();
+  const neighbours = columnNeighbours(
+    columns.find((c) => c.items.some((a) => a.id === selectedId))?.items.map((a) => a.id) ?? [],
+    selectedId
+  );
 
   const handleDragStart = (e: React.DragEvent, id: string) => {
     setDraggedId(id);
@@ -660,6 +684,9 @@ function DynamicBoard({
         open={Boolean(selectedId)}
         application={drawerApp}
         onClose={() => setApplicationId(null)}
+        prevId={neighbours.prevId}
+        nextId={neighbours.nextId}
+        onNavigate={setApplicationId}
       />
 
       <AddPipelineStageDialog
