@@ -21,6 +21,7 @@ import { OfferRevisionPanel } from "@/components/recruitment/offers/offer-revisi
 import { OfferStatus } from "@/generated/prisma/enums";
 import { RecruitmentContextHeader } from "@/components/recruitment/shared/recruitment-context-header";
 import { buildRecruitmentBreadcrumbs } from "@/lib/recruitment/navigation/breadcrumbs";
+import { OfferNegotiationPanel } from "@/components/recruitment/offers/offer-negotiation-panel";
 import {
   parseRecruitmentNavSearch,
   resolveRecruitmentReturnTo,
@@ -193,6 +194,7 @@ export default async function OfferDetailPage({
               declinedAt: asDateOrString(offerRecord.declinedAt),
               withdrawnAt: asDateOrString(offerRecord.withdrawnAt),
               declineReason: asNullableString(offerRecord.declineReason),
+              declineReasonCode: asNullableString(offerRecord.declineReasonCode),
               withdrawReason: asNullableString(offerRecord.withdrawReason),
             }}
             userRole={session.role}
@@ -218,6 +220,18 @@ export default async function OfferDetailPage({
           </span>
         </div>
       </div>
+
+      {offer.status === OfferStatus.released ? (
+        <OfferNegotiationPanel
+          offer={{
+            id: String(offer.id),
+            status: String(offer.status),
+            negotiationStatus: asNullableString(offerRecord.negotiationStatus),
+            negotiationNote: asNullableString(offerRecord.negotiationNote),
+            negotiationFollowUpAt: asDateOrString(offerRecord.negotiationFollowUpAt),
+          }}
+        />
+      ) : null}
 
       {/* Main Grid */}
       <div className="grid gap-6 lg:grid-cols-3">

@@ -2418,6 +2418,13 @@ model Offer {
   proposedStartDate       DateTime?       @map("proposed_start_date")
   expiresAt               DateTime?       @map("expires_at")
   declineReason           String?         @map("decline_reason")
+  /// Code from OFFER_DECLINE_REASONS (src/lib/recruitment/offer/negotiation.ts); declineReason holds the note.
+  declineReasonCode       String?         @map("decline_reason_code")
+  /// "in_negotiation" while the candidate is negotiating a released offer, else null.
+  negotiationStatus       String?         @map("negotiation_status")
+  negotiationNote         String?         @map("negotiation_note")
+  negotiationFollowUpAt   DateTime?       @map("negotiation_follow_up_at")
+  negotiationUpdatedAt    DateTime?       @map("negotiation_updated_at")
   withdrawReason          String?         @map("withdraw_reason")
   releasedAt              DateTime?       @map("released_at")
   acceptedAt              DateTime?       @map("accepted_at")

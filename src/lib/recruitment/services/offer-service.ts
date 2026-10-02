@@ -29,11 +29,13 @@ import {
   sendOfferSchema,
   acceptOfferSchema,
   declineOfferSchema,
+  updateOfferNegotiationSchema,
   withdrawOfferSchema,
   createOfferRevisionSchema,
   attachOfferPdfSchema,
   generateOfferLetterSchema,
 } from "@/lib/validation/schemas/recruitment/offers";
+import { NEGOTIATION_STATUS, offerDeclineReasonLabel } from "@/lib/recruitment/offer/negotiation";
 import {
   buildOfferPdfStorageKey,
   isSafeOfferPdfKey,
@@ -465,7 +467,7 @@ export function createOfferService(
 
     async declineOffer(
       session: SessionUser,
-      input: { id: string; declinedAt?: string | null; reason?: string | null }
+      input: { id: string; declinedAt?: string | null; reasonCode: string; reason?: string | null }
     ): Promise<void> {
       RecruitmentPermissionService.requireModuleEnabled();
       await RecruitmentPermissionService.assertCanManageCandidates(session);
@@ -489,7 +491,7 @@ export function createOfferService(
       const events = createAfterCommitBuffer();
 
       await withRecruitmentTransaction(async (tx) => {
-        await repository.declineOffer(parsed.id, declinedDate, parsed.reason ?? null, tx);
+        await repository.declineOffer(parsed.id, declinedDate, parsed.reason || null, tx, parsed.reasonCode);
 
         // Timeline Event
         await RecruitmentTimelineService.append(
@@ -500,9 +502,19 @@ export function createOfferService(
             candidateId: offer.application.candidateId,
             jobOpeningId: offer.application.jobOpeningId,
             eventType: "offer_declined",
-            summary: `Offer declined: ${offer.offerNumber}. Reason: ${parsed.reason ?? "None"}`,
+            summary: `Offer declined: ${offer.offerNumber}. Reason: ${[
+              offerDeclineReasonLabel(parsed.reasonCode),
+              parsed.reason,
+            ]
+              .filter(Boolean)
+              .join(" — ")}`,
             actorUserId: session.id,
-            metadata: { offerId: parsed.id, declinedAt: parsed.declinedAt, reason: parsed.reason },
+            metadata: {
+              offerId: parsed.id,
+              declinedAt: parsed.declinedAt,
+              reasonCode: parsed.reasonCode,
+              reason: parsed.reason,
+            },
           },
           tx
         );
@@ -518,6 +530,61 @@ export function createOfferService(
       });
 
       await events.flush();
+    },
+
+    /** Mark a sent offer as being negotiated (note + follow-up date), or back to plain "Sent". */
+    async updateNegotiation(
+      session: SessionUser,
+      input: { id: string; inNegotiation: boolean; note?: string | null; followUpAt?: string | null }
+    ): Promise<void> {
+      RecruitmentPermissionService.requireModuleEnabled();
+      await RecruitmentPermissionService.assertCanManageCandidates(session);
+
+      const parsed = updateOfferNegotiationSchema.parse(input);
+      const offer = await repository.getOffer(parsed.id);
+      if (!offer) {
+        throw new RecruitmentDomainError("REC_NOT_FOUND", "Offer not found.");
+      }
+      if (offer.status !== OfferStatus.released) {
+        throw new RecruitmentDomainError(
+          "REC_VALIDATION",
+          "Negotiation can only be tracked on an offer that has been sent."
+        );
+      }
+      const followUpAt = parsed.followUpAt ? new Date(parsed.followUpAt) : null;
+      if (followUpAt && Number.isNaN(followUpAt.getTime())) {
+        throw new RecruitmentDomainError("REC_VALIDATION", "Follow-up date is not valid.");
+      }
+
+      await withRecruitmentTransaction(async (tx) => {
+        await repository.updateNegotiation(
+          parsed.id,
+          parsed.inNegotiation
+            ? { negotiationStatus: NEGOTIATION_STATUS, note: parsed.note || null, followUpAt }
+            : { negotiationStatus: null, note: null, followUpAt: null },
+          tx
+        );
+        await RecruitmentTimelineService.append(
+          {
+            entityType: "application",
+            entityId: offer.applicationId,
+            applicationId: offer.applicationId,
+            candidateId: offer.application.candidateId,
+            jobOpeningId: offer.application.jobOpeningId,
+            eventType: "offer_negotiation_updated",
+            summary: parsed.inNegotiation
+              ? `Offer in negotiation${parsed.note ? `: ${parsed.note}` : ""}`
+              : "Offer negotiation closed",
+            actorUserId: session.id,
+            metadata: {
+              offerId: parsed.id,
+              inNegotiation: parsed.inNegotiation,
+              followUpAt: followUpAt?.toISOString() ?? null,
+            },
+          },
+          tx
+        );
+      });
     },
 
     async expireOffer(session: SessionUser, id: string): Promise<void> {

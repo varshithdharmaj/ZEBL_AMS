@@ -195,18 +195,32 @@ export default async function RecruitmentPipelinePage({
     offerNumber: string | null;
     status: string;
     ctc: number | null;
+    negotiationStatus: string | null;
+    negotiationNote: string | null;
+    negotiationFollowUpAt: Date | null;
   }> = [];
   if (applicationId) {
     const offers = await prisma.offer.findMany({
       where: { applicationId },
       orderBy: { createdAt: "desc" },
-      select: { id: true, offerNumber: true, status: true, ctc: true },
+      select: {
+        id: true,
+        offerNumber: true,
+        status: true,
+        ctc: true,
+        negotiationStatus: true,
+        negotiationNote: true,
+        negotiationFollowUpAt: true,
+      },
     });
     selectedOffers = offers.map((o) => ({
       id: o.id,
       offerNumber: o.offerNumber,
       status: o.status,
       ctc: o.ctc == null ? null : Number(o.ctc),
+      negotiationStatus: o.negotiationStatus,
+      negotiationNote: o.negotiationNote,
+      negotiationFollowUpAt: o.negotiationFollowUpAt,
     }));
   }
 

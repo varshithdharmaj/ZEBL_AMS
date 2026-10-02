@@ -136,6 +136,12 @@ export type OfferRepository = {
     id: string,
     declinedAt: Date | null,
     reason: string | null,
+    tx?: RepositoryTx,
+    reasonCode?: string | null
+  ): Promise<void>;
+  updateNegotiation(
+    id: string,
+    data: { negotiationStatus: string | null; note: string | null; followUpAt: Date | null },
     tx?: RepositoryTx
   ): Promise<void>;
   withdrawOffer(id: string, reason: string | null, tx?: RepositoryTx): Promise<void>;

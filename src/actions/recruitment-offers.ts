@@ -11,6 +11,7 @@ import {
   sendOfferSchema,
   acceptOfferSchema,
   declineOfferSchema,
+  updateOfferNegotiationSchema,
   withdrawOfferSchema,
   createOfferRevisionSchema,
   attachOfferPdfSchema,
@@ -152,6 +153,34 @@ export async function declineOfferAction(
     revalidateOfferPaths(parsed.data.id);
 
     return { success: "Offer marked as declined.", offerId: parsed.data.id };
+  } catch (error) {
+    return mapUnknownToActionState(error);
+  }
+}
+
+export async function updateOfferNegotiationAction(
+  _prev: RecruitmentOfferActionState,
+  input: unknown
+): Promise<RecruitmentOfferActionState> {
+  try {
+    const parsed = safeParseWithSchema(updateOfferNegotiationSchema, input);
+    if (!parsed.ok) return { error: parsed.error };
+
+    const session = await requireRecruitmentAdminSession();
+    if (!isRecruitmentModuleEnabled()) {
+      return { error: "Recruitment module is disabled." };
+    }
+
+    const service = createOfferService();
+    await service.updateNegotiation(session, parsed.data);
+
+    revalidateOfferPaths(parsed.data.id);
+    revalidatePath("/admin/recruitment/pipeline");
+
+    return {
+      success: parsed.data.inNegotiation ? "Negotiation saved." : "Marked as sent.",
+      offerId: parsed.data.id,
+    };
   } catch (error) {
     return mapUnknownToActionState(error);
   }

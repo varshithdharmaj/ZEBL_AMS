@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { OfferStatus } from "@/generated/prisma/enums";
+import { OFFER_DECLINE_REASON_CODES } from "@/lib/recruitment/offer/negotiation";
 
 export const createOfferSchema = z.object({
   applicationId: z.string().trim().min(1, "Application ID is required."),
@@ -51,10 +52,25 @@ export const acceptOfferSchema = z.object({
   acceptedAt: z.string().trim().optional().nullable(),
 });
 
-export const declineOfferSchema = z.object({
+export const declineOfferSchema = z
+  .object({
+    id: z.string().trim().min(1, "Offer ID is required."),
+    declinedAt: z.string().trim().optional().nullable(),
+    reasonCode: z.enum(OFFER_DECLINE_REASON_CODES, { error: "Choose why the candidate declined." }),
+    /** Optional note; required when the reason is Other. */
+    reason: z.string().trim().max(1000).optional().nullable(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.reasonCode === "other" && !data.reason) {
+      ctx.addIssue({ code: "custom", path: ["reason"], message: "Add a note when the reason is Other." });
+    }
+  });
+
+export const updateOfferNegotiationSchema = z.object({
   id: z.string().trim().min(1, "Offer ID is required."),
-  declinedAt: z.string().trim().optional().nullable(),
-  reason: z.string().trim().optional().nullable(),
+  inNegotiation: z.boolean(),
+  note: z.string().trim().max(1000, "Note must be 1000 characters or fewer.").optional().nullable(),
+  followUpAt: z.string().trim().optional().nullable(),
 });
 
 export const withdrawOfferSchema = z.object({
