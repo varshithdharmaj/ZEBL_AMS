@@ -22,6 +22,7 @@ const FIELD_LABELS: { key: keyof StatutoryFields; label: string }[] = [
  * Masked statutory details with an optional "Show unmasked" toggle. Unmasked values are
  * fetched from the server on each click (which audit-logs the view) rather than sent with
  * the page. Shared by the HR employee profile and the employee's own profile.
+ * `headerActions` sit beside the toggle (HR's Edit button); `notice` shows above the values.
  */
 export function StatutoryDetailsCard({
   employeeId,
@@ -29,6 +30,8 @@ export function StatutoryDetailsCard({
   canUnmask,
   title = "Statutory details",
   description,
+  headerActions,
+  notice,
   footer,
 }: {
   employeeId: number;
@@ -36,6 +39,8 @@ export function StatutoryDetailsCard({
   canUnmask: boolean;
   title?: string;
   description?: string;
+  headerActions?: ReactNode;
+  notice?: ReactNode;
   footer?: ReactNode;
 }) {
   const [revealed, setRevealed] = useState<{ source: StatutoryFields; values: StatutoryFields } | null>(
@@ -68,14 +73,20 @@ export function StatutoryDetailsCard({
       title={title}
       description={description}
       action={
-        canUnmask ? (
-          <Button type="button" variant="outline" size="sm" onClick={toggleUnmasked} loading={revealing}>
-            {unmasked ? "Hide" : "Show"} unmasked
-          </Button>
+        canUnmask || headerActions ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {canUnmask && (
+              <Button type="button" variant="outline" size="sm" onClick={toggleUnmasked} loading={revealing}>
+                {unmasked ? "Hide" : "Show"} unmasked
+              </Button>
+            )}
+            {headerActions}
+          </div>
         ) : undefined
       }
     >
       <div className="space-y-4">
+        {notice}
         {error && <ErrorAlert message={error} />}
         <dl className="grid gap-4 sm:grid-cols-2">
           {FIELD_LABELS.map(({ key, label }) => (

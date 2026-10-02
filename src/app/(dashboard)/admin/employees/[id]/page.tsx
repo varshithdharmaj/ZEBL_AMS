@@ -66,7 +66,7 @@ export default async function EmployeeProfilePage({
   const maskedStatutory = plainStatutory ? maskStatutoryDetail(plainStatutory) : null;
 
   const canEditStatutory = canManageEmployee(session.role);
-  // Unmasked values are fetched (and audit-logged) only when "Show unmasked" is clicked.
+  // Unmasked values are fetched (and audit-logged) only when "Show unmasked" or Edit is clicked.
   const canUnmaskStatutory =
     statutoryDetail !== null &&
     canViewUnmaskedStatutoryDetails({
@@ -155,7 +155,6 @@ export default async function EmployeeProfilePage({
       statutory={{
         problem: statutoryProblem,
         masked: maskedStatutory,
-        editValues: canEditStatutory ? plainStatutory : null,
         canEdit: canEditStatutory,
         canUnmask: canUnmaskStatutory,
       }}

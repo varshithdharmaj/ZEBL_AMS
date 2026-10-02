@@ -147,7 +147,6 @@ export function EmployeeProfileShell({
   statutory: {
     problem: StatutoryDetailProblem | null;
     masked: StatutoryFields | null;
-    editValues: StatutoryFields | null;
     canEdit: boolean;
     canUnmask: boolean;
   };
@@ -229,7 +228,6 @@ export function EmployeeProfileShell({
             employeeId={employee.id}
             problem={statutory.problem}
             masked={statutory.masked}
-            editValues={statutory.editValues}
             canEdit={statutory.canEdit}
             canUnmask={statutory.canUnmask}
           />
