@@ -5,7 +5,9 @@ import { FeedbackForm } from "@/components/recruitment/interviews/feedback-form"
 import {
   FeedbackScorecardDetails,
   ScorecardSummary,
+  VerdictBadge,
 } from "@/components/recruitment/interviews/scorecard-summary";
+import { StarRatingDisplay, StarRatingInput } from "@/components/recruitment/interviews/star-rating";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
@@ -14,74 +16,86 @@ vi.mock("@/actions/recruitment-interviews", () => ({
   submitInterviewFeedbackAction: vi.fn(),
 }));
 
-const ratings = { communication: 4, process_knowledge: 3, smartness: 5, eagerness_to_learn: 4 };
+const ratings = { process_knowledge: 4, skills: 3, communication: 5, smartness: 2, eagerness_to_learn: 4 };
 
-describe("Interview scorecard UI", () => {
-  it("renders every criterion and the Y/N question on a blank form", () => {
-    const html = renderToStaticMarkup(<FeedbackForm interviewId="int-1" applicationId="app-1" />);
-    for (const label of [
-      "Communication",
-      "Knowledge on the Process",
-      "Smartness",
-      "Eagerness to Learn",
-      "Can be considered for the position?",
-    ]) {
-      expect(html).toContain(label);
-    }
-    expect(html.match(/Not rated/g)).toHaveLength(4);
-    expect(html).toContain("Submit Feedback Scorecard");
+describe("star rating", () => {
+  it("shows the word and colour for the chosen stars", () => {
+    const html = renderToStaticMarkup(<StarRatingInput label="Skills" value={5} onChange={() => {}} />);
+    expect(html).toContain("Excellent");
+    expect(html).toContain("fill-emerald-600");
+    expect(html).toContain('aria-valuenow="5"');
   });
 
-  it("prefills an existing scorecard, rounding legacy fractional scores", () => {
+  it("shows 'Not rated' with empty stars", () => {
+    const html = renderToStaticMarkup(<StarRatingInput label="Skills" value={undefined} onChange={() => {}} />);
+    expect(html).toContain("Not rated");
+    expect(html).not.toContain("fill-emerald-600");
+  });
+
+  it("colours low scores red", () => {
+    expect(renderToStaticMarkup(<StarRatingDisplay value={2} />)).toContain("fill-red-500");
+  });
+});
+
+describe("scorecard form", () => {
+  it("renders five star rows, four verdict buttons and remarks on a blank form", () => {
+    const html = renderToStaticMarkup(<FeedbackForm interviewId="int-1" applicationId="app-1" />);
+    for (const label of ["Knowledge", "Skills", "Communication", "Smartness", "Eagerness to learn"]) {
+      expect(html).toContain(label);
+    }
+    for (const v of ["Strong No", ">No<", ">Yes<", "Strong Yes"]) expect(html).toContain(v);
+    expect(html.match(/>Not rated</g)).toHaveLength(5);
+    expect(html).toContain("Remarks");
+    expect(html).toContain("+ Add comment to HR");
+    expect(html).toContain("0 of 5 rated");
+  });
+
+  it("prefills an older scorecard: maps the verdict and merges strengths/concerns", () => {
     const html = renderToStaticMarkup(
       <FeedbackForm
         interviewId="int-1"
         applicationId="app-1"
         initialValues={{
-          overallRating: 4,
-          recommendation: "hire",
-          consideredForPosition: true,
+          recommendation: "strong_hire",
           strengths: "Sharp",
-          concerns: null,
-          privateNotes: null,
-          ratingsJson: { ...ratings, communication: 3.7 },
+          concerns: "Slow typing",
+          privateNotes: "Wants WFH",
+          ratingsJson: { ...ratings, communication: 4.6 },
         }}
       />
     );
-    expect(html).not.toContain("Not rated");
-    expect(html).toContain("Excellent"); // smartness 5
-    expect(html).toContain("Assessment average: <span class=\"font-bold\">4</span>/5");
-    expect(html).toContain("Update Feedback Scorecard");
-    expect(html).toMatch(/aria-checked="true"[^>]*>Yes</);
+    expect(html).toContain("Ready to submit");
+    expect(html).toMatch(/aria-checked="true"[^>]*>Strong Yes</);
+    expect(html).toContain("Sharp\n\nSlow typing");
+    expect(html).toContain("Comment to HR");
+    expect(html).toContain("Update scorecard");
   });
+});
 
-  it("summarises the panel's scores and Y/N tally", () => {
+describe("scorecard views", () => {
+  it("summarises the panel's average stars and verdicts", () => {
     const html = renderToStaticMarkup(
       <ScorecardSummary
         feedback={[
-          { ratingsJson: ratings, consideredForPosition: true },
-          { ratingsJson: { ...ratings, communication: 2 }, consideredForPosition: false },
+          { ratingsJson: ratings, recommendation: "yes" },
+          { ratingsJson: { ...ratings, communication: 3 }, recommendation: "strong_no" },
         ]}
       />
     );
-    expect(html).toContain("Panel Assessment");
-    expect(html).toContain("1 Yes");
-    expect(html).toContain("1 No");
-    expect(html).toContain("3/5"); // communication avg of 4 and 2
+    expect(html).toContain("Panel assessment · 2 interviewers");
+    expect(html).toContain("1 × Yes");
+    expect(html).toContain("1 × Strong No");
+    expect(html).toContain(">4<"); // communication average (5 + 3) / 2
   });
 
-  it("shows nothing extra for legacy feedback without scorecard data", () => {
-    const legacy = { ratingsJson: { technical: 4 }, consideredForPosition: null };
+  it("shows nothing extra for old feedback without stars or a verdict", () => {
+    const legacy = { ratingsJson: { technical: 4 }, recommendation: null, consideredForPosition: null };
     expect(renderToStaticMarkup(<ScorecardSummary feedback={[legacy]} />)).toBe("");
     expect(renderToStaticMarkup(<FeedbackScorecardDetails feedback={legacy} />)).toBe("");
   });
 
-  it("shows an interviewer's scores and verdict", () => {
-    const html = renderToStaticMarkup(
-      <FeedbackScorecardDetails feedback={{ ratingsJson: ratings, consideredForPosition: false }} />
-    );
-    expect(html).toContain("Considered: No");
-    expect(html).toContain("Eagerness to Learn");
-    expect(html).toContain("Assessment average: 4/5");
+  it("labels verdicts, including old-style recommendations", () => {
+    expect(renderToStaticMarkup(<VerdictBadge recommendation="no_hire" />)).toContain(">No<");
+    expect(renderToStaticMarkup(<VerdictBadge consideredForPosition />)).toContain(">Yes<");
   });
 });

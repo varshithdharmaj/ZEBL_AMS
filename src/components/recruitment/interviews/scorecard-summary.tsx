@@ -1,139 +1,110 @@
-import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   SCORECARD_CRITERIA,
+  VERDICTS,
+  normalizeVerdict,
   readScorecardRatings,
   scorecardAverage,
-  scorecardScaleLabel,
+  type Verdict,
 } from "@/lib/recruitment/interview/scorecard";
+import { StarRatingDisplay } from "./star-rating";
 
 type ScorecardFeedback = {
   ratingsJson: unknown;
-  consideredForPosition: boolean | null;
+  recommendation?: string | null;
+  consideredForPosition?: boolean | null;
 };
 
-function ScoreBar({ value }: { value: number }) {
+const VERDICT_BADGE: Record<Verdict, string> = {
+  strong_no: "bg-red-600 text-white border-red-600",
+  no: "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/30",
+  yes: "bg-lime-50 text-lime-800 border-lime-300 dark:bg-lime-500/10 dark:text-lime-300 dark:border-lime-500/30",
+  strong_yes: "bg-emerald-600 text-white border-emerald-600",
+};
+
+/** Verdict chip; falls back to the old Yes/No flag for scorecards without a verdict. */
+export function VerdictBadge({
+  recommendation,
+  consideredForPosition,
+}: {
+  recommendation?: string | null;
+  consideredForPosition?: boolean | null;
+}) {
+  const verdict =
+    normalizeVerdict(recommendation) ??
+    (consideredForPosition == null ? null : consideredForPosition ? "yes" : "no");
+  if (!verdict) return null;
+  const label = VERDICTS.find((v) => v.value === verdict)?.label;
   return (
-    <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-      <div
-        className="h-full rounded-full bg-primary"
-        style={{ width: `${Math.min(100, (value / 5) * 100)}%` }}
-      />
-    </div>
+    <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-bold", VERDICT_BADGE[verdict])}>
+      {label}
+    </span>
   );
 }
 
-export function ConsideredBadge({ value }: { value: boolean | null }) {
-  if (value === null) return null;
-  return value ? (
-    <Badge
-      variant="outline"
-      className="gap-1 font-bold text-xs bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900"
-    >
-      <CheckCircle2 className="h-3.5 w-3.5" /> Considered: Yes
-    </Badge>
-  ) : (
-    <Badge
-      variant="outline"
-      className="gap-1 font-bold text-xs bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900"
-    >
-      <XCircle className="h-3.5 w-3.5" /> Considered: No
-    </Badge>
-  );
-}
-
-/** Panel-level roll-up: average per criterion and the Y/N verdict tally. */
+/** Panel-level roll-up: average stars per criterion and the verdict tally. */
 export function ScorecardSummary({ feedback }: { feedback: readonly ScorecardFeedback[] }) {
   const perFeedback = feedback.map((f) => readScorecardRatings(f.ratingsJson));
-  const criteriaAverages = SCORECARD_CRITERIA.map((c) => {
-    const values = perFeedback
-      .map((r) => r[c.id])
-      .filter((v): v is number => typeof v === "number");
+  const criteria = SCORECARD_CRITERIA.map((c) => {
+    const values = perFeedback.map((r) => r[c.id]).filter((v): v is number => typeof v === "number");
     return {
       ...c,
-      average: values.length
-        ? Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10
-        : null,
+      average: values.length ? Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10 : null,
     };
   });
-  const yes = feedback.filter((f) => f.consideredForPosition === true).length;
-  const no = feedback.filter((f) => f.consideredForPosition === false).length;
+  const tally = new Map<Verdict, number>();
+  for (const f of feedback) {
+    const v =
+      normalizeVerdict(f.recommendation) ??
+      (f.consideredForPosition == null ? null : f.consideredForPosition ? "yes" : "no");
+    if (v) tally.set(v, (tally.get(v) ?? 0) + 1);
+  }
 
-  if (criteriaAverages.every((c) => c.average === null) && yes + no === 0) return null;
+  if (criteria.every((c) => c.average === null) && tally.size === 0) return null;
 
   return (
-    <div className="rounded-xl border border-border/60 bg-muted/10 p-4 space-y-3">
+    <div className="space-y-3 rounded-xl border border-border/60 bg-muted/10 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
-          Panel Assessment
+        <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+          Panel assessment · {feedback.length} {feedback.length === 1 ? "interviewer" : "interviewers"}
         </h4>
-        {yes + no > 0 ? (
-          <div className="flex items-center gap-3 text-xs font-semibold">
-            <span className="text-emerald-700 dark:text-emerald-300">{yes} Yes</span>
-            <span className="text-red-700 dark:text-red-300">{no} No</span>
-            <span className="text-muted-foreground">for the position</span>
-          </div>
-        ) : null}
+        <div className="flex flex-wrap gap-1.5">
+          {VERDICTS.filter((v) => tally.get(v.value)).map((v) => (
+            <span key={v.value} className={cn("rounded-full border px-2 py-0.5 text-[11px] font-bold", VERDICT_BADGE[v.value])}>
+              {tally.get(v.value)} × {v.label}
+            </span>
+          ))}
+        </div>
       </div>
-      <div className="grid grid-cols-1 gap-x-6 gap-y-2.5 sm:grid-cols-2">
-        {criteriaAverages.map((c) => (
-          <div key={c.id} className="space-y-1">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-foreground">{c.label}</span>
-              <span className="font-bold text-muted-foreground">
-                {c.average !== null ? `${c.average}/5` : "—"}
-              </span>
-            </div>
-            <ScoreBar value={c.average ?? 0} />
+      <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2">
+        {criteria.map((c) => (
+          <div key={c.id} className="flex items-center justify-between gap-3 text-xs">
+            <dt className="font-semibold text-foreground">{c.label}</dt>
+            <dd>
+              <StarRatingDisplay value={c.average} showNumber />
+            </dd>
           </div>
         ))}
-      </div>
+      </dl>
     </div>
   );
 }
 
-/** One interviewer's criterion scores and verdict, shown inside their feedback card. */
+/** One interviewer's stars, shown inside their feedback card. */
 export function FeedbackScorecardDetails({ feedback }: { feedback: ScorecardFeedback }) {
   const ratings = readScorecardRatings(feedback.ratingsJson);
-  const average = scorecardAverage(ratings);
-  if (average === null && feedback.consideredForPosition === null) return null;
+  if (scorecardAverage(ratings) === null) return null;
 
   return (
-    <div className="mb-3 space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <ConsideredBadge value={feedback.consideredForPosition} />
-        {average !== null ? (
-          <span className="text-[11px] font-semibold text-muted-foreground">
-            Assessment average: {average}/5
-          </span>
-        ) : null}
-      </div>
-      {average !== null ? (
-        <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {SCORECARD_CRITERIA.map((c) => {
-            const value = ratings[c.id];
-            return (
-              <div key={c.id} className="rounded-lg border border-border/60 px-2.5 py-1.5">
-                <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground truncate">
-                  {c.label}
-                </dt>
-                <dd className="text-xs font-bold text-foreground">
-                  {value !== undefined ? (
-                    <>
-                      {Math.round(value * 10) / 10}/5{" "}
-                      <span className="font-medium text-muted-foreground">
-                        {scorecardScaleLabel(value)}
-                      </span>
-                    </>
-                  ) : (
-                    "—"
-                  )}
-                </dd>
-              </div>
-            );
-          })}
-        </dl>
-      ) : null}
-    </div>
+    <dl className="mb-3 grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
+      {SCORECARD_CRITERIA.map((c) => (
+        <div key={c.id} className="flex items-center justify-between gap-3 text-xs">
+          <dt className="text-muted-foreground">{c.label}</dt>
+          <dd>
+            <StarRatingDisplay value={ratings[c.id]} size="xs" />
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }

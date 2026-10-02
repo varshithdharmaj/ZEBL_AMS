@@ -26,9 +26,14 @@ import { createAfterCommitBuffer } from "@/lib/recruitment/shared/after-commit";
 import { RecruitmentEventFactory } from "@/lib/recruitment/events/factory";
 import { RecruitmentTimelineService } from "@/lib/recruitment/services/timeline-service";
 import {
+  isPositiveVerdict,
+  scorecardAverage,
+} from "@/lib/recruitment/interview/scorecard";
+import {
   createInterviewSchema,
   updateInterviewSchema,
   submitFeedbackSchema,
+  type SubmitFeedbackInput,
 } from "@/lib/validation/schemas/recruitment/interviews";
 
 export function createInterviewService(
@@ -329,19 +334,7 @@ export function createInterviewService(
       return { applicationId: interview.applicationId };
     },
 
-    async submitFeedback(
-      session: SessionUser,
-      input: {
-        interviewId: string;
-        overallRating: number;
-        recommendation: string;
-        consideredForPosition: boolean;
-        strengths: string;
-        concerns?: string;
-        privateNotes?: string;
-        ratingsJson: Record<string, number>;
-      }
-    ): Promise<{ id: string }> {
+    async submitFeedback(session: SessionUser, input: SubmitFeedbackInput): Promise<{ id: string }> {
       RecruitmentPermissionService.requireModuleEnabled();
 
       const parsed = submitFeedbackSchema.parse(input);
@@ -376,7 +369,16 @@ export function createInterviewService(
         const { id } = await repository.submitFeedback(
           parsed.interviewId,
           employee.id,
-          parsed,
+          {
+            ratingsJson: parsed.ratingsJson,
+            // Overall score and the Y/N column are derived so they can't disagree with the stars/verdict.
+            overallRating: scorecardAverage(parsed.ratingsJson),
+            recommendation: parsed.verdict,
+            consideredForPosition: isPositiveVerdict(parsed.verdict),
+            strengths: parsed.remarks || null,
+            concerns: null,
+            privateNotes: parsed.commentToHr || null,
+          },
           tx
         );
 
@@ -394,8 +396,8 @@ export function createInterviewService(
             metadata: {
               interviewId: parsed.interviewId,
               feedbackId: id,
-              rating: parsed.overallRating,
-              consideredForPosition: parsed.consideredForPosition,
+              verdict: parsed.verdict,
+              rating: scorecardAverage(parsed.ratingsJson),
             },
           },
           tx

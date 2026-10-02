@@ -25,7 +25,8 @@ import {
 } from "lucide-react";
 import type { InterviewDetail } from "@/lib/recruitment/repositories/interview-repository";
 import { FeedbackForm } from "./feedback-form";
-import { ScorecardSummary, FeedbackScorecardDetails } from "./scorecard-summary";
+import { ScorecardSummary, FeedbackScorecardDetails, VerdictBadge } from "./scorecard-summary";
+import { StarRatingDisplay } from "./star-rating";
 import { buildRecruitmentEntityHref } from "@/lib/recruitment/navigation/return-to";
 
 interface InterviewDetailViewProps {
@@ -408,35 +409,40 @@ export function InterviewDetailView({
                             : "—"}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="font-bold text-xs">
-                          Rating: {feed.overallRating}/5
-                        </Badge>
-                        <Badge variant="secondary" className="font-bold text-xs capitalize">
-                          {feed.recommendation?.replaceAll("_", " ")}
-                        </Badge>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <StarRatingDisplay value={feed.overallRating} showNumber />
+                        <VerdictBadge
+                          recommendation={feed.recommendation}
+                          consideredForPosition={feed.consideredForPosition}
+                        />
                       </div>
                     </div>
                     <FeedbackScorecardDetails feedback={feed} />
-                    <div className="grid gap-3 sm:grid-cols-2 text-xs">
-                      <div>
-                        <span className="font-bold text-muted-foreground block text-[10px] uppercase tracking-wider mb-1">
-                          Strengths
-                        </span>
-                        <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                          {feed.strengths}
-                        </p>
-                      </div>
-                      {feed.concerns && (
+                    <div className="space-y-2 text-xs">
+                      {feed.strengths ? (
                         <div>
-                          <span className="font-bold text-muted-foreground block text-[10px] uppercase tracking-wider mb-1">
+                          <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                            {feed.concerns ? "Strengths" : "Remarks"}
+                          </span>
+                          <p className="whitespace-pre-wrap leading-relaxed text-muted-foreground">{feed.strengths}</p>
+                        </div>
+                      ) : null}
+                      {feed.concerns ? (
+                        <div>
+                          <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                             Concerns
                           </span>
-                          <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                            {feed.concerns}
-                          </p>
+                          <p className="whitespace-pre-wrap leading-relaxed text-muted-foreground">{feed.concerns}</p>
                         </div>
-                      )}
+                      ) : null}
+                      {feed.privateNotes ? (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 dark:border-amber-500/30 dark:bg-amber-500/10">
+                          <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">
+                            Comment to HR · only HR sees this
+                          </span>
+                          <p className="whitespace-pre-wrap leading-relaxed text-amber-900 dark:text-amber-200">{feed.privateNotes}</p>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ))}
