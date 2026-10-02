@@ -80,6 +80,15 @@ export function validateApplicationConfig(opts?: {
     });
   }
 
+  if (!/^[0-9a-fA-F]{64}$/.test(getEnv("EMPLOYEE_FIELD_ENCRYPTION_KEY") ?? "")) {
+    issues.push({
+      field: "EMPLOYEE_FIELD_ENCRYPTION_KEY",
+      level: "warning",
+      message:
+        "Missing or not 64 hex characters; employee statutory details (PAN, Aadhaar, bank) can't be viewed or saved.",
+    });
+  }
+
   if (getEnv("TEAMS_WEBHOOK_URL") && !getEnv("TEAMS_WEBHOOK_URL")?.startsWith("http")) {
     issues.push({
       field: "TEAMS_WEBHOOK_URL",

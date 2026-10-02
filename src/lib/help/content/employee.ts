@@ -66,7 +66,7 @@ export const employeeHelpChapters: HelpChapter[] = [
     blocks: [
       {
         type: "paragraph",
-        text: "Your profile page (`/employee/profile`) shows your identity — name and email — as held by HR, plus your profile photo.",
+        text: "Your profile page (`/employee/profile`) shows your identity — name and email — as held by HR, your profile photo, your bank and statutory details, and the documents HR keeps on file for you.",
       },
       { type: "sectionHeading", text: "Updating your photo" },
       {
@@ -82,6 +82,17 @@ export const employeeHelpChapters: HelpChapter[] = [
         kind: "note",
         label: "NOTE",
         text: "Your name and email are managed by HR. If either is wrong, raise a ticket from My Tickets (Chapter 6) rather than trying to edit it yourself.",
+      },
+      { type: "sectionHeading", text: "Bank details and documents" },
+      {
+        type: "paragraph",
+        text: "PAN, Aadhaar and bank details are masked. Select Show unmasked to see the full values. Under My documents you can download anything HR keeps on file for you, such as your offer letter.",
+      },
+      {
+        type: "callout",
+        kind: "note",
+        label: "NOTE",
+        text: "If any of these details are wrong, select Request a change to open a pre-filled ticket for HR. Don't type full account or ID numbers into the ticket. You'll also get an email whenever your salary bank account is changed; if you didn't ask for that change, contact HR straight away.",
       },
     ],
   },

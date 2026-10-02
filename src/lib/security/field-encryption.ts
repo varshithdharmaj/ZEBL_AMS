@@ -1,11 +1,18 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
-import { requireServerSecret } from "@/lib/config/env";
+import { getEnv, requireServerSecret } from "@/lib/config/env";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;
 const KEY_LENGTH = 32;
+const KEY_HEX_PATTERN = new RegExp(`^[0-9a-fA-F]{${KEY_LENGTH * 2}}$`);
 
 let cachedKey: Buffer | null = null;
+
+/** True when EMPLOYEE_FIELD_ENCRYPTION_KEY is set to a valid 64-hex-char key. Never throws. */
+export function isFieldEncryptionConfigured(): boolean {
+  const raw = getEnv("EMPLOYEE_FIELD_ENCRYPTION_KEY");
+  return raw !== undefined && KEY_HEX_PATTERN.test(raw);
+}
 
 function getKey(): Buffer {
   if (cachedKey) return cachedKey;
