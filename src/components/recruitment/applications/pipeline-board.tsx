@@ -20,7 +20,11 @@ import {
   useCardDensity,
   type CardDensity,
 } from "./candidate-card-density-toggle";
-import { SYSTEM_STAGE_VALUES } from "@/lib/recruitment/shared/pipeline-stage-groups";
+import {
+  CUSTOM_STAGE_SLOTS,
+  SYSTEM_STAGE_VALUES,
+  pipelineStageLabel,
+} from "@/lib/recruitment/shared/pipeline-stage-groups";
 import { Clock, Loader2, Plus } from "lucide-react";
 
 interface BoardColumn {
@@ -59,6 +63,7 @@ const COLUMNS: BoardColumn[] = [
       RecruitmentPipelineStage.team_lead_round,
       RecruitmentPipelineStage.manager_round,
       RecruitmentPipelineStage.client_round,
+      ...CUSTOM_STAGE_SLOTS,
     ],
     defaultStage: RecruitmentPipelineStage.technical_round,
     color: "border-t-indigo-500",
@@ -106,12 +111,15 @@ function CandidateCard({
   app,
   employeeMap,
   density = "comfortable",
+  stageLabel = pipelineStageLabel(app.currentStage),
   onDragStart,
   onClick,
 }: {
   app: PipelineDrawerApplication;
   employeeMap: Map<string, string>;
   density?: CardDensity;
+  /** The job's own name for the candidate's stage (the column title on a per-job board). */
+  stageLabel?: string;
   onDragStart: (e: React.DragEvent) => void;
   onClick: () => void;
 }) {
@@ -138,7 +146,7 @@ function CandidateCard({
         </span>
         <span className="text-[10px] font-medium text-muted-foreground">
           {new Date(app.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })} ·{" "}
-          {String(app.currentStage).replace(/_/g, " ").toUpperCase()}
+          {stageLabel.toUpperCase()}
         </span>
       </button>
     );
@@ -178,7 +186,7 @@ function CandidateCard({
           {new Date(app.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
         </span>
         <span className="rounded border border-border/40 bg-muted/60 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider">
-          {String(app.currentStage).replace(/_/g, " ")}
+          {stageLabel}
         </span>
       </div>
     </button>
@@ -568,6 +576,7 @@ function DynamicBoard({
                       app={app}
                       employeeMap={employeeMap}
                       density={density}
+                      stageLabel={col.title}
                       onDragStart={(e) => handleDragStart(e, app.id)}
                       onClick={() => setApplicationId(app.id)}
                     />

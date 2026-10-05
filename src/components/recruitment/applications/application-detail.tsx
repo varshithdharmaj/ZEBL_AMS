@@ -25,6 +25,7 @@ import {
   reopenApplicationAction,
 } from "@/actions/recruitment-applications";
 import type { ApplicationDetail } from "@/lib/recruitment/repositories/application-repository";
+import { pipelineStageLabel } from "@/lib/recruitment/shared/pipeline-stage-groups";
 import type { InterviewListItem } from "@/lib/recruitment/repositories/interview-repository";
 import type { OfferByApplication } from "@/lib/recruitment/repositories/offer-repository";
 import {
@@ -408,8 +409,8 @@ export function ApplicationDetailView({
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <h4 className="font-bold text-foreground text-sm">
-                          {h.fromStage ? `${h.fromStage.replace(/_/g, " ").toUpperCase()} → ` : ""}
-                          <span className="text-primary">{h.toStage.replace(/_/g, " ").toUpperCase()}</span>
+                          {h.fromStage ? `${pipelineStageLabel(h.fromStage).toUpperCase()} → ` : ""}
+                          <span className="text-primary">{pipelineStageLabel(h.toStage).toUpperCase()}</span>
                         </h4>
                         <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1 font-medium">
                           <Clock className="h-3.5 w-3.5" />
@@ -459,7 +460,7 @@ export function ApplicationDetailView({
                   Current Stage
                 </Label>
                 <span className="inline-flex items-center rounded-full bg-primary/5 border border-primary/10 px-3 py-1 text-xs font-bold text-primary">
-                  {application.currentStage.replace(/_/g, " ").toUpperCase()}
+                  {(application.currentStageRef?.label?.trim() || pipelineStageLabel(application.currentStage)).toUpperCase()}
                 </span>
               </div>
 

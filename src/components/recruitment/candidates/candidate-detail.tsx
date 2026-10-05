@@ -93,6 +93,7 @@ type CandidateApplicationRow = {
   id: string;
   status: string;
   currentStage: string;
+  currentStageLabel?: string;
   jobOpeningId?: string;
   jobTitle: string;
   createdAt: Date | string;
@@ -442,7 +443,8 @@ export function CandidateDetailView({
                     <div>
                       <h4 className="text-xs font-bold text-foreground">{app.jobTitle}</h4>
                       <p className="mt-1 text-[11px] font-medium text-muted-foreground">
-                        {app.currentStage.replace(/_/g, " ")} · {app.status} · {formatDate(app.createdAt)}
+                        {app.currentStageLabel ?? app.currentStage.replace(/_/g, " ")} · {app.status} ·{" "}
+                        {formatDate(app.createdAt)}
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -549,7 +551,7 @@ export function CandidateDetailView({
                         <div>
                           <h4 className="text-xs font-bold text-foreground">{app.jobTitle}</h4>
                           <p className="mt-1 text-[11px] font-medium text-muted-foreground">
-                            {formatRecruitmentEnumLabel(app.currentStage)} ·{" "}
+                            {app.currentStageLabel ?? formatRecruitmentEnumLabel(app.currentStage)} ·{" "}
                             {formatRecruitmentEnumLabel(app.status)}
                           </p>
                         </div>

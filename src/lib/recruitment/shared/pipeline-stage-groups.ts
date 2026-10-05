@@ -1,6 +1,39 @@
 import { RecruitmentPipelineStage, StageCategory } from "@/generated/prisma/enums";
 
 /**
+ * Spare enum values that only exist so "Add Stage" always has a free slot —
+ * every job is seeded with all the named stages, so without these a new
+ * column had nothing left to claim. They have no meaning of their own: the
+ * column's name/category come from its JobOpeningStage row. Where the code
+ * only has the enum value (board filters, funnel rollups), they behave like
+ * interview rounds, same as the named round slots custom columns used to
+ * claim.
+ */
+export const CUSTOM_STAGE_SLOTS = [
+  RecruitmentPipelineStage.custom_1,
+  RecruitmentPipelineStage.custom_2,
+  RecruitmentPipelineStage.custom_3,
+  RecruitmentPipelineStage.custom_4,
+  RecruitmentPipelineStage.custom_5,
+  RecruitmentPipelineStage.custom_6,
+  RecruitmentPipelineStage.custom_7,
+  RecruitmentPipelineStage.custom_8,
+  RecruitmentPipelineStage.custom_9,
+  RecruitmentPipelineStage.custom_10,
+  RecruitmentPipelineStage.custom_11,
+  RecruitmentPipelineStage.custom_12,
+] as const;
+
+type CustomStageSlot = (typeof CUSTOM_STAGE_SLOTS)[number];
+
+function customSlotRecord<T>(value: (index: number) => T): Record<CustomStageSlot, T> {
+  return Object.fromEntries(CUSTOM_STAGE_SLOTS.map((stage, i) => [stage, value(i)])) as Record<
+    CustomStageSlot,
+    T
+  >;
+}
+
+/**
  * Single source of truth for which pipeline stages count as "screening" vs.
  * "interview" for recruiter-facing rollups (job list metrics, hiring funnel).
  */
@@ -16,6 +49,7 @@ export const INTERVIEW_STAGES: readonly RecruitmentPipelineStage[] = [
   RecruitmentPipelineStage.manager_round,
   RecruitmentPipelineStage.client_round,
   RecruitmentPipelineStage.reference_check,
+  ...CUSTOM_STAGE_SLOTS,
 ];
 
 /**
@@ -44,7 +78,13 @@ export const PIPELINE_STAGE_LABELS: Record<RecruitmentPipelineStage, string> = {
   [RecruitmentPipelineStage.rejected]: "Rejected",
   [RecruitmentPipelineStage.on_hold]: "On Hold",
   [RecruitmentPipelineStage.withdrawn]: "Withdrawn",
+  ...customSlotRecord((i) => `Custom Stage ${i + 1}`),
 };
+
+/** Display name for a stage value when the job's own column name isn't at hand. */
+export function pipelineStageLabel(stage: RecruitmentPipelineStage | string): string {
+  return PIPELINE_STAGE_LABELS[stage as RecruitmentPipelineStage] ?? String(stage).replace(/_/g, " ");
+}
 
 /**
  * Single source of truth mapping every RecruitmentPipelineStage to its
@@ -76,6 +116,7 @@ export const PIPELINE_STAGE_CATEGORY: Record<RecruitmentPipelineStage, StageCate
   [RecruitmentPipelineStage.rejected]: StageCategory.REJECTED,
   [RecruitmentPipelineStage.on_hold]: StageCategory.REJECTED,
   [RecruitmentPipelineStage.withdrawn]: StageCategory.REJECTED,
+  ...customSlotRecord(() => StageCategory.INTERVIEW),
 };
 
 /**
@@ -134,7 +175,9 @@ export const SYSTEM_STAGE_VALUES: ReadonlySet<RecruitmentPipelineStage> = new Se
  * stage — excludes SYSTEM_STAGE_VALUES (reserved, see above) and the
  * terminal status stages (rejected/on_hold/withdrawn), which are set only by
  * rejectApplication/withdrawApplication/reopenApplication, never by a
- * manual drag or an inserted custom column.
+ * manual drag or an inserted custom column. The named values are only free
+ * on jobs whose template left them out; CUSTOM_STAGE_SLOTS are what
+ * normally get used.
  */
 export const INSERTABLE_STAGE_POOL: readonly RecruitmentPipelineStage[] = [
   RecruitmentPipelineStage.screening,
@@ -145,6 +188,7 @@ export const INSERTABLE_STAGE_POOL: readonly RecruitmentPipelineStage[] = [
   RecruitmentPipelineStage.manager_round,
   RecruitmentPipelineStage.client_round,
   RecruitmentPipelineStage.reference_check,
+  ...CUSTOM_STAGE_SLOTS,
 ];
 
 /** Display labels for the "Add Stage" category dropdown. */

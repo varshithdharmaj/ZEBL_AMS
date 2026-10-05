@@ -216,6 +216,7 @@ export default async function RecruitmentPipelinePage({
     ? {
         id: String(selectedDetail.id),
         currentStage: selectedDetail.currentStage as RecruitmentPipelineStage,
+        currentStageLabel: selectedDetail.currentStageRef?.label ?? null,
         status: String(selectedDetail.status),
         priority: (selectedDetail as { priority?: string | null }).priority ?? null,
         createdAt: selectedDetail.createdAt as Date | string,
