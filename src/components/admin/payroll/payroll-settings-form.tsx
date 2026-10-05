@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
 import {
   updatePayrollSettingsAction,
   type PayrollActionState,
@@ -8,7 +9,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SectionCard } from "@/components/ui/section-card";
-import { Textarea } from "@/components/ui/textarea";
 import type { PayrollSettingsSnapshot } from "@/lib/payroll/payroll-types";
 
 const initial: PayrollActionState = {};
@@ -72,6 +72,13 @@ export function PayrollSettingsForm({ settings }: { settings: PayrollSettingsSna
               defaultValue={settings.requiredOfficeMinutes}
               className="mt-1"
             />
+            <span className="mt-1 block text-xs font-normal text-muted-foreground">
+              For employees without a shift. Employees on a shift use its start–end time from{" "}
+              <Link href="/admin/shift-settings" className="font-medium text-primary hover:underline">
+                Shift Settings
+              </Link>
+              .
+            </span>
           </label>
         </div>
       </SectionCard>
@@ -109,18 +116,6 @@ export function PayrollSettingsForm({ settings }: { settings: PayrollSettingsSna
             />
           </label>
         </div>
-      </SectionCard>
-
-      <SectionCard
-        title="Per-shift rules (optional)"
-        description='JSON map by Employee.shift label, e.g. {"Night Shift":{"requiredOfficeMinutes":600}}'
-      >
-        <Textarea
-          name="shiftRulesJson"
-          rows={8}
-          className="font-mono text-xs"
-          defaultValue={JSON.stringify(settings.shiftRules, null, 2)}
-        />
       </SectionCard>
 
       <Button type="submit" loading={pending}>

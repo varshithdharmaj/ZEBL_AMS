@@ -32,20 +32,12 @@ export async function updatePayrollSettingsAction(
     otThresholdMinutes: formData.get("otThresholdMinutes"),
     halfDayThresholdMinutes: formData.get("halfDayThresholdMinutes"),
     graceMinutes: formData.get("graceMinutes"),
-    shiftRulesJson: formData.get("shiftRulesJson") ?? "{}",
   });
-
-  const shiftRulesJson = parsed.shiftRulesJson?.trim() || "{}";
-  try {
-    JSON.parse(shiftRulesJson);
-  } catch {
-    return { error: "Shift rules must be valid JSON." };
-  }
 
   await prisma.payrollSettings.upsert({
     where: { id: "default" },
-    create: { id: "default", ...parsed, shiftRulesJson },
-    update: { ...parsed, shiftRulesJson },
+    create: { id: "default", ...parsed },
+    update: parsed,
   });
 
   await writeAuditLog({

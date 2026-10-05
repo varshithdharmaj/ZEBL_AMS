@@ -38,6 +38,15 @@ function toMinutesOfDay(time: string): number | null {
 
 const MINUTES_PER_DAY = 24 * 60;
 
+/** Scheduled length of a shift in minutes, wrapping through midnight (20:00 -> 05:00 = 540).
+ *  Null when a time can't be parsed or start equals end. */
+export function shiftSpanMinutes(shift: Pick<ShiftSummary, "startTime" | "endTime">): number | null {
+  const start = toMinutesOfDay(shift.startTime);
+  const end = toMinutesOfDay(shift.endTime);
+  if (start == null || end == null) return null;
+  return (end - start + MINUTES_PER_DAY) % MINUTES_PER_DAY || null;
+}
+
 /** A shift whose scheduled end is numerically before its start crosses midnight
  *  (e.g. Night Shift 20:00 -> 05:00). Equal start/end is not treated as crossing. */
 export function shiftCrossesMidnight(shift: Pick<ShiftSummary, "startTime" | "endTime">): boolean {

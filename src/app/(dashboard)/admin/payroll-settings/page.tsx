@@ -9,7 +9,7 @@ export default async function PayrollSettingsPage() {
     <div className="space-y-8">
       <WorkspacePageHeader
         title="Payroll settings"
-        description="Configure payroll cycle, required office time, grace, OT thresholds, and per-shift overrides."
+        description="Configure payroll cycle, required office time, grace, and OT thresholds."
       />
       <PayrollSettingsForm settings={settings} />
     </div>

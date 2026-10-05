@@ -6,17 +6,19 @@ import {
   getLateArrivalPolicyOverview,
   getLateArrivalPolicySettings,
 } from "@/lib/attendance/late-arrival-policy-settings";
+import { UnrecognisedShiftLabels } from "@/components/admin/unrecognised-shift-labels";
 import { canManageAttendanceScheduling } from "@/lib/permissions";
-import { getShifts } from "@/lib/shifts";
+import { getShifts, getUnrecognisedShiftLabels } from "@/lib/shifts";
 import { formatDate, startOfDay } from "@/lib/utils";
 
 export default async function ShiftSettingsPage() {
   const session = await getSession();
   const canEdit = session ? canManageAttendanceScheduling(session.role) : false;
-  const [shifts, lateArrivalSettings, lateArrivalOverview] = await Promise.all([
+  const [shifts, lateArrivalSettings, lateArrivalOverview, unrecognisedLabels] = await Promise.all([
     getShifts(),
     getLateArrivalPolicySettings(),
     getLateArrivalPolicyOverview(),
+    canEdit ? getUnrecognisedShiftLabels() : [],
   ]);
 
   // The policy evaluates attendance strictly after the day it was switched on.
@@ -33,6 +35,7 @@ export default async function ShiftSettingsPage() {
         title="Shift management"
         description="Define shift timings so HR can assign employees to the right shift."
       />
+      {canEdit && <UnrecognisedShiftLabels labels={unrecognisedLabels} shifts={shifts} />}
       <ShiftManagement shifts={shifts} canEdit={canEdit} />
       <LateArrivalPolicySettings
         enabled={lateArrivalSettings.enabled}

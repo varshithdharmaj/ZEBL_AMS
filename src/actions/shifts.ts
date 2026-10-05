@@ -11,6 +11,7 @@ import {
   shiftToggleActiveSchema,
 } from "@/lib/validation/schemas/shift";
 import { isUniqueConstraintError } from "@/lib/db/prisma-errors";
+import { getRequestSecurityContext } from "@/lib/security/request-context";
 
 export type ShiftActionState = {
   error?: string;
@@ -148,4 +149,64 @@ export async function toggleShiftActiveAction(
 
   revalidatePath("/admin/shift-settings");
   return { success: isActive ? "Shift activated." : "Shift deactivated." };
+}
+
+/** Moves every employee carrying an unrecognised Employee.shift label onto a real shift. */
+export async function reassignShiftLabelAction(
+  _prev: ShiftActionState,
+  formData: FormData
+): Promise<ShiftActionState> {
+  let session;
+  try {
+    session = await requireSuperAdminSession();
+  } catch {
+    return { error: "Only Super Admin may manage shifts." };
+  }
+
+  const label = String(formData.get("label") ?? "");
+  const shiftId = Number(formData.get("shiftId"));
+  if (!label.trim() || !Number.isInteger(shiftId) || shiftId <= 0) {
+    return { error: "Choose a shift to move these employees to." };
+  }
+
+  const target = await prisma.shift.findUnique({ where: { id: shiftId } });
+  if (!target?.isActive) return { error: "That shift no longer exists or is inactive." };
+
+  const employees = await prisma.employee.findMany({
+    where: { shift: label },
+    select: { id: true, employeeCode: true },
+  });
+  if (employees.length === 0) return { error: `No employees are on "${label}" any more.` };
+
+  const requestContext = await getRequestSecurityContext();
+  await prisma.$transaction(async (tx) => {
+    await tx.employee.updateMany({
+      where: { id: { in: employees.map((employee) => employee.id) } },
+      data: { shift: target.name },
+    });
+    for (const employee of employees) {
+      await writeAuditLog(
+        {
+          entityType: "employee",
+          entityId: String(employee.id),
+          action: AUDIT_ACTIONS.EMPLOYEE_UPDATED,
+          actorUserId: session.id,
+          actorEmail: session.email,
+          employeeId: employee.id,
+          module: "employees",
+          description: `Shift changed from "${label}" to "${target.name}" (bulk shift clean-up).`,
+          oldValue: { shift: label },
+          newValue: { shift: target.name },
+          requestContext,
+          metadata: { operation: "shift_label_reassign", employeeCode: employee.employeeCode },
+        },
+        tx
+      );
+    }
+  });
+
+  revalidatePath("/admin/shift-settings");
+  revalidatePath("/admin/employees");
+  const count = `${employees.length} employee${employees.length === 1 ? "" : "s"}`;
+  return { success: `Moved ${count} from "${label}" to ${target.name}.` };
 }

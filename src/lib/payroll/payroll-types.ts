@@ -1,11 +1,9 @@
 import type { PayrollHrDecision } from "@/generated/prisma/client";
 
+/** What an employee's assigned shift (Shift Settings) overrides in the org-wide defaults. */
 export type PayrollShiftRule = {
+  /** The shift's start→end span. */
   requiredOfficeMinutes?: number;
-  requiredWorkMinutes?: number;
-  breakMinutes?: number;
-  graceMinutes?: number;
-  otThresholdMinutes?: number;
 };
 
 export type PayrollSettingsSnapshot = {
@@ -16,6 +14,7 @@ export type PayrollSettingsSnapshot = {
   otThresholdMinutes: number;
   halfDayThresholdMinutes: number;
   graceMinutes: number;
+  /** Keyed by active Shift name, which is what Employee.shift stores. */
   shiftRules: Record<string, PayrollShiftRule>;
 };
 
@@ -45,9 +44,9 @@ export function resolveShiftPayrollRules(
 
   return {
     requiredOfficeMinutes: override?.requiredOfficeMinutes ?? settings.requiredOfficeMinutes,
-    requiredWorkMinutes: override?.requiredWorkMinutes ?? settings.requiredWorkMinutes,
-    breakMinutes: override?.breakMinutes ?? settings.breakMinutes,
-    graceMinutes: override?.graceMinutes ?? settings.graceMinutes,
-    otThresholdMinutes: override?.otThresholdMinutes ?? settings.otThresholdMinutes,
+    requiredWorkMinutes: settings.requiredWorkMinutes,
+    breakMinutes: settings.breakMinutes,
+    graceMinutes: settings.graceMinutes,
+    otThresholdMinutes: settings.otThresholdMinutes,
   };
 }
