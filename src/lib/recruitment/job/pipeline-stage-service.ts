@@ -88,7 +88,7 @@ export function createPipelineStageService(repository: JobRepository = prismaJob
       if (!availableStage) {
         throw new RecruitmentDomainError(
           "REC_PRECONDITION",
-          "This job opening has reached the maximum number of pipeline stages."
+          "This job opening has reached the maximum number of pipeline stages. Rename a stage you no longer use instead."
         );
       }
 

@@ -90,6 +90,10 @@ const listInclude = {
   assignedManager: { select: { id: true, name: true } },
   createdBy: { select: { id: true, email: true } },
   assessmentUpdatedBy: { select: { id: true, email: true } },
+  /** The job's own name for the stage — custom columns sit on generic `custom_N` enum values. */
+  currentStageRef: {
+    select: { id: true, stage: true, category: true, label: true, sortOrder: true },
+  },
 } as const;
 
 function decimalToNumber(

@@ -3,7 +3,8 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ApplicationStatus, RecruitmentPipelineStage } from "@/generated/prisma/enums";
+import { ApplicationStatus } from "@/generated/prisma/enums";
+import { DEFAULT_STAGE_SEED_ORDER } from "@/lib/recruitment/shared/pipeline-stage-groups";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -199,7 +200,7 @@ export function ApplicationFilters({
           <SelectContent>
             <SelectItem value="all">All Stages</SelectItem>
             <SelectItem value="interviewing">INTERVIEWING (any round)</SelectItem>
-            {Object.values(RecruitmentPipelineStage).map((s) => (
+            {DEFAULT_STAGE_SEED_ORDER.map((s) => (
               <SelectItem key={s} value={s}>
                 {s.replace("_", " ").toUpperCase()}
               </SelectItem>

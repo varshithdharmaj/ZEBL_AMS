@@ -15,6 +15,7 @@ import type { HiringDecisionRecord } from "@/lib/recruitment/repositories/decisi
 import { canCreateOfferFromDecisionState } from "@/lib/recruitment/decision/eligibility";
 import { CandidateTagsInput, type CandidateTagView } from "@/components/recruitment/applications/candidate-tags-input";
 import { Clock, ExternalLink } from "lucide-react";
+import { pipelineStageLabel } from "@/lib/recruitment/shared/pipeline-stage-groups";
 import {
   buildRecruitmentEntityHref,
   currentPathWithSearch,
@@ -38,6 +39,8 @@ export const STAGE_OPTIONS: RecruitmentPipelineStage[] = [
 export type PipelineDrawerApplication = {
   id: string;
   currentStage: RecruitmentPipelineStage | string;
+  /** The job's own name for `currentStage`, when known. */
+  currentStageLabel?: string | null;
   status: string;
   priority?: string | null;
   createdAt: Date | string;
@@ -113,6 +116,8 @@ export function ApplicationPipelineDrawer({
     );
   }
 
+  const currentStageName =
+    application.currentStageLabel?.trim() || pipelineStageLabel(application.currentStage);
   const acceptedOffer = application.offers?.find((o) => o.status === OfferStatus.accepted);
   const canCreateOffer = canCreateOfferFromDecisionState(
     application.requireDecisionForOffer ?? true,
@@ -133,7 +138,7 @@ export function ApplicationPipelineDrawer({
       open={open}
       onClose={onClose}
       title={application.candidate.fullName}
-      description={`${application.jobOpening.title} · ${String(application.currentStage).replace(/_/g, " ")}`}
+      description={`${application.jobOpening.title} · ${currentStageName}`}
     >
       <div className="space-y-6">
         {error && <ErrorAlert message={error} />}
@@ -242,6 +247,9 @@ export function ApplicationPipelineDrawer({
               value={String(application.currentStage)}
               onChange={(e) => moveStage(e.target.value as RecruitmentPipelineStage)}
             >
+              {STAGE_OPTIONS.includes(application.currentStage as RecruitmentPipelineStage) ? null : (
+                <option value={String(application.currentStage)}>{currentStageName}</option>
+              )}
               {STAGE_OPTIONS.map((stage) => (
                 <option key={stage} value={stage}>
                   {stage.replace(/_/g, " ")}

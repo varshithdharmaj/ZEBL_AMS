@@ -15,6 +15,7 @@ import {
   restoreApplicationAction,
 } from "@/actions/recruitment-applications";
 import type { ApplicationDetail } from "@/lib/recruitment/repositories/application-repository";
+import { pipelineStageLabel } from "@/lib/recruitment/shared/pipeline-stage-groups";
 import {
   User,
   Briefcase,
@@ -97,6 +98,7 @@ export type ApplicationTableItem = Pick<
   | "deletedAt"
   | "status"
   | "currentStage"
+  | "currentStageRef"
   | "createdAt"
   | "candidate"
   | "jobOpening"
@@ -313,7 +315,7 @@ export function ApplicationTable({
                 </DataTableCell>
                 <DataTableCell>
                   <span className="inline-flex items-center rounded-full bg-primary/5 border border-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-                    {app.currentStage.replace(/_/g, " ").toUpperCase()}
+                    {(app.currentStageRef?.label?.trim() || pipelineStageLabel(app.currentStage)).toUpperCase()}
                   </span>
                 </DataTableCell>
                 <DataTableCell className="text-sm font-medium text-foreground">
