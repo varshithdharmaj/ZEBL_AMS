@@ -653,15 +653,20 @@ export const prismaJobRepository: JobRepository = {
   async insertJobStage(jobId, input: InsertJobStageInput, tx) {
     const client: Client = tx ?? prisma;
 
-    // Temporary sortOrder, safely outside the normal 0..n range — corrected
+    // Temporary sortOrder one past the job's highest — free, and small enough
+    // for the INT column (a Date.now()-based value overflowed it). Corrected
     // by reorderAllJobStages() below before this function returns, so it's
     // never observable outside this operation.
+    const { _max } = await client.jobOpeningStage.aggregate({
+      where: { jobOpeningId: jobId },
+      _max: { sortOrder: true },
+    });
     const created = await client.jobOpeningStage.create({
       data: {
         jobOpeningId: jobId,
         stage: input.stage,
         category: input.category,
-        sortOrder: STAGE_SORT_ORDER_OFFSET + Date.now(),
+        sortOrder: (_max.sortOrder ?? -1) + 1,
         isOptional: false,
         isEnabled: true,
         isArchived: false,
