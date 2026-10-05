@@ -36,7 +36,6 @@ export const payrollSettingsSchema = z.object({
     .int()
     .min(0, "Grace minutes must be between 0 and 120.")
     .max(120, "Grace minutes must be between 0 and 120."),
-  shiftRulesJson: z.string().optional(),
 });
 
 export const payrollHrDecisionSchema = z.object({

@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { isUniqueConstraintError } from "@/lib/db/prisma-errors";
+import { getShiftMap, shiftSpanMinutes } from "@/lib/attendance/shift-lookup";
 import type { PayrollSettingsSnapshot } from "@/lib/payroll/payroll-types";
 
 export type { PayrollSettingsSnapshot, PayrollShiftRule } from "@/lib/payroll/payroll-types";
@@ -9,12 +10,14 @@ export { resolveShiftPayrollRules } from "@/lib/payroll/payroll-types";
 const DEFAULT_ID = "default";
 
 export const getPayrollSettings = cache(async (): Promise<PayrollSettingsSnapshot> => {
-  const row = await ensurePayrollSettingsRow();
-  let shiftRules: PayrollSettingsSnapshot["shiftRules"] = {};
-  try {
-    shiftRules = JSON.parse(row.shiftRulesJson || "{}") as PayrollSettingsSnapshot["shiftRules"];
-  } catch {
-    shiftRules = {};
+  const [row, shiftMap] = await Promise.all([ensurePayrollSettingsRow(), getShiftMap()]);
+
+  // Per-shift office presence comes from Shift Settings timings, so a shift's hours
+  // are defined in one place. Employees with no (or an unrecognised) shift get the defaults.
+  const shiftRules: PayrollSettingsSnapshot["shiftRules"] = {};
+  for (const [name, shift] of shiftMap) {
+    const span = shiftSpanMinutes(shift);
+    if (span) shiftRules[name] = { requiredOfficeMinutes: span };
   }
 
   return {
