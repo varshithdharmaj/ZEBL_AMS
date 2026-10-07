@@ -9,19 +9,14 @@ import { PipelineBoard } from "@/components/recruitment/applications/pipeline-bo
 import type { PipelineDynamicColumn } from "@/components/recruitment/applications/pipeline-board";
 import { Button } from "@/components/ui/button";
 import { requireRecruitmentAdminSession } from "@/lib/auth-guards";
-import { getApplicationCached, listApplicationsCached } from "@/lib/recruitment/application";
+import { listApplicationsCached } from "@/lib/recruitment/application";
+import { loadPipelineDrawerApplication } from "@/lib/recruitment/application/pipeline-drawer-data";
 import { sanitizeApplicationsForClient } from "@/lib/recruitment/application/sanitize";
 import type { ApplicationDetail } from "@/lib/recruitment/repositories/application-repository";
 import { prismaJobRepository } from "@/lib/recruitment/repositories/prisma-job-repository";
 import type { ApplicationTableItem } from "@/components/recruitment/applications/application-table";
 import { getEmployeeOptions } from "@/lib/recruitment/candidate";
-import { listInterviewsCached } from "@/lib/recruitment/interview/queries";
-import {
-  getCurrentHiringDecisionCached,
-  getRequireDecisionForOfferCached,
-} from "@/lib/recruitment/decision/queries";
 import { prisma } from "@/lib/prisma";
-import { TagService } from "@/lib/recruitment/tags";
 import { ApplicationStatus, RecruitmentPipelineStage } from "@/generated/prisma/enums";
 import { PIPELINE_STAGE_LABELS } from "@/lib/recruitment/shared/pipeline-stage-groups";
 import {
@@ -39,7 +34,6 @@ import {
   returnToLabel,
 } from "@/lib/recruitment/navigation/return-to";
 import { resolveHiringBatch } from "@/lib/recruitment/shared/hiring-batch";
-import { movableStageOptions } from "@/lib/recruitment/shared/next-stage";
 import { loadApplicationScoreSummaries } from "@/lib/recruitment/interview/score-summaries";
 
 function normalizeListPageSize(raw: string | string[] | undefined): number {
@@ -116,16 +110,17 @@ export default async function RecruitmentPipelinePage({
   const boardMode: "dynamic" | "static" =
     view === "board" && jobFilter && dynamicStages.length > 0 ? "dynamic" : "static";
 
+  // Side panel loads alongside the board.
+  const selectedApplicationPromise: Promise<PipelineDrawerApplication | null> = applicationId
+    ? loadPipelineDrawerApplication(session, applicationId, { jobDetail })
+    : Promise.resolve(null);
+
   const [
     listResult,
     dynamicColumnsData,
     staticBoardResult,
     employeeOptions,
     jobs,
-    selectedDetail,
-    selectedInterviews,
-    selectedDecision,
-    requireDecisionForOffer,
   ] = await Promise.all([
     view === "list"
       ? listApplicationsCached(
@@ -172,14 +167,6 @@ export default async function RecruitmentPipelinePage({
       select: { id: true, title: true },
       orderBy: { title: "asc" },
     }),
-    applicationId ? getApplicationCached(session, applicationId).catch(() => null) : Promise.resolve(null),
-    applicationId
-      ? listInterviewsCached(session, { applicationId }, { page: 1, pageSize: 20 })
-      : Promise.resolve({ items: [] as Record<string, unknown>[] }),
-    applicationId
-      ? getCurrentHiringDecisionCached(session, applicationId).catch(() => null)
-      : Promise.resolve(null),
-    getRequireDecisionForOfferCached(),
   ]);
 
   // Next.js cannot serialize Prisma Decimal objects from Server to Client Components.
@@ -190,154 +177,10 @@ export default async function RecruitmentPipelinePage({
     ? sanitizeApplicationsForClient(staticBoardResult.items)
     : [];
 
-  let selectedOffers: Array<{
-    id: string;
-    offerNumber: string | null;
-    status: string;
-    ctc: number | null;
-    negotiationStatus: string | null;
-    negotiationNote: string | null;
-    negotiationFollowUpAt: Date | null;
-  }> = [];
-  if (applicationId) {
-    const offers = await prisma.offer.findMany({
-      where: { applicationId },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        offerNumber: true,
-        status: true,
-        ctc: true,
-        negotiationStatus: true,
-        negotiationNote: true,
-        negotiationFollowUpAt: true,
-      },
-    });
-    selectedOffers = offers.map((o) => ({
-      id: o.id,
-      offerNumber: o.offerNumber,
-      status: o.status,
-      ctc: o.ctc == null ? null : Number(o.ctc),
-      negotiationStatus: o.negotiationStatus,
-      negotiationNote: o.negotiationNote,
-      negotiationFollowUpAt: o.negotiationFollowUpAt,
-    }));
-  }
-
   const listScoreSummaries =
     view === "list" ? await loadApplicationScoreSummaries(listItems.map((a) => a.id)) : undefined;
 
-  // Side-panel extras: the job's own stage order, every round's scorecards, the resume.
-  const [selectedJob, selectedFeedback] = selectedDetail
-    ? await Promise.all([
-        jobDetail?.id === selectedDetail.jobOpeningId
-          ? Promise.resolve(jobDetail)
-          : prismaJobRepository.getJob(selectedDetail.jobOpeningId),
-        prisma.interviewFeedback.findMany({
-          where: { interview: { applicationId: selectedDetail.id } },
-          include: {
-            author: { select: { name: true } },
-            interview: { select: { title: true, scheduledStart: true } },
-          },
-          orderBy: { createdAt: "asc" },
-        }),
-      ])
-    : [null, []];
-  const selectedResume =
-    selectedDetail?.candidate?.documents
-      ?.filter((d) => d.documentType === "resume")
-      .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary))[0] ?? null;
-  const recruiterName = selectedDetail?.assignedRecruiterUserId
-    ? employeeOptions.find((e) => e.user?.id === selectedDetail.assignedRecruiterUserId)?.name ?? null
-    : null;
-
-  const selectedTags = selectedDetail?.candidate?.id
-    ? await TagService.listCandidateTags(String(selectedDetail.candidate.id))
-    : [];
-
-  const selectedApplication: PipelineDrawerApplication | null = selectedDetail
-    ? {
-        id: String(selectedDetail.id),
-        currentStage: selectedDetail.currentStage as RecruitmentPipelineStage,
-        currentStageLabel: selectedDetail.currentStageRef?.label ?? null,
-        status: String(selectedDetail.status),
-        rejectedReason: selectedDetail.rejectedReason ?? null,
-        rejectionReasonCode: selectedDetail.rejectionReasonCode ?? null,
-        withdrawnReason: selectedDetail.withdrawnReason ?? null,
-        withdrawalReasonCode: selectedDetail.withdrawalReasonCode ?? null,
-        stageEnteredAt: selectedDetail.stageEnteredAt as Date | string,
-        source: selectedDetail.source ?? null,
-        recruiterName,
-        stageOptions: movableStageOptions(selectedJob?.stages),
-        resume: selectedResume
-          ? { id: selectedResume.id, fileName: selectedResume.fileName, mimeType: selectedResume.mimeType }
-          : null,
-        feedback: selectedFeedback.map((f) => ({
-          id: f.id,
-          authorName: f.author.name,
-          interviewTitle: f.interview.title ?? "Interview",
-          submittedAt: f.submittedAt,
-          ratingsJson: f.ratingsJson,
-          recommendation: f.recommendation,
-          consideredForPosition: f.consideredForPosition,
-          overallRating: f.overallRating,
-          strengths: f.strengths,
-          concerns: f.concerns,
-          privateNotes: f.privateNotes,
-        })),
-        priority: (selectedDetail as { priority?: string | null }).priority ?? null,
-        createdAt: selectedDetail.createdAt as Date | string,
-        tags: selectedTags,
-        candidate: {
-          id: String(selectedDetail.candidate?.id ?? ""),
-          fullName: String(selectedDetail.candidate?.fullName ?? "Unknown"),
-          email: selectedDetail.candidate?.email ?? null,
-          phone: selectedDetail.candidate?.phone ?? null,
-          totalExperienceYears:
-            (selectedDetail.candidate as { totalExperienceYears?: number | string | null } | null)
-              ?.totalExperienceYears ?? null,
-          currentCompany:
-            (selectedDetail.candidate as { currentCompany?: string | null } | null)?.currentCompany ??
-            null,
-          location: (selectedDetail.candidate as { location?: string | null } | null)?.location ?? null,
-          noticePeriodDays:
-            (selectedDetail.candidate as { noticePeriodDays?: number | null } | null)
-              ?.noticePeriodDays ?? null,
-        },
-        jobOpening: {
-          id: String(selectedDetail.jobOpening?.id ?? ""),
-          title: String(selectedDetail.jobOpening?.title ?? "Untitled"),
-        },
-        interviews: selectedInterviews.items.map((item) => ({
-          id: String(item.id),
-          title: String(item.title ?? "Interview"),
-          scheduledStart: item.scheduledStart as Date | string,
-          status: String(item.status ?? ""),
-        })),
-        offers: selectedOffers,
-        stageHistory: Array.isArray(selectedDetail.stageHistory)
-          ? selectedDetail.stageHistory.map((h: Record<string, unknown>) => ({
-              id: String(h.id),
-              toStage: (h.toStage as string | null) ?? null,
-              fromStage: (h.fromStage as string | null) ?? null,
-              createdAt: h.createdAt as Date | string,
-              note: (h.note as string | null) ?? null,
-              actorEmail: (h.actor as { email?: string | null } | null)?.email ?? null,
-            }))
-          : [],
-        assessment: (selectedDetail.assessment as string | null) ?? null,
-        assessmentUpdatedAt:
-          (selectedDetail.assessmentUpdatedAt as Date | string | null) ?? null,
-        assessmentUpdatedByEmail:
-          (
-            selectedDetail as {
-              assessmentUpdatedBy?: { email?: string | null } | null;
-            }
-          ).assessmentUpdatedBy?.email ?? null,
-        currentDecision: selectedDecision,
-        requireDecisionForOffer,
-      }
-    : null;
+  const selectedApplication = await selectedApplicationPromise;
 
   const filteredJob = jobFilter ? jobs.find((job) => job.id === jobFilter) : undefined;
 

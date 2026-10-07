@@ -303,6 +303,8 @@ model User {
   savedRecruitmentFilters       RecruitmentSavedFilter[]      @relation("RecruitmentSavedFilters")
   emailTemplatesCreated         RecruitmentEmailTemplate[]    @relation("EmailTemplateCreatedBy")
   communicationsSent            RecruitmentCommunication[]    @relation("CommunicationSender")
+  hiringBatchesCreated          HiringBatch[]                 @relation("HiringBatchCreatedBy")
+  hiringBatchMembersAdded       HiringBatchMember[]           @relation("HiringBatchMemberAddedBy")
   // Employee statutory details & documents
   employeeStatutoryUpdates      EmployeeStatutoryDetail[]     @relation("EmployeeStatutoryUpdatedBy")
   employeeDocumentsUploaded     EmployeeDocument[]            @relation("EmployeeDocUploadedBy")
@@ -2244,6 +2246,7 @@ model Application {
   offers             Offer[]
   conversionSnapshot EmployeeConversionSnapshot?
   communications     RecruitmentCommunication[]
+  batchMemberships   HiringBatchMember[]
 
   @@index([jobOpeningId, currentStage, deletedAt])
   @@index([currentStageId])
@@ -2649,6 +2652,56 @@ model RecruitmentSavedFilter {
   @@unique([userId, entity, name])
   @@index([userId, entity])
   @@map("recruitment_saved_filters")
+}
+
+enum HiringBatchStatus {
+  open
+  closed
+}
+
+/// A named group of candidates HR screens together (what used to be one Excel
+/// sheet). `code` is the Batch ID shown to users, e.g. B-2026-001.
+model HiringBatch {
+  id              String            @id @default(cuid())
+  code            String            @unique
+  name            String?
+  status          HiringBatchStatus @default(open)
+  createdByUserId String?           @map("created_by_user_id")
+  createdBy       User?             @relation("HiringBatchCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  closedAt        DateTime?         @map("closed_at")
+  deletedAt       DateTime?         @map("deleted_at")
+
+  members HiringBatchMember[]
+
+  @@index([status, deletedAt])
+  @@index([createdAt])
+  @@map("recruitment_hiring_batches")
+}
+
+/// One application in a batch. The stage is never stored here — it is always
+/// the application's current stage, so the batch and the pipeline agree.
+/// An application sits in at most one open batch (enforced in the service).
+model HiringBatchMember {
+  id            String      @id @default(cuid())
+  batchId       String      @map("batch_id")
+  batch         HiringBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  applicationId String      @map("application_id")
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  /// Row number as in HR's sheet ("Sl.no"); new rows go to the end.
+  slNo          Int         @map("sl_no")
+  remarks       String?     @db.Text
+  /// The sheet's "Candidate profile" cell as typed; shown as a link when it is a URL.
+  profileUrl    String?     @map("profile_url")
+  addedByUserId String?     @map("added_by_user_id")
+  addedBy       User?       @relation("HiringBatchMemberAddedBy", fields: [addedByUserId], references: [id], onDelete: SetNull)
+  addedAt       DateTime    @default(now()) @map("added_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  @@unique([batchId, applicationId])
+  @@index([applicationId])
+  @@map("recruitment_hiring_batch_members")
 }
 
 /// Raw biometric punch events from the eSSL Attendance Bridge.

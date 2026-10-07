@@ -844,9 +844,11 @@ export function CandidateDetailView({
                     <div key={edu.id} className="relative ml-2.5 border-l-2 border-border/80 pl-5">
                       <div className="absolute -left-[6px] top-1.5 h-2.5 w-2.5 rounded-full bg-primary ring-4 ring-background" />
                       <h4 className="text-sm font-bold">
-                        {edu.degree} in {edu.fieldOfStudy || edu.field}
+                        {[edu.degree, edu.fieldOfStudy || edu.field].filter(Boolean).join(" in ")}
                       </h4>
-                      <p className="mt-0.5 text-xs font-semibold text-primary">{edu.institution}</p>
+                      {edu.institution ? (
+                        <p className="mt-0.5 text-xs font-semibold text-primary">{edu.institution}</p>
+                      ) : null}
                     </div>
                   ))}
                 </div>

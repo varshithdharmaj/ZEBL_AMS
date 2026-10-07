@@ -139,7 +139,8 @@ export type PipelineDrawerApplication = {
   requireDecisionForOffer?: boolean;
 };
 
-type Tab = "overview" | "resume" | "feedback" | "activity";
+export type PipelineDrawerTab = "overview" | "resume" | "feedback" | "activity";
+type Tab = PipelineDrawerTab;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -169,6 +170,7 @@ export function ApplicationPipelineDrawer({
   prevId,
   nextId,
   onNavigate,
+  initialTab = "overview",
 }: {
   application: PipelineDrawerApplication | null;
   open: boolean;
@@ -177,6 +179,8 @@ export function ApplicationPipelineDrawer({
   prevId?: string | null;
   nextId?: string | null;
   onNavigate?: (id: string) => void;
+  /** Tab to open on, e.g. "resume" from the batch sheet's Profile column. */
+  initialTab?: Tab;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -184,18 +188,18 @@ export function ApplicationPipelineDrawer({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [closeKind, setCloseKind] = useState<"reject" | "withdraw" | null>(null);
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>(initialTab);
   const pipelineReturnTo = (() => {
     const path = currentPathWithSearch(pathname, searchParams.toString());
     return isSafeRecruitmentReturnTo(path) ? path : "/admin/recruitment/pipeline";
   })();
 
-  // Each candidate opens on Overview.
+  // Each candidate opens on Overview (or the tab the caller asked for).
   const applicationId = application?.id;
   useEffect(() => {
-    setTab("overview");
+    setTab(initialTab);
     setError(null);
-  }, [applicationId]);
+  }, [applicationId, initialTab]);
 
   const stageOptions = useMemo(
     () => application?.stageOptions ?? movableStageOptions(null),

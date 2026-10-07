@@ -30,6 +30,7 @@ import {
   UserRound,
   BookOpen,
   HelpCircle,
+  Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NavLinkPendingHint } from "@/components/layout/nav-link-pending-hint";
@@ -44,6 +45,7 @@ type NavGroup = { group: string; items: NavItem[] };
 
 const RECRUITMENT_WORKSPACE_ITEMS: NavItem[] = [
   { href: "/admin/recruitment", label: "Recruitment Dashboard", icon: LayoutDashboard },
+  { href: "/admin/recruitment/batches", label: "Batches", icon: Layers },
   { href: "/admin/recruitment/jobs", label: "Jobs", icon: Briefcase },
   { href: "/admin/recruitment/candidates", label: "Candidates", icon: Users },
   { href: "/admin/recruitment/pipeline", label: "Pipeline", icon: ClipboardList },

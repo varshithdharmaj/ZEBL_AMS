@@ -72,6 +72,9 @@ export function returnToLabel(returnTo: string | null | undefined, fallback: str
   if (path === `${RECRUITMENT_BASE_PATH}/pipeline` || path.startsWith(`${RECRUITMENT_BASE_PATH}/pipeline/`)) {
     return "Back to pipeline";
   }
+  if (path === `${RECRUITMENT_BASE_PATH}/batches` || path.startsWith(`${RECRUITMENT_BASE_PATH}/batches/`)) {
+    return "Back to batch";
+  }
   if (path === `${RECRUITMENT_BASE_PATH}/candidates` || path.startsWith(`${RECRUITMENT_BASE_PATH}/candidates/`)) {
     return "Back to candidate";
   }
