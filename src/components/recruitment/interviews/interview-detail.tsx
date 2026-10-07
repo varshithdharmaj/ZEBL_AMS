@@ -30,7 +30,8 @@ import { StarRatingDisplay } from "./star-rating";
 import { buildRecruitmentEntityHref } from "@/lib/recruitment/navigation/return-to";
 
 interface InterviewDetailViewProps {
-  interview: InterviewDetail;
+  /** hiddenFeedbackCount: scorecards held back until the viewer submits their own. */
+  interview: InterviewDetail & { hiddenFeedbackCount?: number };
   currentUserId: string;
   canManage: boolean;
   backHref?: string;
@@ -382,6 +383,15 @@ export function InterviewDetailView({
                     router.refresh();
                   }}
                 />
+              </div>
+            ) : null}
+
+            {interview.hiddenFeedbackCount ? (
+              <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                {interview.hiddenFeedbackCount === 1
+                  ? "1 other interviewer has submitted a scorecard."
+                  : `${interview.hiddenFeedbackCount} other interviewers have submitted scorecards.`}{" "}
+                You&apos;ll see them after you submit yours, so your ratings stay independent.
               </div>
             ) : null}
 

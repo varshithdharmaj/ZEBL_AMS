@@ -36,6 +36,34 @@ import {
   type SubmitFeedbackInput,
 } from "@/lib/validation/schemas/recruitment/interviews";
 
+export type InterviewDetailForViewer = InterviewDetail & {
+  /** Scorecards the viewer can't see yet because they haven't submitted their own. */
+  hiddenFeedbackCount: number;
+};
+
+/**
+ * HR / recruitment staff see every scorecard in full. Interviewers see other
+ * scorecards only after submitting their own (so they aren't swayed), and never
+ * see anyone else's comment to HR. Done server-side so hidden data never
+ * reaches the browser.
+ */
+export function redactFeedbackForViewer(
+  interview: InterviewDetail,
+  session: SessionUser
+): InterviewDetailForViewer {
+  if (canAccessRecruitmentAdministration(session)) {
+    return { ...interview, hiddenFeedbackCount: 0 };
+  }
+  const isMine = (f: InterviewDetail["feedback"][number]) => f.author.user?.id === session.id;
+  const hasSubmitted = interview.feedback.some((f) => isMine(f) && f.submittedAt);
+  const visible = hasSubmitted ? interview.feedback : interview.feedback.filter(isMine);
+  return {
+    ...interview,
+    feedback: visible.map((f) => (isMine(f) ? f : { ...f, privateNotes: null })),
+    hiddenFeedbackCount: interview.feedback.length - visible.length,
+  };
+}
+
 export function createInterviewService(
   repository: InterviewRepository = prismaInterviewRepository
 ) {
@@ -437,13 +465,13 @@ export function createInterviewService(
       });
     },
 
-    async getInterview(session: SessionUser, id: string): Promise<InterviewDetail | null> {
+    async getInterview(session: SessionUser, id: string): Promise<InterviewDetailForViewer | null> {
       RecruitmentPermissionService.requireModuleEnabled();
       const scope = await RecruitmentScopeEngine.getScope(session);
       const interview = await repository.getInterview(id);
       if (!interview) return null;
       RecruitmentScopeEngine.assertApplicationInScope(scope, interview.applicationId);
-      return interview;
+      return redactFeedbackForViewer(interview, session);
     },
 
     async listInterviews(
