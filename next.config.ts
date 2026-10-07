@@ -28,6 +28,18 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // File previews are shown in an iframe on our own pages, so let only
+      // this site frame them. Later rules override the DENY above.
+      ...[
+        "/api/recruitment/documents/preview",
+        "/api/recruitment/communications/attachments/preview",
+      ].map((source) => ({
+        source,
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+        ],
+      })),
     ];
   },
   // Keep Prisma/pg out of the server bundle so native query engines resolve at runtime.
