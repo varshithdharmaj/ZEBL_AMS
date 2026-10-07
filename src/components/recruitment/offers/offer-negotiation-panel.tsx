@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarClock } from "lucide-react";
 import { updateOfferNegotiationAction } from "@/actions/recruitment-offers";
@@ -37,35 +37,53 @@ export function OfferNegotiationPanel({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const negotiating = offer.negotiationStatus === NEGOTIATION_STATUS;
+  // What was just saved, shown until the refreshed offer arrives, so the toggle
+  // doesn't flick back to "Sent" for a moment after Save.
+  const [saved, setSaved] = useState<{
+    negotiationStatus: string | null;
+    negotiationNote: string | null;
+    negotiationFollowUpAt: string | null;
+  } | null>(null);
+  useEffect(() => {
+    setSaved(null);
+  }, [offer.negotiationStatus, offer.negotiationNote, offer.negotiationFollowUpAt]);
+  const shown = saved ? { ...offer, ...saved } : offer;
+  const negotiating = shown.negotiationStatus === NEGOTIATION_STATUS;
   const [editing, setEditing] = useState(false);
   const [note, setNote] = useState(offer.negotiationNote ?? "");
   const [followUp, setFollowUp] = useState(toDateInput(offer.negotiationFollowUpAt));
   const [error, setError] = useState<string | null>(null);
-  const overdue = isFollowUpOverdue(offer);
+  const overdue = isFollowUpOverdue(shown);
 
   const save = (inNegotiation: boolean) => {
     setError(null);
     startTransition(async () => {
+      const savedNote = inNegotiation ? note.trim() || null : null;
+      const followUpAt = inNegotiation && followUp ? new Date(`${followUp}T10:00:00`).toISOString() : null;
       const res = await updateOfferNegotiationAction(
         {},
         {
           id: offer.id,
           inNegotiation,
           note: inNegotiation ? note : null,
-          followUpAt: inNegotiation && followUp ? new Date(`${followUp}T10:00:00`).toISOString() : null,
+          followUpAt,
         }
       );
       if (res.error) {
         setError(res.error);
         return;
       }
+      setSaved({
+        negotiationStatus: inNegotiation ? NEGOTIATION_STATUS : null,
+        negotiationNote: savedNote,
+        negotiationFollowUpAt: followUpAt,
+      });
       setEditing(false);
       router.refresh();
     });
   };
 
-  const showForm = editing || (negotiating && !offer.negotiationNote && !offer.negotiationFollowUpAt);
+  const showForm = editing || (negotiating && !shown.negotiationNote && !shown.negotiationFollowUpAt);
 
   return (
     <section className="space-y-3 rounded-xl border border-border bg-muted/10 p-3">
@@ -108,11 +126,11 @@ export function OfferNegotiationPanel({
 
       {negotiating && !showForm ? (
         <div className="space-y-1 text-xs">
-          {offer.negotiationNote ? <p className="whitespace-pre-wrap text-foreground">{offer.negotiationNote}</p> : null}
-          {offer.negotiationFollowUpAt ? (
+          {shown.negotiationNote ? <p className="whitespace-pre-wrap text-foreground">{shown.negotiationNote}</p> : null}
+          {shown.negotiationFollowUpAt ? (
             <p className={cn("inline-flex items-center gap-1 font-semibold", overdue ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
               <CalendarClock className="h-3.5 w-3.5" />
-              Follow up {new Date(offer.negotiationFollowUpAt).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}
+              Follow up {new Date(shown.negotiationFollowUpAt).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}
               {overdue ? " · overdue" : ""}
             </p>
           ) : null}
@@ -164,8 +182,8 @@ export function OfferNegotiationPanel({
               disabled={isPending}
               onClick={() => {
                 setEditing(false);
-                setNote(offer.negotiationNote ?? "");
-                setFollowUp(toDateInput(offer.negotiationFollowUpAt));
+                setNote(shown.negotiationNote ?? "");
+                setFollowUp(toDateInput(shown.negotiationFollowUpAt));
               }}
             >
               Cancel
