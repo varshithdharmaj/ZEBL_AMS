@@ -123,7 +123,8 @@ export async function seedApplications(ctx: DemoCtx): Promise<void> {
         });
         await svc.rejectApplication(ctx.session, {
           id: appId,
-          reason: "Skills mismatch for current bar",
+          reasonCode: "skills_mismatch",
+          note: "Below the current bar for this level",
         });
       } else if (c.purpose === "withdrawn") {
         await svc.moveToStage(ctx.session, {
@@ -133,7 +134,7 @@ export async function seedApplications(ctx: DemoCtx): Promise<void> {
         });
         await svc.withdrawApplication(ctx.session, {
           id: appId,
-          reason: "Accepted another offer",
+          reasonCode: "accepted_other_offer",
         });
       } else {
         const stage = STAGE[c.purpose];

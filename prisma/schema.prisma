@@ -2218,9 +2218,15 @@ model Application {
   source                    CandidateSource?
   riskFlagsJson             Json                     @default("[]") @map("risk_flags_json")
   aggregateScore            Float?                   @map("aggregate_score")
+  /// Optional free-text note; the structured reason is `rejectionReasonCode`.
   rejectedReason            String?                  @map("rejected_reason")
+  /// Code from REJECTION_REASONS (src/lib/recruitment/application/close-reasons.ts).
+  rejectionReasonCode       String?                  @map("rejection_reason_code")
   holdReason                String?                  @map("hold_reason")
+  /// Optional free-text note; the structured reason is `withdrawalReasonCode`.
   withdrawnReason           String?                  @map("withdrawn_reason")
+  /// Code from WITHDRAWAL_REASONS (src/lib/recruitment/application/close-reasons.ts).
+  withdrawalReasonCode      String?                  @map("withdrawal_reason_code")
   /// Recruiter assessment for this application (role-specific evaluation)
   assessment                String?
   assessmentUpdatedAt       DateTime?                @map("assessment_updated_at")
@@ -2332,20 +2338,22 @@ model InterviewPanelist {
 }
 
 model InterviewFeedback {
-  id               String    @id @default(cuid())
-  interviewId      String    @map("interview_id")
-  interview        Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
-  authorEmployeeId Int       @map("author_employee_id")
-  author           Employee  @relation(fields: [authorEmployeeId], references: [id], onDelete: Cascade)
-  overallRating    Float?    @map("overall_rating")
-  ratingsJson      Json      @default("{}") @map("ratings_json")
-  recommendation   String?
-  strengths        String?
-  concerns         String?
-  privateNotes     String?   @map("private_notes")
-  submittedAt      DateTime? @map("submitted_at")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
+  id                    String    @id @default(cuid())
+  interviewId           String    @map("interview_id")
+  interview             Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  authorEmployeeId      Int       @map("author_employee_id")
+  author                Employee  @relation(fields: [authorEmployeeId], references: [id], onDelete: Cascade)
+  overallRating         Float?    @map("overall_rating")
+  ratingsJson           Json      @default("{}") @map("ratings_json")
+  recommendation        String?
+  /// Interviewer's Y/N verdict: can the candidate be considered for the position.
+  consideredForPosition Boolean?  @map("considered_for_position")
+  strengths             String?
+  concerns              String?
+  privateNotes          String?   @map("private_notes")
+  submittedAt           DateTime? @map("submitted_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
   @@unique([interviewId, authorEmployeeId])
   @@index([authorEmployeeId])

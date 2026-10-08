@@ -7,6 +7,8 @@ import { getApplicationCached } from "@/lib/recruitment/application";
 import { getEmployeeOptions } from "@/lib/recruitment/candidate";
 import { listInterviewsCached } from "@/lib/recruitment/interview/queries";
 import { prismaOfferRepository } from "@/lib/recruitment/repositories/prisma-offer-repository";
+import { prismaJobRepository } from "@/lib/recruitment/repositories/prisma-job-repository";
+import { movableStageOptions } from "@/lib/recruitment/shared/next-stage";
 import {
   getCurrentHiringDecisionCached,
   getRequireDecisionForOfferCached,
@@ -48,10 +50,11 @@ export default async function ApplicationDetailPage({
   );
   const interviews = interviewsResult.items;
 
-  const [offers, currentDecision, requireDecisionForOffer] = await Promise.all([
+  const [offers, currentDecision, requireDecisionForOffer, job] = await Promise.all([
     prismaOfferRepository.listByApplication(id),
     getCurrentHiringDecisionCached(session, id),
     getRequireDecisionForOfferCached(),
+    prismaJobRepository.getJob(app.jobOpeningId),
   ]);
 
   const candidateId = app.candidate?.id;
@@ -113,6 +116,7 @@ export default async function ApplicationDetailPage({
         offers={offers}
         currentDecision={currentDecision}
         requireDecisionForOffer={requireDecisionForOffer}
+        stageOptions={movableStageOptions(job?.stages)}
         navigation={{
           candidateHref,
           jobHref,

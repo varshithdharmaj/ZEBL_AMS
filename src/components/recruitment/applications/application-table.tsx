@@ -47,6 +47,10 @@ import {
   OPTIONAL_LIST_COLUMNS,
   type OptionalListColumnKey,
 } from "./column-visibility-menu";
+import type { ApplicationScoreSummary } from "@/lib/recruitment/interview/score-summaries";
+import { VERDICTS } from "@/lib/recruitment/interview/scorecard";
+import { StarRatingDisplay } from "@/components/recruitment/interviews/star-rating";
+import { VerdictBadge } from "@/components/recruitment/interviews/scorecard-summary";
 
 function formatOptionalColumn(key: OptionalListColumnKey, app: ApplicationTableItem): string {
   const candidate = app.candidate as
@@ -117,8 +121,11 @@ export function ApplicationTable({
   pagination,
   filters,
   basePath = "/admin/recruitment/pipeline",
+  scoreSummaries,
 }: {
   applications: readonly ApplicationTableItem[];
+  /** Interview scores, verdicts and offer status per application (adds the score columns). */
+  scoreSummaries?: Record<string, ApplicationScoreSummary>;
   employeeOptions: { id: number; name: string; user: { id: string; email: string } | null }[];
   pagination?: ApplicationTablePagination;
   filters?: ApplicationListFilterState;
@@ -249,6 +256,7 @@ export function ApplicationTable({
             "Job Opening",
             "Stage",
             "Recruiter",
+            ...(scoreSummaries ? ["Knowledge", "Skills ★", "Communication", "Verdict", "Offer"] : []),
             ...OPTIONAL_LIST_COLUMNS.filter((c) => visibleColumns.includes(c.key)).map((c) => c.label),
             "Status",
             "Applied Date",
@@ -321,6 +329,7 @@ export function ApplicationTable({
                 <DataTableCell className="text-sm font-medium text-foreground">
                   {recruiterName}
                 </DataTableCell>
+                {scoreSummaries ? <ScoreCells summary={scoreSummaries[app.id]} /> : null}
                 {OPTIONAL_LIST_COLUMNS.filter((c) => visibleColumns.includes(c.key)).map((c) => (
                   <DataTableCell key={c.key} className="text-sm text-muted-foreground">
                     {formatOptionalColumn(c.key, app)}
@@ -528,5 +537,36 @@ function ApplicationTablePaginationBar({
         </div>
       </div>
     </div>
+  );
+}
+
+/** Knowledge / Skills / Communication stars, the panel's verdict and the offer status. */
+function ScoreCells({ summary }: { summary: ApplicationScoreSummary | undefined }) {
+  const verdicts = VERDICTS.filter((v) => summary?.verdicts[v.value]);
+  const top = [...verdicts].sort((a, b) => (summary!.verdicts[b.value] ?? 0) - (summary!.verdicts[a.value] ?? 0))[0];
+  const tally = verdicts.map((v) => `${summary!.verdicts[v.value]} × ${v.label}`).join(", ");
+  return (
+    <>
+      {(["process_knowledge", "skills", "communication"] as const).map((id) => (
+        <DataTableCell key={id}>
+          <StarRatingDisplay value={summary?.averages[id] ?? null} size="xs" showNumber />
+        </DataTableCell>
+      ))}
+      <DataTableCell>
+        {top ? (
+          <span title={tally} className="inline-flex items-center gap-1">
+            <VerdictBadge recommendation={top.value} />
+            {summary!.scorecards > 1 ? (
+              <span className="text-[10px] text-muted-foreground">({summary!.scorecards})</span>
+            ) : null}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        )}
+      </DataTableCell>
+      <DataTableCell className="text-xs capitalize text-foreground">
+        {summary?.offer ? summary.offer.status.replace(/_/g, " ") : <span className="text-muted-foreground">—</span>}
+      </DataTableCell>
+    </>
   );
 }

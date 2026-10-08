@@ -14,6 +14,9 @@ import {
   type PipelineDrawerApplication,
 } from "./application-pipeline-drawer";
 import { StageColumnMenu } from "./stage-column-menu";
+import { PipelineCardMenu, useBoardCloseDialog, type CardCloseTarget } from "./pipeline-card-menu";
+import { getCloseReason } from "./close-reason-summary";
+import type { CloseKind } from "@/lib/recruitment/application/close-reasons";
 import { AddPipelineStageDialog } from "./add-pipeline-stage-dialog";
 import {
   CandidateCardDensityToggle,
@@ -97,6 +100,13 @@ type EmployeeOption = { id: number; name: string; user: { id: string; email: str
 const JOINED_STAGE_ERROR =
   "Joined is for converted hires only. Accept an offer, then use Convert to Employee.";
 
+/** Previous/next candidate ids within the same column, for the side panel's ‹ › and J/K. */
+function columnNeighbours(columnIds: string[], selectedId: string | null) {
+  const index = selectedId ? columnIds.indexOf(selectedId) : -1;
+  if (index === -1) return { prevId: null, nextId: null };
+  return { prevId: columnIds[index - 1] ?? null, nextId: columnIds[index + 1] ?? null };
+}
+
 function useEmployeeMap(employeeOptions: EmployeeOption[]) {
   return React.useMemo(() => {
     const map = new Map<string, string>();
@@ -114,6 +124,7 @@ function CandidateCard({
   stageLabel = pipelineStageLabel(app.currentStage),
   onDragStart,
   onClick,
+  onRequestClose,
 }: {
   app: PipelineDrawerApplication;
   employeeMap: Map<string, string>;
@@ -122,7 +133,24 @@ function CandidateCard({
   stageLabel?: string;
   onDragStart: (e: React.DragEvent) => void;
   onClick: () => void;
+  onRequestClose?: (kind: CloseKind, target: CardCloseTarget) => void;
 }) {
+  const canClose = Boolean(onRequestClose) && (app.status === "active" || app.status === "on_hold");
+  const menu = canClose ? (
+    <PipelineCardMenu
+      target={{ id: app.id, candidateName: app.candidate.fullName, jobTitle: app.jobOpening.title }}
+      onOpenDetails={onClick}
+      onRequestClose={onRequestClose!}
+    />
+  ) : null;
+
+  const closeReason = getCloseReason(app);
+  const closeReasonText = closeReason
+    ? `${closeReason.kind === "reject" ? "Rejected" : "Withdrawn"}${
+        closeReason.label ?? closeReason.note ? ` · ${closeReason.label ?? closeReason.note}` : ""
+      }`
+    : null;
+
   const recruiterName = (app as { assignedRecruiterUserId?: string | null }).assignedRecruiterUserId
     ? employeeMap.get((app as { assignedRecruiterUserId?: string }).assignedRecruiterUserId!) ?? "—"
     : "—";
@@ -130,66 +158,84 @@ function CandidateCard({
   if (density === "compact") {
     const experience = app.candidate.totalExperienceYears;
     return (
+      <div className="group/card relative">
+        <button
+          type="button"
+          draggable
+          onDragStart={onDragStart}
+          onClick={onClick}
+          className={`group flex w-full cursor-grab flex-col gap-0.5 rounded-lg border border-border/80 bg-card px-3 py-2 text-left shadow-subtle transition-all duration-200 hover:border-primary/40 hover:shadow-elevated active:cursor-grabbing ${menu ? "pr-8" : ""}`}
+        >
+          <span className="line-clamp-1 text-xs font-bold text-foreground group-hover:text-primary">
+            {app.candidate.fullName}
+            {experience != null ? (
+              <span className="font-medium text-muted-foreground"> · {experience}y</span>
+            ) : null}
+            <span className="font-medium text-muted-foreground"> · {recruiterName}</span>
+          </span>
+          <span className="text-[10px] font-medium text-muted-foreground">
+            {new Date(app.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })} ·{" "}
+            {closeReasonText ?? stageLabel.toUpperCase()}
+          </span>
+        </button>
+        {menu}
+      </div>
+    );
+  }
+
+  return (
+    <div className="group/card relative">
       <button
         type="button"
         draggable
         onDragStart={onDragStart}
         onClick={onClick}
-        className="group flex w-full cursor-grab flex-col gap-0.5 rounded-lg border border-border/80 bg-card px-3 py-2 text-left shadow-subtle transition-all duration-200 hover:border-primary/40 hover:shadow-elevated active:cursor-grabbing"
+        className="group relative w-full cursor-grab rounded-xl border border-border/80 bg-card p-3.5 text-left shadow-subtle transition-all duration-200 hover:border-primary/40 hover:shadow-elevated active:cursor-grabbing"
       >
-        <span className="line-clamp-1 text-xs font-bold text-foreground group-hover:text-primary">
-          {app.candidate.fullName}
-          {experience != null ? (
-            <span className="font-medium text-muted-foreground"> · {experience}y</span>
-          ) : null}
-          <span className="font-medium text-muted-foreground"> · {recruiterName}</span>
-        </span>
-        <span className="text-[10px] font-medium text-muted-foreground">
-          {new Date(app.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })} ·{" "}
-          {stageLabel.toUpperCase()}
-        </span>
-      </button>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      draggable
-      onDragStart={onDragStart}
-      onClick={onClick}
-      className="group relative w-full cursor-grab rounded-xl border border-border/80 bg-card p-3.5 text-left shadow-subtle transition-all duration-200 hover:border-primary/40 hover:shadow-elevated active:cursor-grabbing"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <span className="line-clamp-1 text-sm font-bold leading-snug text-foreground group-hover:text-primary">
-          {app.candidate.fullName}
-        </span>
-        {app.priority === "high" || app.priority === "critical" ? (
-          <span className="inline-flex items-center rounded-full border border-red-100 bg-red-50 px-1.5 py-0.5 text-[9px] font-bold text-red-600 dark:border-red-500/20 dark:bg-red-500/10">
-            HIGH
+        <div className={`flex items-start justify-between gap-2 ${menu ? "pr-6" : ""}`}>
+          <span className="line-clamp-1 text-sm font-bold leading-snug text-foreground group-hover:text-primary">
+            {app.candidate.fullName}
           </span>
+          {app.priority === "high" || app.priority === "critical" ? (
+            <span className="inline-flex items-center rounded-full border border-red-100 bg-red-50 px-1.5 py-0.5 text-[9px] font-bold text-red-600 dark:border-red-500/20 dark:bg-red-500/10">
+              HIGH
+            </span>
+          ) : null}
+        </div>
+
+        <p className="mt-1 line-clamp-1 text-xs font-semibold text-primary">{app.jobOpening.title}</p>
+        {closeReasonText ? (
+          <p
+            title={closeReason?.note ?? undefined}
+            className={`mt-1.5 line-clamp-1 text-[11px] font-semibold ${
+              closeReason?.kind === "reject"
+                ? "text-red-600 dark:text-red-400"
+                : "text-amber-600 dark:text-amber-400"
+            }`}
+          >
+            {closeReasonText}
+          </p>
         ) : null}
-      </div>
 
-      <p className="mt-1 line-clamp-1 text-xs font-semibold text-primary">{app.jobOpening.title}</p>
+        <div className="mt-3 flex items-center gap-1.5 border-t border-border/40 pt-3">
+          <CandidateAvatar fullName={app.candidate.fullName} className="h-5 w-5" />
+          <span className="max-w-[120px] truncate text-[10px] font-medium text-muted-foreground">
+            Recruiter: {recruiterName}
+          </span>
+        </div>
 
-      <div className="mt-3 flex items-center gap-1.5 border-t border-border/40 pt-3">
-        <CandidateAvatar fullName={app.candidate.fullName} className="h-5 w-5" />
-        <span className="max-w-[120px] truncate text-[10px] font-medium text-muted-foreground">
-          Recruiter: {recruiterName}
-        </span>
-      </div>
-
-      <div className="mt-2 flex items-center justify-between text-[10px] font-medium text-muted-foreground">
-        <span className="inline-flex items-center gap-1">
-          <Clock className="h-3 w-3" />
-          {new Date(app.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-        </span>
-        <span className="rounded border border-border/40 bg-muted/60 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider">
-          {stageLabel}
-        </span>
-      </div>
-    </button>
+        <div className="mt-2 flex items-center justify-between text-[10px] font-medium text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            {new Date(app.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+          </span>
+          <span className="rounded border border-border/40 bg-muted/60 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider">
+            {stageLabel}
+          </span>
+        </div>
+      </button>
+      {menu}
+    </div>
   );
 }
 
@@ -283,6 +329,17 @@ function StaticBoard({
   }, [initialApplications]);
 
   const drawerApp = selectedApplication ?? applications.find((a) => a.id === selectedId) ?? null;
+  const closeDialog = useBoardCloseDialog();
+  const selectedStage = applications.find((a) => a.id === selectedId)?.currentStage;
+  const selectedColumn = COLUMNS.find((c) => c.stages.includes(selectedStage as RecruitmentPipelineStage));
+  const neighbours = columnNeighbours(
+    selectedColumn
+      ? applications
+          .filter((a) => selectedColumn.stages.includes(a.currentStage as RecruitmentPipelineStage))
+          .map((a) => a.id)
+      : [],
+    selectedId
+  );
 
   const handleDragStart = (e: React.DragEvent, id: string) => {
     setDraggedId(id);
@@ -335,6 +392,7 @@ function StaticBoard({
         <CandidateCardDensityToggle density={density} onChange={onDensityChange} />
       </div>
       {error && <ErrorAlert message={error} />}
+      {closeDialog.element}
       {isPending ? (
         <p className="text-xs font-medium text-muted-foreground">Updating pipeline…</p>
       ) : null}
@@ -371,6 +429,7 @@ function StaticBoard({
                     density={density}
                     onDragStart={(e) => handleDragStart(e, app.id)}
                     onClick={() => setApplicationId(app.id)}
+                    onRequestClose={closeDialog.requestClose}
                   />
                 ))}
 
@@ -390,6 +449,9 @@ function StaticBoard({
         open={Boolean(selectedId)}
         application={drawerApp}
         onClose={() => setApplicationId(null)}
+        prevId={neighbours.prevId}
+        nextId={neighbours.nextId}
+        onNavigate={setApplicationId}
       />
     </div>
   );
@@ -438,6 +500,11 @@ function DynamicBoard({
 
   const allItems = columns.flatMap((c) => c.items);
   const drawerApp = selectedApplication ?? allItems.find((a) => a.id === selectedId) ?? null;
+  const closeDialog = useBoardCloseDialog();
+  const neighbours = columnNeighbours(
+    columns.find((c) => c.items.some((a) => a.id === selectedId))?.items.map((a) => a.id) ?? [],
+    selectedId
+  );
 
   const handleDragStart = (e: React.DragEvent, id: string) => {
     setDraggedId(id);
@@ -528,6 +595,7 @@ function DynamicBoard({
         <CandidateCardDensityToggle density={density} onChange={onDensityChange} />
       </div>
       {error && <ErrorAlert message={error} />}
+      {closeDialog.element}
       {isPending && !loadingColumnId ? (
         <p className="text-xs font-medium text-muted-foreground">Updating pipeline…</p>
       ) : null}
@@ -579,6 +647,7 @@ function DynamicBoard({
                       stageLabel={col.title}
                       onDragStart={(e) => handleDragStart(e, app.id)}
                       onClick={() => setApplicationId(app.id)}
+                      onRequestClose={closeDialog.requestClose}
                     />
                   ))}
 
@@ -615,6 +684,9 @@ function DynamicBoard({
         open={Boolean(selectedId)}
         application={drawerApp}
         onClose={() => setApplicationId(null)}
+        prevId={neighbours.prevId}
+        nextId={neighbours.nextId}
+        onNavigate={setApplicationId}
       />
 
       <AddPipelineStageDialog

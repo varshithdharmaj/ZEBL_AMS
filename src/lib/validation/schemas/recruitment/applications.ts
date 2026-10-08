@@ -1,5 +1,9 @@
 import { z } from "zod";
 import {
+  REJECTION_REASON_CODES,
+  WITHDRAWAL_REASON_CODES,
+} from "@/lib/recruitment/application/close-reasons";
+import {
   ApplicationPriority,
   ApplicationStatus,
   RecruitmentPipelineStage,
@@ -29,15 +33,35 @@ export const moveStageSchema = z.object({
   note: z.string().trim().optional(),
 });
 
-export const rejectApplicationSchema = z.object({
-  id: z.string().trim().min(1, "Application ID is required."),
-  reason: z.string().trim().min(1, "Reason is required."),
-});
+const closeNoteSchema = z
+  .string()
+  .trim()
+  .max(1000, "Note must be 1000 characters or fewer.")
+  .optional()
+  .transform((value) => (value ? value : undefined));
 
-export const withdrawApplicationSchema = z.object({
-  id: z.string().trim().min(1, "Application ID is required."),
-  reason: z.string().trim().min(1, "Reason is required."),
-});
+/** "Other" carries no meaning on its own, so it needs a note. */
+function requireNoteForOther(data: { reasonCode: string; note?: string }, ctx: z.RefinementCtx) {
+  if (data.reasonCode === "other" && !data.note) {
+    ctx.addIssue({ code: "custom", path: ["note"], message: "Add a note when the reason is Other." });
+  }
+}
+
+export const rejectApplicationSchema = z
+  .object({
+    id: z.string().trim().min(1, "Application ID is required."),
+    reasonCode: z.enum(REJECTION_REASON_CODES, { error: "Choose a rejection reason." }),
+    note: closeNoteSchema,
+  })
+  .superRefine(requireNoteForOther);
+
+export const withdrawApplicationSchema = z
+  .object({
+    id: z.string().trim().min(1, "Application ID is required."),
+    reasonCode: z.enum(WITHDRAWAL_REASON_CODES, { error: "Choose a withdrawal reason." }),
+    note: closeNoteSchema,
+  })
+  .superRefine(requireNoteForOther);
 
 export const updateApplicationAssessmentSchema = z.object({
   applicationId: z.string().trim().min(1, "Application ID is required."),

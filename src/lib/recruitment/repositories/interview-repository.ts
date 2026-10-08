@@ -149,6 +149,7 @@ export type InterviewFeedbackSubmitData = {
   overallRating?: number | null;
   ratingsJson?: Prisma.InputJsonValue;
   recommendation?: string | null;
+  consideredForPosition?: boolean | null;
   strengths?: string | null;
   concerns?: string | null;
   privateNotes?: string | null;

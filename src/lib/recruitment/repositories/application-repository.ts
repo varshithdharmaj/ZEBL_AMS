@@ -82,8 +82,10 @@ export type ApplicationUpdateData = {
   riskFlagsJson?: string;
   aggregateScore?: number | null;
   rejectedReason?: string | null;
+  rejectionReasonCode?: string | null;
   holdReason?: string | null;
   withdrawnReason?: string | null;
+  withdrawalReasonCode?: string | null;
 };
 
 export type ApplicationListFilters = {

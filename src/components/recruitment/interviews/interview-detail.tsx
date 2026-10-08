@@ -25,10 +25,13 @@ import {
 } from "lucide-react";
 import type { InterviewDetail } from "@/lib/recruitment/repositories/interview-repository";
 import { FeedbackForm } from "./feedback-form";
+import { ScorecardSummary, FeedbackScorecardDetails, VerdictBadge } from "./scorecard-summary";
+import { StarRatingDisplay } from "./star-rating";
 import { buildRecruitmentEntityHref } from "@/lib/recruitment/navigation/return-to";
 
 interface InterviewDetailViewProps {
-  interview: InterviewDetail;
+  /** hiddenFeedbackCount: scorecards held back until the viewer submits their own. */
+  interview: InterviewDetail & { hiddenFeedbackCount?: number };
   currentUserId: string;
   canManage: boolean;
   backHref?: string;
@@ -185,6 +188,8 @@ export function InterviewDetailView({
   );
   const canSubmitFeedback =
     interview.status !== "cancelled" && (canManage || isAssignedPanelist);
+  const myFeedback =
+    interview.feedback.find((f) => f.author.user?.id === currentUserId) ?? null;
 
   return (
     <div className="space-y-6">
@@ -341,7 +346,15 @@ export function InterviewDetailView({
                   onClick={() => setShowFeedbackForm(true)}
                   className="font-semibold text-xs rounded-lg gap-1 shadow-subtle"
                 >
-                  <Plus className="h-4 w-4" /> Submit Scorecard
+                  {myFeedback ? (
+                    <>
+                      <Pencil className="h-4 w-4" /> Edit My Scorecard
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-4 w-4" /> Submit Scorecard
+                    </>
+                  )}
                 </Button>
               ) : null}
             </div>
@@ -350,7 +363,7 @@ export function InterviewDetailView({
               <div className="bg-muted/10 rounded-xl border border-border/60 p-5">
                 <div className="flex items-center justify-between border-b border-border/60 pb-3 mb-4">
                   <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
-                    Submit Scorecard
+                    {myFeedback ? "Edit My Scorecard" : "Submit Scorecard"}
                   </h4>
                   <Button
                     variant="ghost"
@@ -364,12 +377,26 @@ export function InterviewDetailView({
                 <FeedbackForm
                   interviewId={interview.id}
                   applicationId={interview.applicationId}
+                  initialValues={myFeedback}
                   onSuccess={() => {
                     setShowFeedbackForm(false);
                     router.refresh();
                   }}
                 />
               </div>
+            ) : null}
+
+            {interview.hiddenFeedbackCount ? (
+              <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                {interview.hiddenFeedbackCount === 1
+                  ? "1 other interviewer has submitted a scorecard."
+                  : `${interview.hiddenFeedbackCount} other interviewers have submitted scorecards.`}{" "}
+                You&apos;ll see them after you submit yours, so your ratings stay independent.
+              </div>
+            ) : null}
+
+            {interview.feedback.length > 0 ? (
+              <ScorecardSummary feedback={interview.feedback} />
             ) : null}
 
             {interview.feedback.length === 0 ? (
@@ -392,34 +419,40 @@ export function InterviewDetailView({
                             : "—"}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="font-bold text-xs">
-                          Rating: {feed.overallRating}/5
-                        </Badge>
-                        <Badge variant="secondary" className="font-bold text-xs capitalize">
-                          {feed.recommendation?.replace("_", " ")}
-                        </Badge>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <StarRatingDisplay value={feed.overallRating} showNumber />
+                        <VerdictBadge
+                          recommendation={feed.recommendation}
+                          consideredForPosition={feed.consideredForPosition}
+                        />
                       </div>
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-2 text-xs">
-                      <div>
-                        <span className="font-bold text-muted-foreground block text-[10px] uppercase tracking-wider mb-1">
-                          Strengths
-                        </span>
-                        <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                          {feed.strengths}
-                        </p>
-                      </div>
-                      {feed.concerns && (
+                    <FeedbackScorecardDetails feedback={feed} />
+                    <div className="space-y-2 text-xs">
+                      {feed.strengths ? (
                         <div>
-                          <span className="font-bold text-muted-foreground block text-[10px] uppercase tracking-wider mb-1">
+                          <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                            {feed.concerns ? "Strengths" : "Remarks"}
+                          </span>
+                          <p className="whitespace-pre-wrap leading-relaxed text-muted-foreground">{feed.strengths}</p>
+                        </div>
+                      ) : null}
+                      {feed.concerns ? (
+                        <div>
+                          <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                             Concerns
                           </span>
-                          <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                            {feed.concerns}
-                          </p>
+                          <p className="whitespace-pre-wrap leading-relaxed text-muted-foreground">{feed.concerns}</p>
                         </div>
-                      )}
+                      ) : null}
+                      {feed.privateNotes ? (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 dark:border-amber-500/30 dark:bg-amber-500/10">
+                          <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">
+                            Comment to HR · only HR sees this
+                          </span>
+                          <p className="whitespace-pre-wrap leading-relaxed text-amber-900 dark:text-amber-200">{feed.privateNotes}</p>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ))}

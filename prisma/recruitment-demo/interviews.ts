@@ -87,6 +87,7 @@ export async function seedInterviews(ctx: DemoCtx): Promise<void> {
       location: "Teams",
       meetingUrl: `https://meet.zebl.demo/${app.id.slice(0, 6)}`,
       panelistEmployeeIds: [panel.id],
+      notifyCandidate: false,
     });
 
     if (spec.status === InterviewStatus.completed) {
@@ -101,15 +102,27 @@ export async function seedInterviews(ctx: DemoCtx): Promise<void> {
               : spec.rec === "no_hire"
                 ? 2.5
                 : 1.5;
+      const verdict =
+        spec.rec === "strong_hire"
+          ? "strong_yes"
+          : spec.rec === "strong_no_hire"
+            ? "strong_no"
+            : spec.rec === "no_hire"
+              ? "no"
+              : "yes";
       await svc.submitFeedback(ctx.session, {
         interviewId: id,
-        overallRating: rating,
-        recommendation: spec.rec ?? "hire",
-        strengths: "Clear ownership and structured thinking.",
-        concerns: (spec.rec ?? "").includes("no_hire")
+        verdict,
+        remarks: (spec.rec ?? "").includes("no_hire")
           ? "Gaps vs bar for this level."
-          : undefined,
-        ratingsJson: { technical: rating, communication: rating - 0.2 },
+          : "Clear ownership and structured thinking.",
+        ratingsJson: {
+          process_knowledge: Math.floor(rating),
+          skills: Math.round(rating),
+          communication: Math.round(rating),
+          smartness: Math.round(rating),
+          eagerness_to_learn: Math.min(5, Math.ceil(rating)),
+        },
       });
     } else if (spec.status === InterviewStatus.cancelled) {
       await svc.cancelInterview(ctx.session, id);

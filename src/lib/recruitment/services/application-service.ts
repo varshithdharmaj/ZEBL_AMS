@@ -40,6 +40,7 @@ import {
   updateApplicationAssessmentSchema,
   type UpdateApplicationAssessmentInput,
 } from "@/lib/validation/schemas/recruitment/applications";
+import { describeCloseReason } from "@/lib/recruitment/application/close-reasons";
 
 export type AfterCommitBuffer = ReturnType<typeof createAfterCommitBuffer>;
 
@@ -473,13 +474,14 @@ export function createApplicationService(
 
     async rejectApplication(
       session: SessionUser,
-      input: { id: string; reason: string }
+      input: { id: string; reasonCode: string; note?: string }
     ): Promise<void> {
       RecruitmentPermissionService.requireModuleEnabled();
       await RecruitmentPermissionService.assertCanManageCandidates(session);
       const actor = toRecruitmentActor(session);
 
       const parsed = rejectApplicationSchema.parse(input);
+      const reasonSummary = describeCloseReason("reject", parsed.reasonCode, parsed.note) ?? "";
 
       const app = await repository.getApplication(parsed.id);
       if (!app) {
@@ -495,7 +497,8 @@ export function createApplicationService(
             status: ApplicationStatus.rejected,
             currentStage: RecruitmentPipelineStage.rejected,
             stageEnteredAt: new Date(),
-            rejectedReason: parsed.reason,
+            rejectionReasonCode: parsed.reasonCode,
+            rejectedReason: parsed.note ?? null,
           },
           tx
         );
@@ -512,7 +515,7 @@ export function createApplicationService(
             toStage: RecruitmentPipelineStage.rejected,
             fromStageId,
             toStageId,
-            note: `Rejected: ${parsed.reason}`,
+            note: `Rejected: ${reasonSummary}`,
             actorUserId: session.id,
           },
         });
@@ -526,9 +529,9 @@ export function createApplicationService(
             candidateId: app.candidateId,
             jobOpeningId: app.jobOpeningId,
             eventType: "application_rejected",
-            summary: `Application rejected: ${parsed.reason}`,
+            summary: `Application rejected: ${reasonSummary}`,
             actorUserId: session.id,
-            metadata: { reason: parsed.reason },
+            metadata: { reasonCode: parsed.reasonCode, note: parsed.note ?? null },
           },
           tx
         );
@@ -551,13 +554,14 @@ export function createApplicationService(
 
     async withdrawApplication(
       session: SessionUser,
-      input: { id: string; reason: string }
+      input: { id: string; reasonCode: string; note?: string }
     ): Promise<void> {
       RecruitmentPermissionService.requireModuleEnabled();
       await RecruitmentPermissionService.assertCanManageCandidates(session);
       const actor = toRecruitmentActor(session);
 
       const parsed = withdrawApplicationSchema.parse(input);
+      const reasonSummary = describeCloseReason("withdraw", parsed.reasonCode, parsed.note) ?? "";
 
       const app = await repository.getApplication(parsed.id);
       if (!app) {
@@ -573,7 +577,8 @@ export function createApplicationService(
             status: ApplicationStatus.withdrawn,
             currentStage: RecruitmentPipelineStage.withdrawn,
             stageEnteredAt: new Date(),
-            withdrawnReason: parsed.reason,
+            withdrawalReasonCode: parsed.reasonCode,
+            withdrawnReason: parsed.note ?? null,
           },
           tx
         );
@@ -590,7 +595,7 @@ export function createApplicationService(
             toStage: RecruitmentPipelineStage.withdrawn,
             fromStageId,
             toStageId,
-            note: `Withdrawn: ${parsed.reason}`,
+            note: `Withdrawn: ${reasonSummary}`,
             actorUserId: session.id,
           },
         });
@@ -604,9 +609,9 @@ export function createApplicationService(
             candidateId: app.candidateId,
             jobOpeningId: app.jobOpeningId,
             eventType: "application_withdrawn",
-            summary: `Application withdrawn: ${parsed.reason}`,
+            summary: `Application withdrawn: ${reasonSummary}`,
             actorUserId: session.id,
-            metadata: { reason: parsed.reason },
+            metadata: { reasonCode: parsed.reasonCode, note: parsed.note ?? null },
           },
           tx
         );
@@ -662,7 +667,9 @@ export function createApplicationService(
             currentStage: targetStage,
             stageEnteredAt: new Date(),
             rejectedReason: null,
+            rejectionReasonCode: null,
             withdrawnReason: null,
+            withdrawalReasonCode: null,
           },
           tx
         );

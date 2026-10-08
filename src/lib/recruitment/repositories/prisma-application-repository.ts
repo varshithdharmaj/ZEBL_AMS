@@ -381,8 +381,10 @@ export const prismaApplicationRepository: ApplicationRepository = {
         riskFlagsJson: patch.riskFlagsJson,
         aggregateScore: patch.aggregateScore,
         rejectedReason: patch.rejectedReason,
+        rejectionReasonCode: patch.rejectionReasonCode,
         holdReason: patch.holdReason,
         withdrawnReason: patch.withdrawnReason,
+        withdrawalReasonCode: patch.withdrawalReasonCode,
       },
     });
   },
