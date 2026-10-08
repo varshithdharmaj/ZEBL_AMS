@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowDown, ArrowLeft, ArrowUp, ClipboardPaste, Download, ExternalLink, FileText, Pencil, Search, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, CalendarDays, Columns3, FileText, Layers, Pencil, Search, X } from "lucide-react";
 import { RecruitmentPipelineStage } from "@/generated/prisma/enums";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ApplicationPipelineDrawer,
@@ -16,26 +17,36 @@ import {
 } from "@/components/recruitment/applications/application-pipeline-drawer";
 import { StarRatingDisplay } from "@/components/recruitment/interviews/star-rating";
 import { BatchProgressBar, BatchProgressLegend } from "@/components/recruitment/batches/batch-progress-bar";
-import { BatchPasteDialog } from "@/components/recruitment/batches/batch-paste-dialog";
 import {
   removeBatchMembersAction,
   renameBatchAction,
+  setBatchInterviewDateAction,
   setBatchStatusAction,
   updateBatchRemarksAction,
 } from "@/actions/recruitment-batches";
 import { bulkMoveApplicationsStageAction } from "@/actions/recruitment-applications";
 import type { BatchSheet, BatchSheetRow } from "@/lib/recruitment/batch/batch-service";
 import { BATCH_BUCKETS, type BatchBucket } from "@/lib/recruitment/batch/batch-progress";
-import { isLink } from "@/lib/recruitment/batch/parse-pasted-rows";
+import { formatCtc, formatInterviewDate } from "@/lib/recruitment/batch/batch-membership";
 import { cn } from "@/lib/utils";
 
-type SortKey = "slNo" | "name" | "location" | "qualification" | "experienceYears" | "availability" | "role" | "hrStars" | "stageLabel";
+type SortKey = "slNo" | "name" | "role" | "experienceYears" | "currentCtc" | "hrStars" | "education" | "noticePeriod" | "stageLabel";
 
 const MOVE_OPTIONS = [
   { stage: RecruitmentPipelineStage.hr_round, label: "HR Round" },
   { stage: RecruitmentPipelineStage.manager_round, label: "Manager Round" },
   { stage: RecruitmentPipelineStage.decision, label: "Selected" },
 ] as const;
+
+const EXTRA_COLUMNS = [
+  { id: "email", label: "Email ID" },
+  { id: "phone", label: "Phone Number" },
+  { id: "location", label: "Current Location" },
+] as const;
+type ExtraColumnId = (typeof EXTRA_COLUMNS)[number]["id"];
+
+/** Checkbox, Sl.no, Name, Role, Experience, CTC, HR ★, Education, Notice, Resume, Stage, Remarks. */
+const BASE_COLUMNS = 12;
 
 const BUCKET_DOT = Object.fromEntries(BATCH_BUCKETS.map((b) => [b.id, b.dotClass])) as Record<BatchBucket, string>;
 
@@ -49,24 +60,20 @@ function compare(a: BatchSheetRow, b: BatchSheetRow, key: SortKey): number {
   return String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: "base" });
 }
 
-function formatExperience(years: number | null): string {
-  if (years == null) return "—";
+function formatExperience(years: number | null): string | null {
+  if (years == null) return null;
   if (years === 0) return "Fresher";
   return `${years} yr${years === 1 ? "" : "s"}`;
 }
 
 export function BatchSheetView({
   sheet,
-  jobs,
   selectedApplication,
   initialTab,
-  openPaste,
 }: {
   sheet: BatchSheet;
-  jobs: Array<{ id: string; title: string; status: string }>;
   selectedApplication: PipelineDrawerApplication | null;
   initialTab: PipelineDrawerTab;
-  openPaste: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -75,19 +82,12 @@ export function BatchSheetView({
   const [bucket, setBucket] = useState<BatchBucket | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "slNo", dir: "asc" });
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [pasteOpen, setPasteOpen] = useState(openPaste && sheet.status === "open");
+  const [extras, setExtras] = useState<Set<ExtraColumnId>>(new Set());
+  const [columnsOpen, setColumnsOpen] = useState(false);
   const [notice, setNotice] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [isPending, startTransition] = useTransition();
   const isOpen = sheet.status === "open";
-
-  // "?paste=1" (from New batch) only opens the dialog once; drop it from the
-  // address bar without reloading the page, so a refresh doesn't reopen it.
-  useEffect(() => {
-    if (!openPaste) return;
-    const url = new URL(window.location.href);
-    url.searchParams.delete("paste");
-    window.history.replaceState(null, "", url.pathname + url.search);
-  }, [openPaste]);
+  const show = (id: ExtraColumnId) => extras.has(id);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -99,7 +99,8 @@ export function BatchSheetView({
         r.name.toLowerCase().includes(q) ||
         (r.email ?? "").toLowerCase().includes(q) ||
         (digits.length >= 3 && (r.phone ?? "").replace(/\D/g, "").includes(digits)) ||
-        (r.location ?? "").toLowerCase().includes(q) ||
+        r.role.toLowerCase().includes(q) ||
+        r.experiences.some((e) => e.company.toLowerCase().includes(q)) ||
         (r.remarks ?? "").toLowerCase().includes(q)
       );
     });
@@ -119,7 +120,6 @@ export function BatchSheetView({
   const setPanel = useCallback(
     (applicationId: string | null, tab?: PipelineDrawerTab) => {
       const params = new URLSearchParams(searchParams.toString());
-      params.delete("paste");
       if (applicationId) params.set("applicationId", applicationId);
       else params.delete("applicationId");
       if (applicationId && tab && tab !== "overview") params.set("tab", tab);
@@ -136,6 +136,15 @@ export function BatchSheetView({
 
   function toggleSort(key: SortKey) {
     setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
+  }
+
+  function toggleExtra(id: ExtraColumnId) {
+    setExtras((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   const allShownSelected = rows.length > 0 && rows.every((r) => selected.has(r.memberId));
@@ -176,17 +185,7 @@ export function BatchSheetView({
     });
   }
 
-  function exportHref(memberIds?: string[]) {
-    const params = new URLSearchParams();
-    memberIds?.forEach((id) => params.append("ids", id));
-    const qs = params.toString();
-    return `/api/recruitment/batches/${sheet.id}/export${qs ? `?${qs}` : ""}`;
-  }
-
-  const defaultJobId = useMemo(() => {
-    const ids = new Set(sheet.rows.map((r) => r.jobOpeningId));
-    return ids.size === 1 ? [...ids][0] : null;
-  }, [sheet.rows]);
+  const columnCount = BASE_COLUMNS + extras.size;
 
   return (
     <div className="space-y-4">
@@ -208,25 +207,24 @@ export function BatchSheetView({
                 <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">Closed</span>
               ) : null}
             </div>
-            <p className="text-sm text-muted-foreground">
-              {sheet.rows.length} candidate{sheet.rows.length === 1 ? "" : "s"} · created{" "}
-              {new Date(sheet.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" })}
-              {sheet.createdByName ? ` by ${sheet.createdByName}` : ""}
-            </p>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+              <InterviewDate batchId={sheet.id} value={sheet.interviewDate} editable={isOpen} />
+              <span>
+                {sheet.rows.length} candidate{sheet.rows.length === 1 ? "" : "s"} · created{" "}
+                {new Date(sheet.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" })}
+                {sheet.createdByName ? ` by ${sheet.createdByName}` : ""}
+              </span>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {isOpen ? (
-              <Button onClick={() => setPasteOpen(true)}>
-                <ClipboardPaste className="h-4 w-4" />
-                Paste from Excel
+              <Button asChild variant="outline">
+                <Link href="/admin/recruitment/pipeline?view=list">
+                  <Layers className="h-4 w-4" />
+                  Add candidates
+                </Link>
               </Button>
             ) : null}
-            <Button asChild variant="outline" disabled={sheet.rows.length === 0}>
-              <a href={exportHref()} download>
-                <Download className="h-4 w-4" />
-                Export
-              </a>
-            </Button>
             <Button
               variant="ghost"
               disabled={isPending}
@@ -265,14 +263,18 @@ export function BatchSheetView({
 
       {sheet.rows.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-card px-6 py-14 text-center">
-          <ClipboardPaste className="h-8 w-8 text-muted-foreground" aria-hidden />
+          <Layers className="h-8 w-8 text-muted-foreground" aria-hidden />
           <div className="space-y-1">
             <p className="font-medium">No candidates in this batch yet</p>
             <p className="text-sm text-muted-foreground">
-              Select the rows in your Excel sheet, copy them, and paste them here.
+              On the Pipeline list, tick the candidates for this interview and choose Add to batch.
             </p>
           </div>
-          {isOpen ? <Button onClick={() => setPasteOpen(true)}>Paste from Excel</Button> : null}
+          {isOpen ? (
+            <Button asChild>
+              <Link href="/admin/recruitment/pipeline?view=list">Go to Pipeline list</Link>
+            </Button>
+          ) : null}
         </div>
       ) : (
         <>
@@ -282,7 +284,6 @@ export function BatchSheetView({
               <SelectionBar
                 count={selectedRows.length}
                 disabled={isPending}
-                exportHref={exportHref(selectedRows.map((r) => r.memberId))}
                 onMove={(stage) =>
                   run(
                     () => bulkMoveApplicationsStageAction({}, { ids: selectedRows.map((r) => r.applicationId), stage }),
@@ -303,7 +304,7 @@ export function BatchSheetView({
                 <Input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search name, phone, email"
+                  placeholder="Search name, role, company"
                   className="h-9 pl-8"
                   aria-label="Search this batch"
                 />
@@ -314,10 +315,39 @@ export function BatchSheetView({
                 Showing {rows.length} of {sheet.rows.length}
               </span>
             ) : null}
+            <Popover
+              open={columnsOpen}
+              onOpenChange={setColumnsOpen}
+              align="end"
+              className="ml-auto"
+              trigger={
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  aria-expanded={columnsOpen}
+                  onClick={() => setColumnsOpen((open) => !open)}
+                >
+                  <Columns3 className="h-3.5 w-3.5" />
+                  Columns
+                  {extras.size > 0 ? <span className="text-muted-foreground">{extras.size}</span> : null}
+                </Button>
+              }
+            >
+              <div className="space-y-2 p-1">
+                <p className="px-1 text-xs font-medium text-muted-foreground">More columns</p>
+                {EXTRA_COLUMNS.map((col) => (
+                  <label key={col.id} className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-sm hover:bg-muted">
+                    <Checkbox checked={extras.has(col.id)} onCheckedChange={() => toggleExtra(col.id)} aria-label={col.label} />
+                    {col.label}
+                  </label>
+                ))}
+              </div>
+            </Popover>
           </div>
 
           <div className="max-h-[calc(100vh-15rem)] overflow-auto rounded-xl border border-border bg-card">
-            <table className="w-full min-w-[1400px] border-separate border-spacing-0 text-[13px]">
+            <table className="w-full border-separate border-spacing-0 text-[13px]">
               <thead className="sticky top-0 z-20 bg-muted text-left text-xs text-muted-foreground">
                 <tr>
                   <th className="sticky left-0 z-30 w-10 border-b border-border bg-muted px-3 py-2">
@@ -325,17 +355,18 @@ export function BatchSheetView({
                   </th>
                   <SortHeader label="Sl.no" k="slNo" sort={sort} onSort={toggleSort} className="w-14 text-right" />
                   <SortHeader label="Name" k="name" sort={sort} onSort={toggleSort} className="sticky left-10 z-30 min-w-44 bg-muted" />
-                  <th className="border-b border-border px-3 py-2 font-medium">Email ID</th>
-                  <th className="border-b border-border px-3 py-2 font-medium">Phone Number</th>
-                  <SortHeader label="Current Location" k="location" sort={sort} onSort={toggleSort} />
-                  <SortHeader label="Qualification" k="qualification" sort={sort} onSort={toggleSort} />
-                  <SortHeader label="Total Experience" k="experienceYears" sort={sort} onSort={toggleSort} className="text-right" />
-                  <th className="min-w-56 border-b border-border px-3 py-2 font-medium">Remarks</th>
-                  <SortHeader label="Availability" k="availability" sort={sort} onSort={toggleSort} />
-                  <th className="border-b border-border px-3 py-2 font-medium">Candidate profile</th>
-                  <SortHeader label="Role" k="role" sort={sort} onSort={toggleSort} />
+                  <SortHeader label="Applied role" k="role" sort={sort} onSort={toggleSort} />
+                  <SortHeader label="Experience" k="experienceYears" sort={sort} onSort={toggleSort} className="min-w-52" />
+                  <SortHeader label="CTC (current / expected)" k="currentCtc" sort={sort} onSort={toggleSort} />
                   <SortHeader label="HR ★" k="hrStars" sort={sort} onSort={toggleSort} />
+                  <SortHeader label="Education" k="education" sort={sort} onSort={toggleSort} />
+                  <SortHeader label="Notice period" k="noticePeriod" sort={sort} onSort={toggleSort} />
+                  <th className="border-b border-border px-3 py-2 font-medium">Resume</th>
                   <SortHeader label="Stage" k="stageLabel" sort={sort} onSort={toggleSort} />
+                  <th className="min-w-56 border-b border-border px-3 py-2 font-medium">Remarks</th>
+                  {show("email") ? <th className="border-b border-border px-3 py-2 font-medium">Email ID</th> : null}
+                  {show("phone") ? <th className="border-b border-border px-3 py-2 font-medium">Phone Number</th> : null}
+                  {show("location") ? <th className="border-b border-border px-3 py-2 font-medium">Current Location</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -344,6 +375,8 @@ export function BatchSheetView({
                   const isActive = openId === r.applicationId;
                   const cell = "border-b border-border px-3 py-2 align-top";
                   const stickyBg = isActive ? "bg-accent-blue-muted" : isSelected ? "bg-muted" : "bg-card group-hover:bg-muted/60";
+                  const current = formatCtc(r.currentCtc);
+                  const expected = formatCtc(r.expectedCtc);
                   return (
                     <tr
                       key={r.memberId}
@@ -354,65 +387,33 @@ export function BatchSheetView({
                       </td>
                       <td className={cn(cell, "text-right tabular-nums text-muted-foreground")}>{r.slNo}</td>
                       <td className={cn(cell, "sticky left-10 z-10", stickyBg)}>
-                        <span className="flex items-center gap-2">
-                          {/* Stage at a glance, since the Stage column is off to the right. */}
-                          <span
-                            className={cn("h-2 w-2 shrink-0 rounded-full", BUCKET_DOT[r.bucket])}
-                            title={r.stageLabel}
-                            aria-hidden
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setPanel(r.applicationId)}
-                            className="text-left font-medium text-foreground hover:underline focus-visible:underline focus-visible:outline-none"
-                          >
-                            {r.name}
-                          </button>
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setPanel(r.applicationId)}
+                          className="text-left font-medium text-foreground hover:underline focus-visible:underline focus-visible:outline-none"
+                        >
+                          {r.name}
+                        </button>
                       </td>
-                      <td className={cn(cell, "max-w-56 truncate")} title={r.email ?? undefined}>
-                        {r.email ?? <Blank />}
+                      <td className={cn(cell, "whitespace-nowrap")}>
+                        <Link href={`/admin/recruitment/jobs/${r.jobOpeningId}`} className="text-accent-blue hover:underline">
+                          {r.role}
+                        </Link>
+                      </td>
+                      <td className={cell}>
+                        <ExperienceCell years={r.experienceYears} experiences={r.experiences} />
                       </td>
                       <td className={cn(cell, "whitespace-nowrap tabular-nums")}>
-                        {r.phone ? (
-                          <a href={`tel:${r.phone}`} className="hover:underline">
-                            {r.phone}
-                          </a>
+                        {current || expected ? (
+                          <>
+                            {current ?? <Blank />}
+                            <span className="text-muted-foreground"> / </span>
+                            {expected ?? <Blank />}
+                          </>
                         ) : (
                           <Blank />
                         )}
                       </td>
-                      <td className={cell}>{r.location ?? <Blank />}</td>
-                      <td className={cell}>{r.qualification ?? <Blank />}</td>
-                      <td className={cn(cell, "whitespace-nowrap text-right tabular-nums")}>{formatExperience(r.experienceYears)}</td>
-                      <td className={cn(cell, "p-0")}>
-                        <RemarksCell memberId={r.memberId} value={r.remarks} editable={isOpen} />
-                      </td>
-                      <td className={cell}>{r.availability ?? <Blank />}</td>
-                      <td className={cn(cell, "whitespace-nowrap")}>
-                        {r.resume ? (
-                          <button
-                            type="button"
-                            onClick={() => setPanel(r.applicationId, "resume")}
-                            className="inline-flex items-center gap-1 text-accent-blue hover:underline"
-                          >
-                            <FileText className="h-3.5 w-3.5" />
-                            Resume
-                          </button>
-                        ) : isLink(r.profile) ? (
-                          <a href={r.profile} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-accent-blue hover:underline">
-                            Open link
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                        ) : r.profile ? (
-                          <span className="block max-w-40 truncate" title={r.profile}>
-                            {r.profile}
-                          </span>
-                        ) : (
-                          <Blank />
-                        )}
-                      </td>
-                      <td className={cn(cell, "whitespace-nowrap")}>{r.role}</td>
                       <td className={cn(cell, "whitespace-nowrap")}>
                         {r.hrStars != null ? (
                           <StarRatingDisplay value={r.hrStars} size="xs" showNumber />
@@ -422,18 +423,56 @@ export function BatchSheetView({
                           </span>
                         )}
                       </td>
+                      <td className={cell}>{r.education ?? <Blank />}</td>
+                      <td className={cn(cell, "whitespace-nowrap")}>{r.noticePeriod ?? <Blank />}</td>
+                      <td className={cn(cell, "whitespace-nowrap")}>
+                        {r.resume ? (
+                          <a
+                            href={`/api/recruitment/documents/preview?id=${encodeURIComponent(r.resume.id)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-accent-blue hover:underline"
+                            title={r.resume.fileName}
+                          >
+                            <FileText className="h-3.5 w-3.5" />
+                            Resume
+                          </a>
+                        ) : (
+                          <Blank />
+                        )}
+                      </td>
                       <td className={cn(cell, "whitespace-nowrap")}>
                         <span className="inline-flex items-center gap-1.5">
                           <span className={cn("h-2 w-2 rounded-full", BUCKET_DOT[r.bucket])} aria-hidden />
                           {r.stageLabel}
                         </span>
                       </td>
+                      <td className={cn(cell, "p-0")}>
+                        <RemarksCell memberId={r.memberId} value={r.remarks} editable={isOpen} />
+                      </td>
+                      {show("email") ? (
+                        <td className={cn(cell, "max-w-56 truncate")} title={r.email ?? undefined}>
+                          {r.email ?? <Blank />}
+                        </td>
+                      ) : null}
+                      {show("phone") ? (
+                        <td className={cn(cell, "whitespace-nowrap tabular-nums")}>
+                          {r.phone ? (
+                            <a href={`tel:${r.phone}`} className="hover:underline">
+                              {r.phone}
+                            </a>
+                          ) : (
+                            <Blank />
+                          )}
+                        </td>
+                      ) : null}
+                      {show("location") ? <td className={cell}>{r.location ?? <Blank />}</td> : null}
                     </tr>
                   );
                 })}
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={14} className="px-3 py-10 text-center text-sm text-muted-foreground">
+                    <td colSpan={columnCount} className="px-3 py-10 text-center text-sm text-muted-foreground">
                       No candidates match.{" "}
                       <button type="button" className="underline" onClick={() => { setQuery(""); setBucket(null); }}>
                         Clear search
@@ -445,7 +484,7 @@ export function BatchSheetView({
             </table>
           </div>
           <p className="text-xs text-muted-foreground">
-            Click a name to see the candidate without leaving the sheet. In the panel, J and K move to the next and previous person.
+            Click a name to see the candidate without leaving the batch. In the panel, J and K move to the next and previous person.
           </p>
         </>
       )}
@@ -459,20 +498,79 @@ export function BatchSheetView({
         onNavigate={(id) => setPanel(id)}
         initialTab={initialTab}
       />
-
-      <BatchPasteDialog
-        open={pasteOpen}
-        onOpenChange={setPasteOpen}
-        batchId={sheet.id}
-        jobs={jobs}
-        defaultJobId={defaultJobId}
-      />
     </div>
   );
 }
 
 function Blank() {
   return <span className="text-muted-foreground/60">—</span>;
+}
+
+function ExperienceCell({ years, experiences }: { years: number | null; experiences: BatchSheetRow["experiences"] }) {
+  const total = formatExperience(years);
+  if (!total && experiences.length === 0) return <Blank />;
+  return (
+    <div className="space-y-0.5">
+      {total ? <div className="font-medium tabular-nums">{total}</div> : null}
+      {experiences.slice(0, 3).map((e, i) => (
+        <div key={i} className="text-xs text-muted-foreground">
+          <span className="text-foreground">{e.company}</span>
+          {e.role ? ` · ${e.role}` : ""}
+          {e.current ? " (current)" : ""}
+        </div>
+      ))}
+      {experiences.length > 3 ? <div className="text-xs text-muted-foreground">+{experiences.length - 3} more</div> : null}
+    </div>
+  );
+}
+
+function InterviewDate({ batchId, value, editable }: { batchId: string; value: Date | null; editable: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+  const iso = value ? new Date(value).toISOString().slice(0, 10) : "";
+
+  function save(next: string) {
+    setEditing(false);
+    if (!next || next === iso) return;
+    startTransition(async () => {
+      const res = await setBatchInterviewDateAction({ batchId, interviewDate: next });
+      setError(res.error ?? null);
+      if (!res.error) router.refresh();
+    });
+  }
+
+  if (editing) {
+    return (
+      <Input
+        type="date"
+        defaultValue={iso}
+        autoFocus
+        onBlur={(e) => save(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") save(e.currentTarget.value);
+          if (e.key === "Escape") setEditing(false);
+        }}
+        className="h-8 w-44"
+        aria-label="Interview date"
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      disabled={!editable || isPending}
+      onClick={() => setEditing(true)}
+      className="group inline-flex items-center gap-1.5 font-medium text-foreground disabled:cursor-default"
+      title={error ?? (editable ? "Change interview date" : undefined)}
+    >
+      <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+      {formatInterviewDate(value) ? `Interview ${formatInterviewDate(value)}` : <span className="text-muted-foreground">Set interview date</span>}
+      {editable ? <Pencil className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden /> : null}
+      {error ? <span className="text-xs text-danger">Not saved</span> : null}
+    </button>
+  );
 }
 
 function SortHeader({
@@ -510,14 +608,12 @@ function SortHeader({
 function SelectionBar({
   count,
   disabled,
-  exportHref,
   onMove,
   onRemove,
   onClear,
 }: {
   count: number;
   disabled: boolean;
-  exportHref: string;
   onMove: (stage: RecruitmentPipelineStage) => void;
   onRemove: () => void;
   onClear: () => void;
@@ -544,12 +640,6 @@ function SelectionBar({
           ))}
         </SelectContent>
       </Select>
-      <Button asChild variant="outline" size="sm">
-        <a href={exportHref} download>
-          <Download className="h-3.5 w-3.5" />
-          Export
-        </a>
-      </Button>
       <Button
         variant={confirmRemove ? "destructive" : "outline"}
         size="sm"

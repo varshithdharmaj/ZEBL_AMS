@@ -5,6 +5,7 @@ import { listBatches } from "@/lib/recruitment/batch/batch-service";
 import { HiringBatchStatus } from "@/generated/prisma/enums";
 import { NewBatchButton } from "@/components/recruitment/batches/new-batch-button";
 import { BatchProgressBar, BatchProgressLegend } from "@/components/recruitment/batches/batch-progress-bar";
+import { formatInterviewDate } from "@/lib/recruitment/batch/batch-membership";
 import { cn } from "@/lib/utils";
 
 const FILTERS = [
@@ -59,7 +60,7 @@ export default async function BatchesPage({
           <div className="space-y-1">
             <p className="font-medium">{show === "open" ? "No open batches" : show === "closed" ? "No closed batches" : "No batches yet"}</p>
             <p className="text-sm text-muted-foreground">
-              Create a batch, then paste the candidates straight from your Excel sheet.
+              Create a batch for an interview date, then tick candidates on the Pipeline list and choose Add to batch.
             </p>
           </div>
           {show !== "closed" ? <NewBatchButton variant="outline" /> : null}
@@ -70,6 +71,7 @@ export default async function BatchesPage({
             <thead className="border-b border-border bg-muted/50 text-left text-xs font-medium text-muted-foreground">
               <tr>
                 <th className="px-4 py-2.5 font-medium">Batch ID</th>
+                <th className="px-4 py-2.5 font-medium">Interview date</th>
                 <th className="px-4 py-2.5 font-medium">Name</th>
                 <th className="px-4 py-2.5 text-right font-medium">Candidates</th>
                 <th className="hidden w-[38%] px-4 py-2.5 font-medium md:table-cell">Progress</th>
@@ -86,6 +88,9 @@ export default async function BatchesPage({
                     {b.status === "closed" ? (
                       <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-sans text-[11px] font-medium text-muted-foreground">Closed</span>
                     ) : null}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3">
+                    {formatInterviewDate(b.interviewDate) ?? <span className="text-muted-foreground">—</span>}
                   </td>
                   <td className="px-4 py-3">{b.name ?? <span className="text-muted-foreground">—</span>}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{b.candidateCount}</td>

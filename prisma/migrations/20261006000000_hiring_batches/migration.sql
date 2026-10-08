@@ -1,5 +1,5 @@
--- Hiring batches: HR groups candidates into a named batch (Batch ID B-2026-001)
--- instead of one Excel sheet per batch. Additive only.
+-- Hiring batches: HR groups candidates into a batch (Batch ID B-2026-001),
+-- usually one interview date per batch. Additive only.
 
 -- CreateEnum
 CREATE TYPE "HiringBatchStatus" AS ENUM ('open', 'closed');
@@ -9,6 +9,7 @@ CREATE TABLE "recruitment_hiring_batches" (
     "id" TEXT NOT NULL,
     "code" TEXT NOT NULL,
     "name" TEXT,
+    "interview_date" DATE,
     "status" "HiringBatchStatus" NOT NULL DEFAULT 'open',
     "created_by_user_id" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -26,7 +27,6 @@ CREATE TABLE "recruitment_hiring_batch_members" (
     "application_id" TEXT NOT NULL,
     "sl_no" INTEGER NOT NULL,
     "remarks" TEXT,
-    "profile_url" TEXT,
     "added_by_user_id" TEXT,
     "added_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,

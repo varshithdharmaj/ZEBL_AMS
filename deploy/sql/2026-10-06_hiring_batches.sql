@@ -1,9 +1,10 @@
 -- Hiring batches: HR groups candidates into a batch (Batch ID B-2026-001)
--- instead of keeping one Excel sheet per batch.
+-- usually one interview date per batch.
 -- Run once on the production database in pgAdmin, BEFORE deploying this code.
 --
--- Safe to run more than once. Only creates a new enum and two new tables;
--- no existing table or row is read, changed or deleted.
+-- Safe to run more than once. Only creates a new enum and two new tables, and
+-- adds interview_date if an earlier copy of this script already ran;
+-- no other table or row is read, changed or deleted.
 -- Mirrors this Prisma migration:
 --   20261006000000_hiring_batches
 
@@ -18,6 +19,7 @@ CREATE TABLE IF NOT EXISTS "recruitment_hiring_batches" (
     "id" TEXT NOT NULL,
     "code" TEXT NOT NULL,
     "name" TEXT,
+    "interview_date" DATE,
     "status" "HiringBatchStatus" NOT NULL DEFAULT 'open',
     "created_by_user_id" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -33,12 +35,13 @@ CREATE TABLE IF NOT EXISTS "recruitment_hiring_batch_members" (
     "application_id" TEXT NOT NULL,
     "sl_no" INTEGER NOT NULL,
     "remarks" TEXT,
-    "profile_url" TEXT,
     "added_by_user_id" TEXT,
     "added_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "recruitment_hiring_batch_members_pkey" PRIMARY KEY ("id")
 );
+
+ALTER TABLE "recruitment_hiring_batches" ADD COLUMN IF NOT EXISTS "interview_date" DATE;
 
 CREATE UNIQUE INDEX IF NOT EXISTS "recruitment_hiring_batches_code_key" ON "recruitment_hiring_batches"("code");
 CREATE INDEX IF NOT EXISTS "recruitment_hiring_batches_status_deleted_at_idx" ON "recruitment_hiring_batches"("status", "deleted_at");

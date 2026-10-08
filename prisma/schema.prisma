@@ -2659,12 +2659,13 @@ enum HiringBatchStatus {
   closed
 }
 
-/// A named group of candidates HR screens together (what used to be one Excel
-/// sheet). `code` is the Batch ID shown to users, e.g. B-2026-001.
+/// A group of candidates HR interviews together, usually on one date.
+/// `code` is the Batch ID shown to users, e.g. B-2026-001.
 model HiringBatch {
   id              String            @id @default(cuid())
   code            String            @unique
   name            String?
+  interviewDate   DateTime?         @map("interview_date") @db.Date
   status          HiringBatchStatus @default(open)
   createdByUserId String?           @map("created_by_user_id")
   createdBy       User?             @relation("HiringBatchCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
@@ -2689,11 +2690,9 @@ model HiringBatchMember {
   batch         HiringBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
   applicationId String      @map("application_id")
   application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  /// Row number as in HR's sheet ("Sl.no"); new rows go to the end.
+  /// Row number in the batch ("Sl.no"); new rows go to the end.
   slNo          Int         @map("sl_no")
   remarks       String?     @db.Text
-  /// The sheet's "Candidate profile" cell as typed; shown as a link when it is a URL.
-  profileUrl    String?     @map("profile_url")
   addedByUserId String?     @map("added_by_user_id")
   addedBy       User?       @relation("HiringBatchMemberAddedBy", fields: [addedByUserId], references: [id], onDelete: SetNull)
   addedAt       DateTime    @default(now()) @map("added_at")
