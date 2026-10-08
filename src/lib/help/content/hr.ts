@@ -13,7 +13,7 @@ export const hrHelpChapters: HelpChapter[] = [
       { type: "sectionHeading", text: "Signing in" },
       {
         type: "paragraph",
-        text: "Sign in with your work email and password, or Sign in with Microsoft if Entra ID is connected. You land on the HR Command Center at `/admin/dashboard`.",
+        text: "Sign in with your username (or your login email if you don't have a username yet) and password, or Sign in with Microsoft if Entra ID is connected. You land on the HR Command Center at `/admin/dashboard`.",
       },
       { type: "sectionHeading", text: "How the admin workspace is organized" },
       {

@@ -2,7 +2,8 @@ import type { SessionUser } from "@/lib/session";
 import type { AuthResult } from "@/lib/auth/auth-types";
 
 export interface LocalCredentials {
-  email: string;
+  /** The account's username, or its login email (older accounts have no username). */
+  username: string;
   password: string;
   clientIp?: string;
 }

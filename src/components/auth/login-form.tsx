@@ -54,7 +54,7 @@ export function LoginForm({ microsoftEnabled }: { microsoftEnabled: boolean }) {
             <span className="w-full border-t border-border" />
           </div>
           <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-background px-2 text-muted-foreground">Or continue with email</span>
+            <span className="bg-background px-2 text-muted-foreground">Or sign in with username</span>
           </div>
         </div>
       )}
@@ -65,14 +65,16 @@ export function LoginForm({ microsoftEnabled }: { microsoftEnabled: boolean }) {
       >
         {displayError && <ErrorAlert message={displayError} />}
         <div className="space-y-2">
-          <Label htmlFor="email">Work email</Label>
+          <Label htmlFor="username">Username</Label>
           <Input
-            id="email"
-            name="email"
-            type="email"
-            placeholder="you@company.com"
+            id="username"
+            name="username"
+            type="text"
+            placeholder="Your employee code"
             required
-            autoComplete="email"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
           />
         </div>
         <div className="space-y-2">
@@ -91,7 +93,7 @@ export function LoginForm({ microsoftEnabled }: { microsoftEnabled: boolean }) {
           className="w-full"
           loading={pending}
         >
-          {pending ? "Signing in…" : "Sign in with email"}
+          {pending ? "Signing in…" : "Sign in"}
         </Button>
       </form>
     </div>

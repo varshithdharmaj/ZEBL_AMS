@@ -23,7 +23,7 @@ export function PreLoginHelp() {
       </DialogTrigger>
       <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Signing in — help</DialogTitle>
+          <DialogTitle>Help with signing in</DialogTitle>
           <DialogDescription>Common questions before you&apos;re signed in.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">

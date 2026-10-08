@@ -195,9 +195,10 @@ export async function provisionEmployeeLoginAction(
 
     return {
       success:
-        parsed.data.mode === "link"
+        (parsed.data.mode === "link"
           ? "Existing login linked to this employee."
-          : "Employee login created.",
+          : "Employee login created.") +
+        (result.username ? ` Username: ${result.username}` : ""),
       temporaryPassword: result.temporaryPassword,
     };
   } catch (error) {

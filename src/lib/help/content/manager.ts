@@ -18,7 +18,7 @@ export const managerHelpChapters: HelpChapter[] = [
       { type: "sectionHeading", text: "Signing in" },
       {
         type: "paragraph",
-        text: "Sign in with your work email and password, or Sign in with Microsoft if your organization has connected Entra ID. Both take you to the same workspace.",
+        text: "Sign in with your username (your employee code, for example 660052) and password, or Sign in with Microsoft if your organization has connected Entra ID. Both take you to the same workspace.",
       },
       {
         type: "callout",

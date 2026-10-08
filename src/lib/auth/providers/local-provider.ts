@@ -17,11 +17,17 @@ function isPrismaInitError(e: unknown): boolean {
 export async function authenticateLocalUser(
   credentials: LocalCredentials
 ): Promise<AuthResult> {
-  const email = credentials.email.toLowerCase().trim();
+  const login = credentials.username.trim();
   let user;
   try {
-    user = await prisma.user.findUnique({
-      where: { email },
+    // Match the username, or the login email for accounts that don't have a username yet.
+    user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { username: { equals: login, mode: "insensitive" } },
+          { email: login.toLowerCase() },
+        ],
+      },
       include: { employee: true },
     });
   } catch (e) {
@@ -40,12 +46,12 @@ export async function authenticateLocalUser(
   }
 
   if (!user || !user.password) {
-    return { ok: false, code: "invalid_credentials", message: "Invalid email or password." };
+    return { ok: false, code: "invalid_credentials", message: "Wrong username or password." };
   }
 
   const valid = await bcrypt.compare(credentials.password, user.password);
   if (!valid) {
-    return { ok: false, code: "invalid_credentials", message: "Invalid email or password." };
+    return { ok: false, code: "invalid_credentials", message: "Wrong username or password." };
   }
 
   if (!user.isActive) {
