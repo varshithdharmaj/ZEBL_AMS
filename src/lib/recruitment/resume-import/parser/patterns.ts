@@ -252,6 +252,17 @@ export function normalizeResumeDate(raw: string | null | undefined): string | nu
     return `${y}-${mo}-${d}`;
   }
 
+  // DD/MM/YYYY (day-first, as on Indian resumes); MM/DD/YYYY only when the
+  // second number can't be a month.
+  m = value.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+  if (m) {
+    let day = Number(m[1]);
+    let month = Number(m[2]);
+    if (month > 12 && day <= 12) [day, month] = [month, day];
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    return `${m[3]}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+
   m = value.match(/^(\d{1,2})[./-](\d{4})$/);
   if (m) {
     return `${m[2]}-${m[1]!.padStart(2, "0")}-01`;
@@ -270,6 +281,18 @@ export function normalizeResumeDate(raw: string | null | undefined): string | nu
   }
 
   return null;
+}
+
+/**
+ * Resume date → Date for DB writes: normalizeResumeDate first, native parsing
+ * for anything it doesn't recognise. Returns null rather than an Invalid Date,
+ * which Prisma rejects (fails the whole create with a generic server error).
+ */
+export function resumeDateToDate(raw: string | Date | null | undefined): Date | null {
+  if (raw instanceof Date) return Number.isNaN(raw.getTime()) ? null : raw;
+  if (!raw?.trim()) return null;
+  const d = new Date(normalizeResumeDate(raw) ?? raw);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 export function parseDateRange(line: string): {

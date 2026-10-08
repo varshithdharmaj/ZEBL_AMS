@@ -162,7 +162,7 @@ export function CandidateForm({
                 <Input
                   id="phone"
                   name="phone"
-                  placeholder="+1234567890"
+                  placeholder="Mobile number with country code"
                   defaultValue={candidate?.phone ?? ""}
                   className="h-10"
                 />
@@ -174,7 +174,7 @@ export function CandidateForm({
                 <Input
                   id="alternatePhone"
                   name="alternatePhone"
-                  placeholder="+1234567890"
+                  placeholder="Mobile number with country code"
                   defaultValue={candidate?.alternatePhone ?? ""}
                   className="h-10"
                 />
@@ -251,7 +251,7 @@ export function CandidateForm({
                 <Input
                   id="totalExperienceYears"
                   name="totalExperienceYears"
-                  placeholder="e.g. 5 or 5.5"
+                  placeholder="Number of years"
                   defaultValue={candidate?.totalExperienceYears ?? ""}
                   className="h-10"
                 />
@@ -329,7 +329,7 @@ export function CandidateForm({
                 <Input
                   id="currentCtc"
                   name="currentCtc"
-                  placeholder="e.g. 1200000"
+                  placeholder="Amount per year"
                   defaultValue={candidate?.currentCtc ?? ""}
                   className="h-10"
                 />
@@ -341,7 +341,7 @@ export function CandidateForm({
                 <Input
                   id="expectedCtc"
                   name="expectedCtc"
-                  placeholder="e.g. 1500000"
+                  placeholder="Amount per year"
                   defaultValue={candidate?.expectedCtc ?? ""}
                   className="h-10"
                 />

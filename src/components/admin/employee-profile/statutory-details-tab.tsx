@@ -22,12 +22,12 @@ const PROBLEM_MESSAGES: Record<StatutoryDetailProblem, string> = {
 };
 
 const FORM_FIELDS: { key: keyof StatutoryFields; label: string; placeholder?: string }[] = [
-  { key: "pan", label: "PAN", placeholder: "ABCDE1234F" },
-  { key: "aadhaar", label: "Aadhaar", placeholder: "123456789012" },
+  { key: "pan", label: "PAN", placeholder: "10 characters: 5 letters, 4 digits, 1 letter" },
+  { key: "aadhaar", label: "Aadhaar", placeholder: "12-digit number" },
   { key: "uan", label: "UAN" },
   { key: "esiNumber", label: "ESI number" },
   { key: "bankAccountNo", label: "Bank account number" },
-  { key: "ifsc", label: "IFSC code", placeholder: "HDFC0001234" },
+  { key: "ifsc", label: "IFSC code", placeholder: "11-character branch code" },
   { key: "bankName", label: "Bank name" },
   { key: "bankBranchName", label: "Bank branch name" },
 ];

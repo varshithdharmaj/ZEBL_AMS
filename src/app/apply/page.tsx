@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { listPublicJobs } from "@/lib/recruitment/public-apply/public-job-query";
 
-export const metadata = { title: "Careers" };
+export const metadata = { title: { absolute: "Open positions · ZEBL Careers" } };
 export const dynamic = "force-dynamic";
 
 function employmentTypeLabel(value: string): string {
@@ -17,11 +17,11 @@ export default async function CareersPage() {
   const jobs = await listPublicJobs();
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-12">
+    <main className="mx-auto max-w-3xl px-4 py-10">
       <div className="mb-8 flex flex-col gap-2">
         <h1 className="text-2xl font-semibold text-foreground">Open positions</h1>
         <p className="text-sm text-muted-foreground">
-          Browse current openings and apply directly — no account required.
+          See our open jobs and apply directly. You don&apos;t need an account.
         </p>
       </div>
 

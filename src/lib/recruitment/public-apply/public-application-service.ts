@@ -36,6 +36,7 @@ import {
   monthPartitionFor,
 } from "@/lib/recruitment/shared/storage-paths";
 import { parseResumeDocument } from "@/lib/recruitment/resume-import/parser";
+import { resumeDateToDate } from "@/lib/recruitment/resume-import/parser/patterns";
 import type { ResumeImportDraftContent } from "@/lib/recruitment/resume-import/types";
 import { RESUME_UPLOAD_MAX_BYTES } from "@/lib/recruitment/resume-import/file-validation";
 import { resolveCandidateForPublicApplication } from "@/lib/recruitment/public-apply/candidate-resolution";
@@ -401,11 +402,17 @@ export async function uploadPhoto(
   input: { fileName: string; mimeType: string; content: Buffer }
 ): Promise<void> {
   const submission = await loadAndVerify(token);
+  // The photo never changes status or touches the parsed review, so unlike the
+  // resume it can be (re)uploaded at any point up to submit — the single-page
+  // form uploads it when the candidate opens the preview.
   const uploadableFrom: PublicSubmissionStatus[] = [
     PublicSubmissionStatus.basic_info_complete,
     PublicSubmissionStatus.resume_uploaded,
     PublicSubmissionStatus.parse_failed,
     PublicSubmissionStatus.upload_failed,
+    PublicSubmissionStatus.ready_for_review,
+    PublicSubmissionStatus.candidate_edited,
+    PublicSubmissionStatus.submission_failed,
   ];
   if (!uploadableFrom.includes(submission.status)) {
     throw new PublicApplyError("VALIDATION_FAILED", "Please complete your basic information first.");
@@ -586,10 +593,13 @@ export async function getReview(
 
 export async function updateReview(token: string, payload: PublicReviewPayloadInput): Promise<void> {
   const submission = await loadAndVerify(token);
+  // submission_failed is included so a candidate whose submit hit a transient
+  // error can go back, edit and preview again (ALLOWED_TRANSITIONS permits it).
   const editableFrom: PublicSubmissionStatus[] = [
     PublicSubmissionStatus.ready_for_review,
     PublicSubmissionStatus.candidate_edited,
     PublicSubmissionStatus.parse_failed,
+    PublicSubmissionStatus.submission_failed,
   ];
   if (!editableFrom.includes(submission.status)) {
     throw new PublicApplyError("VALIDATION_FAILED", "Nothing to review yet.");
@@ -662,8 +672,8 @@ function mapCandidateCreateData(
       company: e.company,
       title: e.title,
       location: e.location ?? null,
-      startDate: e.startDate ? new Date(e.startDate) : null,
-      endDate: e.endDate ? new Date(e.endDate) : null,
+      startDate: resumeDateToDate(e.startDate),
+      endDate: resumeDateToDate(e.endDate),
       isCurrent: e.isCurrent ?? false,
       description: e.description ?? null,
       sortOrder: e.sortOrder ?? i,
@@ -696,7 +706,7 @@ function mapCandidateCreateData(
     certifications: review.certifications.map((c) => ({
       name: c.name,
       issuer: c.issuer ?? null,
-      issuedAt: c.issuedAt ? new Date(c.issuedAt) : null,
+      issuedAt: resumeDateToDate(c.issuedAt),
       credentialUrl: c.credentialUrl ?? null,
       credentialId: c.credentialId ?? null,
     })),
