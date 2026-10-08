@@ -18,13 +18,13 @@ export const hrHelpChapters: HelpChapter[] = [
       { type: "sectionHeading", text: "How the admin workspace is organized" },
       {
         type: "paragraph",
-        text: "The left-hand menu groups everything into: Core Workforce (Chapters 3–8), Hiring Workspace (Chapter 9, if recruitment is enabled for your organization), System Operations (Chapter 10), Security (Chapter 11), and Settings (Chapter 12). If you're personally linked to an employee record, you'll also see My Workspace (Chapter 13).",
+        text: "The left-hand menu has one row per module: Dashboard, Employees, Attendance, Leave, Payroll, Recruitment (if enabled for your organization), Helpdesk, Monitoring and Administration, with User Guide pinned at the bottom. Click a module to show its pages; each module's settings sit inside it, for example Leave → Leave Settings. If you're personally linked to an employee record, you'll also see My Workspace (Chapter 13).",
       },
       {
         type: "callout",
         kind: "note",
         label: "NOTE",
-        text: "You will not see a \"Platform Administration\" group — that's exclusive to Super Admin. See Chapter 14 for exactly where the line sits.",
+        text: "You will not see User Management or Anonymous Tickets — those are exclusive to Super Admin. See Chapter 14 for exactly where the line sits.",
       },
     ],
   },
@@ -159,7 +159,7 @@ export const hrHelpChapters: HelpChapter[] = [
       { type: "sectionHeading", text: "Migration controls — manual balances and historical leave" },
       {
         type: "paragraph",
-        text: "Three switches under Settings → Leave Settings control how much HR can change directly on an employee's profile. They're meant for the migration period; turn them off once opening data is settled.",
+        text: "Three switches under Leave → Leave Settings control how much HR can change directly on an employee's profile. They're meant for the migration period; turn them off once opening data is settled.",
       },
       {
         type: "table",
@@ -174,7 +174,7 @@ export const hrHelpChapters: HelpChapter[] = [
       { type: "sectionHeading", text: "Leave Policy vs. Leave Settings" },
       {
         type: "paragraph",
-        text: "`/admin/leave-policy` is the read-only, employee-facing document. The actual rules behind it — leave cycle, Earned Leave accrual, Sick Leave policy — are configured separately under Settings → Leave Settings (Chapter 12). Edit the settings; the policy page updates to match automatically.",
+        text: "`/admin/leave-policy` is the read-only, employee-facing document. The actual rules behind it — leave cycle, Earned Leave accrual, Sick Leave policy — are configured separately under Leave → Leave Settings (Chapter 12). Edit the settings; the policy page updates to match automatically.",
       },
     ],
   },
@@ -348,7 +348,7 @@ export const hrHelpChapters: HelpChapter[] = [
     blocks: [
       {
         type: "paragraph",
-        text: "If you, as an HR user, are also linked to an employee record — because you're an employee of the company yourself — a My Workspace group appears in your menu.",
+        text: "If you, as an HR user, are also linked to an employee record — because you're an employee of the company yourself — a My Workspace row appears in your menu.",
       },
       {
         type: "cards",

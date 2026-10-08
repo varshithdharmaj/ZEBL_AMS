@@ -11,6 +11,8 @@ import { canAccessAdmin } from "@/lib/permissions";
 import { ROLE_LABELS } from "@/lib/roles";
 import { getMyTeamNavContextAction } from "@/actions/employee-nav";
 
+const COLLAPSED_STORAGE_KEY = "hrms.sidebar.collapsed";
+
 const PROFILE_ITEM: AccountMenuItem = { label: "My Profile", href: "/employee/profile", icon: UserRound };
 
 // Employee/Manager: personal account settings live in the dropdown, not the
@@ -65,6 +67,26 @@ export function AppShell({
     : EMPLOYEE_SHELL_ACCOUNT_ITEMS;
 
   useEffect(() => {
+    try {
+      setCollapsed(window.localStorage.getItem(COLLAPSED_STORAGE_KEY) === "1");
+    } catch {
+      // Storage unavailable: keep the expanded default.
+    }
+  }, []);
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(COLLAPSED_STORAGE_KEY, next ? "1" : "0");
+      } catch {
+        // Storage unavailable: the choice lasts for this page only.
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
     if (!deferMyTeamNav) {
       setMyTeamVisible(showMyTeamGroup);
       return;
@@ -87,7 +109,7 @@ export function AppShell({
       <AppSidebar
         role={user.role}
         collapsed={collapsed}
-        onToggleCollapse={() => setCollapsed(!collapsed)}
+        onToggleCollapse={toggleCollapsed}
         showMyTeamGroup={myTeamVisible}
         showRecruitmentNav={showRecruitmentNav}
         showPanelistInterviews={showPanelistInterviews}

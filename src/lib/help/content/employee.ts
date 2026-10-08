@@ -24,7 +24,7 @@ export const employeeHelpChapters: HelpChapter[] = [
       { type: "sectionHeading", text: "Finding your way around" },
       {
         type: "paragraph",
-        text: "Once signed in, you land on your `Dashboard`. The left-hand menu is grouped under Workspace and lists everything covered in this guide: Dashboard, Profile, History, Leaves, Leave Policy, My Tickets, Settings, and Security. Your name and photo sit in the top corner — click them any time to jump to your profile.",
+        text: "Once signed in, you land on your `Dashboard`. The left-hand menu lists Dashboard, Profile, History, Leaves, Leave Policy and My Tickets, with User Guide pinned at the bottom. Settings and Security & Sessions are in the menu under your name and photo in the top corner, which also takes you to your profile.",
       },
       {
         type: "callout",

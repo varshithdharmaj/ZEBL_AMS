@@ -32,3 +32,11 @@ export function isSidebarNavActive(
       (path === other || path.startsWith(`${other}/`))
   );
 }
+
+/** The single sidebar href that owns {@link pathname}, checked against every link in the menu. */
+export function findActiveSidebarHref(
+  pathname: string,
+  hrefs: readonly string[]
+): string | null {
+  return hrefs.find((href) => isSidebarNavActive(pathname, href, hrefs)) ?? null;
+}
