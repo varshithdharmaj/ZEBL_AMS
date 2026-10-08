@@ -12,6 +12,8 @@ import { RecruitmentTimelineService } from "@/lib/recruitment/services/timeline-
 import { RecruitmentDashboardView } from "@/components/recruitment/recruitment-dashboard";
 import { buildHiringFunnelCounts } from "@/lib/recruitment/dashboard/build-funnel-counts";
 import { withTiming } from "@/lib/observability/timing";
+import { listBatches } from "@/lib/recruitment/batch/batch-service";
+import { HiringBatchStatus } from "@/generated/prisma/enums";
 
 export default async function RecruitmentDashboardPage() {
   const session = await requireRecruitmentAdminSession();
@@ -25,6 +27,7 @@ export default async function RecruitmentDashboardPage() {
     candidatesResult,
     interviewsResult,
     timeline,
+    openBatches,
   ] = await withTiming("recruitment.dashboard.load", () =>
     Promise.all([
       getJobDashboardCountsCached(session),
@@ -42,6 +45,7 @@ export default async function RecruitmentDashboardPage() {
         direction: "asc",
       }),
       RecruitmentTimelineService.buildTimeline({ limit: 12 }),
+      listBatches(session, { status: HiringBatchStatus.open, limit: 5 }),
     ])
   );
 
@@ -144,6 +148,7 @@ export default async function RecruitmentDashboardPage() {
         createdAt: c.createdAt as Date | string,
       }))}
       upcomingInterviews={upcomingInterviews}
+      openBatches={openBatches}
       activityFeed={timeline.map((item) => ({
         id: item.id,
         summary: item.summary,
