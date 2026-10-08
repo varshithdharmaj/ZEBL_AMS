@@ -30,29 +30,29 @@ export async function loginAction(
   _prevState: AuthState,
   formData: FormData
 ): Promise<AuthState> {
-  const email = String(formData.get("email") ?? "").trim();
+  const username = String(formData.get("username") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
-  if (!email || !password) {
-    return { error: "Email and password are required." };
+  if (!username || !password) {
+    return { error: "Enter your username and password." };
   }
 
   const clientIp = await getRequestClientIp();
   const requestContext = await getRequestSecurityContext();
-  const rateKey = `login:${clientIp}:${email.toLowerCase()}`;
+  const rateKey = `login:${clientIp}:${username.toLowerCase()}`;
   const limit = checkRateLimit(rateKey, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_MS);
 
   if (!limit.allowed) {
     await recordFailedLogin({
-      attemptedEmail: email,
+      attemptedEmail: username,
       reason: "rate_limited",
       context: requestContext,
     });
     await writeAuditLog({
       entityType: "auth",
-      entityId: email.toLowerCase(),
+      entityId: username.toLowerCase(),
       action: AUDIT_ACTIONS.AUTH_LOGIN_FAILURE,
-      actorEmail: email.toLowerCase(),
+      actorEmail: username.toLowerCase(),
       module: "authentication",
       description: "Login attempt was rate limited.",
       status: "failure",
@@ -63,18 +63,18 @@ export async function loginAction(
     return { error: `Too many login attempts. Try again in ${minutes} minute(s).` };
   }
 
-  const auth = await authenticateLocalUser({ email, password, clientIp });
+  const auth = await authenticateLocalUser({ username, password, clientIp });
   if (!auth.ok) {
     await recordFailedLogin({
-      attemptedEmail: email,
+      attemptedEmail: username,
       reason: auth.code,
       context: requestContext,
     });
     await writeAuditLog({
       entityType: "auth",
-      entityId: email.toLowerCase(),
+      entityId: username.toLowerCase(),
       action: AUDIT_ACTIONS.AUTH_LOGIN_FAILURE,
-      actorEmail: email.toLowerCase(),
+      actorEmail: username.toLowerCase(),
       module: "authentication",
       description: "Local login attempt failed.",
       status: "failure",

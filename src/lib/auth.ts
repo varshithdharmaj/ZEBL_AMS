@@ -163,10 +163,10 @@ export async function invalidateUserSessionsWithAudit(
 }
 
 export async function authenticateUser(
-  email: string,
+  username: string,
   password: string
 ): Promise<SessionUser | null> {
-  const result = await authenticateLocalUser({ email, password });
+  const result = await authenticateLocalUser({ username, password });
   return result.ok ? result.user : null;
 }
 

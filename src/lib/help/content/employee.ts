@@ -13,7 +13,7 @@ export const employeeHelpChapters: HelpChapter[] = [
       { type: "sectionHeading", text: "Signing in" },
       {
         type: "paragraph",
-        text: "Open the ZEBL AMS login page and sign in with your work email and password. If your organization has connected Microsoft Entra ID, you'll also see a Sign in with Microsoft button — either option takes you to the same workspace.",
+        text: "Open the ZEBL AMS login page and sign in with your username (your employee code, for example 660052) and password. If your organization has connected Microsoft Entra ID, you'll also see a Sign in with Microsoft button — either option takes you to the same workspace.",
       },
       {
         type: "callout",

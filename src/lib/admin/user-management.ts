@@ -400,7 +400,9 @@ export async function updateUserIdentity(
       id: { not: target.id },
       OR: [
         { email },
-        ...(input.username ? [{ username: input.username }] : []),
+        ...(input.username
+          ? [{ username: { equals: input.username, mode: "insensitive" as const } }]
+          : []),
       ],
     },
     select: { id: true },
@@ -458,6 +460,29 @@ export async function updateUserIdentity(
   });
 }
 
+const USERNAME_PATTERN = /^[a-zA-Z0-9._-]{3,100}$/;
+
+/**
+ * The employee code becomes the login username (e.g. 660052), so staff sign in with
+ * the number they already know. Returns null when the code can't be a username or
+ * another login already uses it; the login still works with its email then.
+ */
+async function usernameFromEmployeeCode(
+  employeeCode: string,
+  exceptUserId?: string
+): Promise<string | null> {
+  const code = employeeCode.trim();
+  if (!USERNAME_PATTERN.test(code)) return null;
+  const taken = await prisma.user.findFirst({
+    where: {
+      username: { equals: code, mode: "insensitive" },
+      ...(exceptUserId ? { id: { not: exceptUserId } } : {}),
+    },
+    select: { id: true },
+  });
+  return taken ? null : code;
+}
+
 /**
  * Create a new local login for an employee who has none, or link an existing
  * unlinked employee-role user. Role is always forced to `employee` on create.
@@ -481,7 +506,7 @@ export async function provisionEmployeeLogin(
     /** Audit metadata.operation — defaults to mode name */
     auditOperation?: string;
   }
-): Promise<{ userId: string; temporaryPassword?: string }> {
+): Promise<{ userId: string; username: string | null; temporaryPassword?: string }> {
   if (!canAdministerEmployeeAccount(actor.role, "employee")) {
     // HR and Superadmin both pass for target role "employee"; employees do not.
     throw new UserManagementError("You are not permitted to provision employee logins.");
@@ -524,11 +549,15 @@ export async function provisionEmployeeLogin(
     }
 
     const linkedAccount = employeeStatusToUserAccountFields(employee.employeeStatus);
+    const linkedUsername = existing.username
+      ? null
+      : await usernameFromEmployeeCode(employee.employeeCode, existing.id);
     await prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: existing.id },
         data: {
           employeeId: employee.id,
+          ...(linkedUsername ? { username: linkedUsername } : {}),
           accountStatus: linkedAccount.accountStatus,
           isActive: linkedAccount.isActive,
           ...(employee.email ? {} : { email: existing.email }),
@@ -571,7 +600,7 @@ export async function provisionEmployeeLogin(
       await invalidateUserSessions(existing.id);
     }
 
-    return { userId: existing.id };
+    return { userId: existing.id, username: existing.username ?? linkedUsername };
   }
 
   // create mode — role forced to employee; never trust client role
@@ -594,11 +623,13 @@ export async function provisionEmployeeLogin(
   }
   const passwordHash = await bcrypt.hash(password, 10);
   const accountFields = employeeStatusToUserAccountFields(employee.employeeStatus);
+  const username = await usernameFromEmployeeCode(employee.employeeCode);
 
   const created = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
       data: {
         email,
+        username,
         password: passwordHash,
         role: UserRole.employee,
         employeeId: employee.id,
@@ -647,6 +678,7 @@ export async function provisionEmployeeLogin(
 
   return {
     userId: created.id,
+    username,
     temporaryPassword: input.generate ? password : undefined,
   };
 }
