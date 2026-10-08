@@ -1,8 +1,14 @@
+import { cache } from "react";
+import Link from "next/link";
+import type { Metadata } from "next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { resolvePublicJobBySlug } from "@/lib/recruitment/public-apply/public-job-query";
 import { PublicApplyFlow } from "@/components/recruitment/public-apply/public-apply-flow";
 
 export const dynamic = "force-dynamic";
+
+// generateMetadata and the page both need the job — resolve it once per request.
+const getJob = cache(resolvePublicJobBySlug);
 
 function employmentTypeLabel(value: string): string {
   return value
@@ -11,13 +17,19 @@ function employmentTypeLabel(value: string): string {
     .join(" ");
 }
 
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const job = await getJob(slug);
+  return { title: job ? `Apply: ${job.title}` : "Job not found" };
+}
+
 export default async function JobApplyPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const job = await resolvePublicJobBySlug(slug);
+  const job = await getJob(slug);
 
   if (!job) {
     return (
@@ -26,7 +38,11 @@ export default async function JobApplyPage({
           <CardContent className="py-10 text-center">
             <p className="text-base font-medium text-foreground">This job posting is no longer available.</p>
             <p className="mt-2 text-sm text-muted-foreground">
-              It may have closed or been unpublished. Check our open positions instead.
+              It may have closed or been unpublished.{" "}
+              <Link href="/apply" className="font-medium text-primary hover:underline">
+                See our open positions
+              </Link>
+              .
             </p>
           </CardContent>
         </Card>
@@ -35,7 +51,10 @@ export default async function JobApplyPage({
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-12">
+    <main className="mx-auto max-w-3xl px-4 py-8">
+      <Link href="/apply" className="mb-4 inline-block text-sm text-muted-foreground hover:text-foreground">
+        ← All open positions
+      </Link>
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="text-xl">{job.title}</CardTitle>

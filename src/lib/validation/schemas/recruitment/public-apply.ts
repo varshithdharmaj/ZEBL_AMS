@@ -83,7 +83,12 @@ export const publicReviewPayloadSchema = z.object({
     headline: z.string().trim().max(200).nullable().optional(),
     professionalSummary: z.string().trim().max(4000).nullable().optional(),
     currentCompany: z.string().trim().max(200).nullable().optional(),
-    currentTitle: z.string().trim().max(200).nullable().optional(),
+    // Mandatory on the public form ("Fresher" for candidates not yet working).
+    currentTitle: z
+      .string({ message: "Enter your current position." })
+      .trim()
+      .min(1, "Enter your current position.")
+      .max(200),
     githubUrl: z.string().trim().max(500).nullable().optional(),
     linkedinUrl: z.string().trim().max(500).nullable().optional(),
     portfolioUrl: z.string().trim().max(500).nullable().optional(),
@@ -97,19 +102,23 @@ export const publicReviewPayloadSchema = z.object({
   projects: z.array(projectRowSchema).max(30).default([]),
   certifications: z.array(certificationRowSchema).max(30).default([]),
   // Candidate-entered only — never populated from resume parsing (see
-  // RESUME_IMPORT_DENIED_SCALAR_KEYS).
-  compensation: z
-    .object({
+  // RESUME_IMPORT_DENIED_SCALAR_KEYS). Both mandatory; freshers enter 0.
+  compensation: z.object(
+    {
       currentCtc: z
-        .string()
+        .string({ message: "Enter your current CTC." })
         .trim()
+        .min(1, "Enter your current CTC.")
         .max(20)
-        .regex(/^\d+(\.\d{1,2})?$/, "Enter a numeric amount.")
-        .nullable()
-        .optional(),
-      noticePeriodDays: z.number().int().min(0).max(365).nullable().optional(),
-    })
-    .default({}),
+        .regex(/^\d+(\.\d{1,2})?$/, "Enter a numeric amount."),
+      noticePeriodDays: z
+        .number({ message: "Enter your notice period in days." })
+        .int("Enter your notice period in whole days.")
+        .min(0)
+        .max(365),
+    },
+    { message: "Enter your current CTC and notice period." }
+  ),
 });
 
 export const publicSubmitSchema = z.object({
