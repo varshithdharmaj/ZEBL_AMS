@@ -1,98 +1,57 @@
 import {
-  LayoutDashboard,
-  Users,
-  ClipboardList,
-  CalendarDays,
-  History,
-  Settings,
-  UserCheck,
-  ShieldCheck,
-  Headset,
-  Briefcase,
-  UserRound,
   BookOpen,
-  HelpCircle,
-  type LucideIcon,
+  BriefcaseBusiness,
+  CalendarDays,
+  CircleHelp,
+  Headset,
+  History,
+  LayoutDashboard,
+  UserRound,
+  Users,
 } from "lucide-react";
-
-export type EmployeeNavItem = {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-};
-
-export type EmployeeNavGroup = {
-  group: string;
-  items: EmployeeNavItem[];
-};
-
-const WORKSPACE_ITEMS: EmployeeNavItem[] = [
-  { href: "/employee/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/employee/profile", label: "Profile", icon: UserRound },
-  { href: "/employee/attendance", label: "History", icon: History },
-  { href: "/employee/leaves", label: "Leaves", icon: CalendarDays },
-  { href: "/employee/leaves/policy", label: "Leave Policy", icon: BookOpen },
-  { href: "/employee/tickets", label: "My Tickets", icon: Headset },
-  { href: "/employee/settings", label: "Settings", icon: Settings },
-  { href: "/employee/help", label: "User Guide", icon: HelpCircle },
-];
-
-const MY_TEAM_ITEMS: EmployeeNavItem[] = [
-  { href: "/employee/team", label: "Overview", icon: LayoutDashboard },
-  { href: "/employee/approvals", label: "Approvals", icon: UserCheck },
-  { href: "/employee/team/people", label: "People", icon: Users },
-  { href: "/employee/team/attendance", label: "Attendance", icon: ClipboardList },
-  { href: "/employee/team/leave", label: "Leave", icon: CalendarDays },
-  { href: "/employee/team/calendar", label: "Calendar", icon: CalendarDays },
-];
-
-const SECURITY_ITEMS: EmployeeNavItem[] = [
-  { href: "/employee/security", label: "Security & Sessions", icon: ShieldCheck },
-];
+import {
+  compactModules,
+  link,
+  section,
+  type SidebarNav,
+} from "@/lib/navigation/sidebar-nav-types";
 
 /**
- * Pure employee-shell nav groups for the sidebar.
- * My Team appears only when {@link showMyTeamGroup} is true (Phase 2 nav context).
+ * Employee and manager sidebar. Settings and Security & Sessions live in the
+ * account menu; My Team appears only when {@link showMyTeamGroup} is true.
  */
 export function buildEmployeeShellNav(
   showMyTeamGroup: boolean,
   showPanelistInterviews = false,
   showRecruitmentOpsLink = false
-): EmployeeNavGroup[] {
-  const workspaceItems = [...WORKSPACE_ITEMS];
-  // Prefer full Recruitment workspace when present — avoid duplicate Interviews entry.
-  if (showRecruitmentOpsLink) {
-    workspaceItems.splice(1, 0, {
-      href: "/admin/recruitment",
-      label: "Recruitment",
-      icon: Briefcase,
-    });
-  } else if (showPanelistInterviews) {
-    workspaceItems.splice(1, 0, {
-      href: "/employee/interviews",
-      label: "Interviews",
-      icon: Briefcase,
-    });
-  }
+): SidebarNav {
+  // Prefer the full Recruitment workspace when present — avoid a duplicate Interviews entry.
+  const hiringLink = showRecruitmentOpsLink
+    ? link("recruitment", "Recruitment", "/admin/recruitment", BriefcaseBusiness)
+    : showPanelistInterviews
+      ? link("interviews", "Interviews", "/employee/interviews", BriefcaseBusiness)
+      : null;
 
-  const groups: EmployeeNavGroup[] = [
-    {
-      group: "Workspace",
-      items: workspaceItems,
-    },
-  ];
-
-  if (showMyTeamGroup) {
-    groups.push({
-      group: "My Team",
-      items: MY_TEAM_ITEMS,
-    });
-  }
-
-  groups.push({
-    group: "Security",
-    items: SECURITY_ITEMS,
-  });
-
-  return groups;
+  return {
+    modules: compactModules([
+      link("dashboard", "Dashboard", "/employee/dashboard", LayoutDashboard),
+      link("profile", "Profile", "/employee/profile", UserRound),
+      hiringLink,
+      link("history", "History", "/employee/attendance", History),
+      link("leaves", "Leaves", "/employee/leaves", CalendarDays),
+      link("leave-policy", "Leave Policy", "/employee/leaves/policy", BookOpen),
+      link("tickets", "My Tickets", "/employee/tickets", Headset),
+      showMyTeamGroup
+        ? section("my-team", "My Team", Users, [
+            { href: "/employee/team", label: "Overview" },
+            { href: "/employee/approvals", label: "Approvals" },
+            { href: "/employee/team/people", label: "People" },
+            { href: "/employee/team/attendance", label: "Attendance" },
+            { href: "/employee/team/leave", label: "Leave" },
+            { href: "/employee/team/calendar", label: "Calendar" },
+          ])
+        : null,
+    ]),
+    footer: { href: "/employee/help", label: "User Guide", icon: CircleHelp },
+  };
 }

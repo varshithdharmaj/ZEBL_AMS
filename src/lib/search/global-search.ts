@@ -13,7 +13,7 @@ export type SearchResultItem = {
 
 type AdminPageShortcut = { label: string; href: string; superAdminOnly?: boolean; keywords?: string[] };
 
-// Kept in sync manually with the admin nav in app-sidebar.tsx (a "use client"
+// Kept in sync manually with the admin nav in admin-shell-nav.ts (a "use client"
 // component, so it can't be imported into this server-side search module).
 const ADMIN_PAGE_SHORTCUTS: AdminPageShortcut[] = [
   { label: "Dashboard", href: "/admin/dashboard" },
