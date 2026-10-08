@@ -465,7 +465,7 @@ export function NewCandidateResumeReview({ draft, file, onBack, onContinueManual
                     value={form.candidate.phone ?? ""}
                     onChange={(e) => updateCandidate({ phone: e.target.value || null })}
                     disabled={pending}
-                    placeholder="+91..."
+                    placeholder="Mobile number with country code"
                   />
                 </Field>
                 <Field label="Location" path="location" flagged={flagged}>

@@ -112,7 +112,7 @@ function ProvisionEmployeeLoginCard({
             type="email"
             defaultValue={employee.email ?? ""}
             required
-            placeholder="name@company.com"
+            placeholder="name@yourcompany.com"
           />
         </div>
         {mode === "create" && (

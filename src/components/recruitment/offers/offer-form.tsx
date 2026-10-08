@@ -495,7 +495,7 @@ export function OfferForm({
                 type="number"
                 value={baseSalary}
                 onChange={(e) => setBaseSalary(e.target.value)}
-                placeholder="e.g. 1200000"
+                placeholder="Amount per year"
                 className="w-full h-9 rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-subtle focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
             </div>
@@ -508,7 +508,7 @@ export function OfferForm({
                 type="number"
                 value={variablePay}
                 onChange={(e) => setVariablePay(e.target.value)}
-                placeholder="e.g. 200000"
+                placeholder="Amount per year"
                 className="w-full h-9 rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-subtle focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
             </div>
@@ -521,7 +521,7 @@ export function OfferForm({
                 type="number"
                 value={bonus}
                 onChange={(e) => setBonus(e.target.value)}
-                placeholder="e.g. 100000"
+                placeholder="One-time amount"
                 className="w-full h-9 rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-subtle focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
             </div>
@@ -534,7 +534,7 @@ export function OfferForm({
                 type="text"
                 value={stock}
                 onChange={(e) => setStock(e.target.value)}
-                placeholder="e.g. 500 RSUs"
+                placeholder="Units and type, if any"
                 className="w-full h-9 rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-subtle focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
             </div>
