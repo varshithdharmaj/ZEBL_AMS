@@ -16,7 +16,7 @@ import {
   type PipelineDrawerTab,
 } from "@/components/recruitment/applications/application-pipeline-drawer";
 import { StarRatingDisplay } from "@/components/recruitment/interviews/star-rating";
-import { BatchProgressBar, BatchProgressLegend } from "@/components/recruitment/batches/batch-progress-bar";
+import { BatchProgressLegend } from "@/components/recruitment/batches/batch-progress-legend";
 import {
   removeBatchMembersAction,
   renameBatchAction,
@@ -26,7 +26,7 @@ import {
 } from "@/actions/recruitment-batches";
 import { bulkMoveApplicationsStageAction } from "@/actions/recruitment-applications";
 import type { BatchSheet, BatchSheetRow } from "@/lib/recruitment/batch/batch-service";
-import { BATCH_BUCKETS, type BatchBucket } from "@/lib/recruitment/batch/batch-progress";
+import type { BatchBucket } from "@/lib/recruitment/batch/batch-progress";
 import { formatCtc, formatInterviewDate } from "@/lib/recruitment/batch/batch-membership";
 import { cn } from "@/lib/utils";
 
@@ -47,8 +47,6 @@ type ExtraColumnId = (typeof EXTRA_COLUMNS)[number]["id"];
 
 /** Checkbox, Sl.no, Name, Role, Experience, CTC, HR ★, Education, Notice, Resume, Stage, Remarks. */
 const BASE_COLUMNS = 12;
-
-const BUCKET_DOT = Object.fromEntries(BATCH_BUCKETS.map((b) => [b.id, b.dotClass])) as Record<BatchBucket, string>;
 
 function compare(a: BatchSheetRow, b: BatchSheetRow, key: SortKey): number {
   const av = a[key];
@@ -240,8 +238,7 @@ export function BatchSheetView({
 
       {/* Progress */}
       {sheet.rows.length > 0 ? (
-        <div className="space-y-2 rounded-xl border border-border bg-card p-4">
-          <BatchProgressBar progress={sheet.progress} total={sheet.rows.length} className="h-2.5" />
+        <div className="rounded-xl border border-border bg-card p-4">
           <BatchProgressLegend progress={sheet.progress} active={bucket} onSelect={setBucket} />
         </div>
       ) : null}
@@ -442,10 +439,7 @@ export function BatchSheetView({
                         )}
                       </td>
                       <td className={cn(cell, "whitespace-nowrap")}>
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className={cn("h-2 w-2 rounded-full", BUCKET_DOT[r.bucket])} aria-hidden />
-                          {r.stageLabel}
-                        </span>
+                        {r.stageLabel}
                       </td>
                       <td className={cn(cell, "p-0")}>
                         <RemarksCell memberId={r.memberId} value={r.remarks} editable={isOpen} />

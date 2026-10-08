@@ -1,18 +1,17 @@
 /**
  * Groups each candidate's application stage into the few buckets a batch's
- * progress bar shows. Pure — safe for client imports.
+ * stage counts show. Pure — safe for client imports.
  */
 
 export type BatchBucket = "new" | "hr_round" | "manager_round" | "hire" | "on_hold" | "rejected";
 
-/** Rounds share one blue; colour is kept for outcomes (hire, hold, reject). */
-export const BATCH_BUCKETS: ReadonlyArray<{ id: BatchBucket; label: string; barClass: string; dotClass: string }> = [
-  { id: "new", label: "New", barClass: "bg-slate-300 dark:bg-slate-600", dotClass: "bg-slate-400" },
-  { id: "hr_round", label: "HR Round", barClass: "bg-sky-300 dark:bg-sky-700", dotClass: "bg-sky-300 dark:bg-sky-700" },
-  { id: "manager_round", label: "Manager Round", barClass: "bg-sky-500", dotClass: "bg-sky-500" },
-  { id: "hire", label: "Hire", barClass: "bg-emerald-500", dotClass: "bg-emerald-500" },
-  { id: "on_hold", label: "On Hold", barClass: "bg-amber-400", dotClass: "bg-amber-400" },
-  { id: "rejected", label: "Rejected", barClass: "bg-rose-400", dotClass: "bg-rose-400" },
+export const BATCH_BUCKETS: ReadonlyArray<{ id: BatchBucket; label: string }> = [
+  { id: "new", label: "New" },
+  { id: "hr_round", label: "HR Round" },
+  { id: "manager_round", label: "Manager Round" },
+  { id: "hire", label: "Hire" },
+  { id: "on_hold", label: "On Hold" },
+  { id: "rejected", label: "Rejected" },
 ];
 
 const STAGE_BUCKET: Record<string, BatchBucket> = {

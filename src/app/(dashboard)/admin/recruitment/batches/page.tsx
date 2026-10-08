@@ -4,7 +4,7 @@ import { requireRecruitmentAdminSession } from "@/lib/auth-guards";
 import { listBatches } from "@/lib/recruitment/batch/batch-service";
 import { HiringBatchStatus } from "@/generated/prisma/enums";
 import { NewBatchButton } from "@/components/recruitment/batches/new-batch-button";
-import { BatchProgressBar, BatchProgressLegend } from "@/components/recruitment/batches/batch-progress-bar";
+import { BatchProgressLegend } from "@/components/recruitment/batches/batch-progress-legend";
 import { formatInterviewDate } from "@/lib/recruitment/batch/batch-membership";
 import { cn } from "@/lib/utils";
 
@@ -95,10 +95,7 @@ export default async function BatchesPage({
                   <td className="px-4 py-3">{b.name ?? <span className="text-muted-foreground">—</span>}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{b.candidateCount}</td>
                   <td className="hidden px-4 py-3 md:table-cell">
-                    <div className="space-y-1.5">
-                      <BatchProgressBar progress={b.progress} total={b.candidateCount} />
-                      <BatchProgressLegend progress={b.progress} />
-                    </div>
+                    <BatchProgressLegend progress={b.progress} />
                   </td>
                   <td className="hidden whitespace-nowrap px-4 py-3 text-muted-foreground lg:table-cell">
                     {formatDay(b.createdAt)}
