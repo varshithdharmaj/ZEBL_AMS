@@ -70,6 +70,7 @@ export function AppSidebar({
   showPanelistInterviews = false,
   recruitmentOpsOnly = false,
   showOwnWorkspaceNav = false,
+  roleLabel,
 }: {
   role: AppUserRole;
   collapsed?: boolean;
@@ -84,6 +85,8 @@ export function AppSidebar({
   recruitmentOpsOnly?: boolean;
   /** HR/Super Admin linked to an Employee record: "My Workspace" section. */
   showOwnWorkspaceNav?: boolean;
+  /** Label under the logo; defaults to the login role's label. */
+  roleLabel?: string;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
@@ -268,7 +271,7 @@ export function AppSidebar({
               )}
             >
               <p className="text-sm font-bold leading-tight tracking-tight text-foreground">HRMS</p>
-              <p className="text-[0.65rem] font-medium text-muted-foreground">{ROLE_LABELS[role]}</p>
+              <p className="text-[0.65rem] font-medium text-muted-foreground">{roleLabel ?? ROLE_LABELS[role]}</p>
             </div>
           </Link>
           <button type="button" className="lg:hidden" onClick={onMobileClose} aria-label="Close navigation">
