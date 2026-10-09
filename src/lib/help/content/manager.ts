@@ -95,7 +95,7 @@ export const managerHelpChapters: HelpChapter[] = [
     title: "Attendance & Regularization",
     intro: "Reading your own history and fixing a punch that looks wrong.",
     blocks: [
-      { type: "paragraph", text: "History (`/employee/attendance`) is your own full attendance record." },
+      { type: "paragraph", text: "Attendance (`/employee/attendance`) is your own full attendance record." },
       { type: "sectionHeading", text: "Reading your history" },
       {
         type: "paragraph",
@@ -109,7 +109,7 @@ export const managerHelpChapters: HelpChapter[] = [
       {
         type: "steps",
         items: [
-          "Open the day in question from History.",
+          "Open the day in question from Attendance.",
           "Select Request correction and explain what actually happened.",
           "Submit — it goes to HR's regularization queue, the same as any employee's request.",
           "Track status — Pending, Approved, Rejected, or Cancelled — on the entry itself.",

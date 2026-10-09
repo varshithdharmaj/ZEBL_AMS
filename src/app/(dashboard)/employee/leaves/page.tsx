@@ -3,6 +3,7 @@ import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { LeaveRequestForm } from "@/components/employee/leave-request-form";
 import { EmployeeLeaveTable } from "@/components/employee/leave-table";
 import { LeaveBalanceGrid } from "@/components/leave/leave-balance-grid";
+import { LeaveHistoryTab } from "@/components/admin/employee-profile/leave-history-tab";
 import { SectionCard } from "@/components/ui/section-card";
 import { getSession } from "@/lib/auth";
 import { getEmployeeLeavePageData } from "@/lib/data";
@@ -14,7 +15,7 @@ export default async function EmployeeLeavesPage() {
   const session = await getSession();
   if (!session?.employeeId) redirect("/login");
 
-  const [{ balances, leaves }, holidays, policy] = await Promise.all([
+  const [{ balances, leaves, history }, holidays, policy] = await Promise.all([
     getEmployeeLeavePageData(session.employeeId),
     getUpcomingHolidays(6),
     getLeavePolicySettings(),
@@ -55,6 +56,10 @@ export default async function EmployeeLeavesPage() {
 
       <SectionCard title="Your requests" description={`${leaves.length} submitted`} noPadding>
         <EmployeeLeaveTable leaves={leaves} />
+      </SectionCard>
+
+      <SectionCard title="Leave history" description="Every change to your leave balance">
+        <LeaveHistoryTab history={history} />
       </SectionCard>
     </div>
   );

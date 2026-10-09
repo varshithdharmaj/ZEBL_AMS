@@ -24,7 +24,7 @@ export const employeeHelpChapters: HelpChapter[] = [
       { type: "sectionHeading", text: "Finding your way around" },
       {
         type: "paragraph",
-        text: "Once signed in, you land on your `Dashboard`. The left-hand menu lists Dashboard, Profile, History, Leaves, Leave Policy and My Tickets, with User Guide pinned at the bottom. Settings and Security & Sessions are in the menu under your name and photo in the top corner, which also takes you to your profile.",
+        text: "Once signed in, you land on your `Dashboard`. The left-hand menu lists Dashboard, Profile, Attendance, Leaves, Leave Policy and My Tickets, with User Guide pinned at the bottom. Settings and Security & Sessions are in the menu under your name and photo in the top corner, which also takes you to your profile.",
       },
       {
         type: "callout",
@@ -55,7 +55,7 @@ export const employeeHelpChapters: HelpChapter[] = [
         type: "callout",
         kind: "tip",
         label: "TIP",
-        text: "Hover or tap a day in the heatmap to see exactly what was recorded for it. If a day looks wrong, jump straight to History (Chapter 4) to raise a correction.",
+        text: "Hover or tap a day in the heatmap to see exactly what was recorded for it. If a day looks wrong, jump straight to Attendance (Chapter 4) to raise a correction.",
       },
     ],
   },
@@ -103,7 +103,7 @@ export const employeeHelpChapters: HelpChapter[] = [
     blocks: [
       {
         type: "paragraph",
-        text: "History (`/employee/attendance`) is your full personal attendance record — every day, exactly as the system captured it.",
+        text: "Attendance (`/employee/attendance`) is your full personal attendance record — every day, exactly as the system captured it.",
       },
       { type: "sectionHeading", text: "Reading your history" },
       {
@@ -118,7 +118,7 @@ export const employeeHelpChapters: HelpChapter[] = [
       {
         type: "steps",
         items: [
-          "Open the day in question from History.",
+          "Open the day in question from Attendance.",
           "Select Request correction and state what actually happened and why.",
           "Submit. The request lands in HR's regularization queue.",
           "Track its status — Pending, Approved, Rejected, or Cancelled — directly on that day's entry.",
@@ -148,6 +148,11 @@ export const employeeHelpChapters: HelpChapter[] = [
       {
         type: "paragraph",
         text: "At the top of the page you'll see your current balance broken down by leave type (e.g. Earned Leave, Sick Leave, Casual Leave), plus the organization's upcoming holiday list.",
+      },
+      { type: "sectionHeading", text: "Leave history" },
+      {
+        type: "paragraph",
+        text: "At the bottom of the page, Leave history lists every change to your balance: monthly and yearly credits, approved leave, and corrections made by HR.",
       },
       { type: "sectionHeading", text: "Requesting leave" },
       {

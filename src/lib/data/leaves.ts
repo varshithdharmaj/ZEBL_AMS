@@ -1,15 +1,31 @@
 import type { LeaveWorkflowStatus } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getLeaveBalanceSummaries } from "@/lib/leave";
+import { getLeaveBalanceSummaries, getLeaveTransactionHistory } from "@/lib/leave";
 import { leaveRequestWithStepsInclude } from "@/lib/leave/leave-request-include";
 
+// Rows written by a hand-run data fix carry a technical note meant for HR and
+// developers. Employees see a plain label instead; HR still sees the full note
+// on the employee record.
+const DATA_FIX_AUTHOR = "system-migration";
+
 export async function getEmployeeLeavePageData(employeeId: number) {
-  const [balances, leaves] = await Promise.all([
-    getLeaveBalanceSummaries(employeeId, { processAccruals: true }),
+  // Balances first: with processAccruals they write any due accruals, which
+  // the history should then include.
+  const balances = await getLeaveBalanceSummaries(employeeId, { processAccruals: true });
+  const [leaves, history] = await Promise.all([
     getLeaveRequests("employee", employeeId),
+    getLeaveTransactionHistory(employeeId),
   ]);
 
-  return { balances, leaves };
+  return {
+    balances,
+    leaves,
+    history: history.map((row) =>
+      row.updatedBy === DATA_FIX_AUTHOR
+        ? { ...row, reason: "Balance correction", updatedBy: "system" }
+        : row
+    ),
+  };
 }
 
 export async function getLeaveRequests(

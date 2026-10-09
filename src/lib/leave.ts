@@ -422,11 +422,12 @@ export function buildLeaveBalanceSummariesFromParts(
       }
     }
 
+    // A negative adjustment corrects the balance (e.g. a duplicate allocation
+    // removed); it is not leave taken, so it lowers "total" rather than adding
+    // to "used".
     const typeManuals = manualAdjustments.filter((m) => m.leaveType === leaveType);
     for (const tx of typeManuals) {
-      if (tx.amount < 0) {
-        used += Math.abs(tx.amount);
-      } else if (tx.amount > 0) {
+      if (tx.amount > 0) {
         accrued += tx.amount;
       }
     }
@@ -742,6 +743,7 @@ export async function getLeaveTransactionHistory(employeeId: number, limit = 100
       where: { employeeId },
       orderBy: { createdAt: "desc" },
       take: limit,
+      include: { elAccrualLot: { select: { accrualDate: true } } },
     }),
     prisma.leaveRequest.findMany({
       where: { employeeId },
@@ -814,7 +816,9 @@ export async function getLeaveTransactionHistory(employeeId: number, limit = 100
     .filter((tx) => !mergedTransactionIds.has(tx.id))
     .map((tx) => ({
       id: `tx-${tx.id}`,
-      date: tx.createdAt,
+      // An EL accrual shows the month it was earned for, not the day a
+      // catch-up run happened to write it.
+      date: tx.elAccrualLot?.accrualDate ?? tx.createdAt,
       leaveType: tx.leaveType,
       transactionType: tx.transactionType,
       amount:

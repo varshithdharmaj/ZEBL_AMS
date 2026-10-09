@@ -7,9 +7,6 @@ import { Button } from "@/components/ui/button";
 import { DataTable, DataTableCell, DataTableRow } from "@/components/ui/data-table";
 import { SectionCard } from "@/components/ui/section-card";
 import { ContactInfoForm } from "@/components/employee/contact-info-form";
-import { LeaveBalanceGrid } from "@/components/leave/leave-balance-grid";
-import { LeaveHistoryTab } from "@/components/admin/employee-profile/leave-history-tab";
-import { getEmployeeProfileLeaveData } from "@/actions/leave-balances";
 import { getSession } from "@/lib/auth";
 import { canEditEmployeeProfilePhoto, canViewUnmaskedStatutoryDetails } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
@@ -21,7 +18,7 @@ export default async function EmployeeSelfProfilePage() {
   const session = await getSession();
   if (!session?.employeeId) redirect("/login");
 
-  const [employee, leaveData, statutoryRow, documents] = await Promise.all([
+  const [employee, statutoryRow, documents] = await Promise.all([
     prisma.employee.findUnique({
       where: { id: session.employeeId },
       select: {
@@ -41,7 +38,6 @@ export default async function EmployeeSelfProfilePage() {
         emergencyContact: true,
       },
     }),
-    getEmployeeProfileLeaveData(session.employeeId),
     prisma.employeeStatutoryDetail.findUnique({ where: { employeeId: session.employeeId } }),
     prisma.employeeDocument.findMany({
       where: { employeeId: session.employeeId, deletedAt: null },
@@ -207,14 +203,6 @@ export default async function EmployeeSelfProfilePage() {
                 </DataTableRow>
               ))}
             </DataTable>
-          </SectionCard>
-
-          <SectionCard title="Leave balance" description="Managed by HR — read-only">
-            <LeaveBalanceGrid balances={leaveData.balances} />
-          </SectionCard>
-
-          <SectionCard title="Leave history" description="Every transaction affecting your leave balance">
-            <LeaveHistoryTab history={leaveData.history} />
           </SectionCard>
         </>
       )}
