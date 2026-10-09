@@ -3,7 +3,12 @@ import { AppShell } from "@/components/layout/app-shell";
 import { DashboardPageSkeleton } from "@/components/loading";
 import { getSession } from "@/lib/auth";
 import { redirectToLogin } from "@/lib/auth/redirect-login";
-import { canAccessHRAdministration, canAccessOwnWorkspace } from "@/lib/permissions";
+import {
+  canAccessEmployeeShell,
+  canAccessHRAdministration,
+  canAccessOwnWorkspace,
+} from "@/lib/permissions";
+import { resolveMyTeamNavContext } from "@/lib/people-scope/nav-context";
 import { isRecruitmentModuleEnabled } from "@/lib/recruitment/config/feature-flags";
 import { hasPanelistInterviewAssignment } from "@/lib/recruitment/interview/queries";
 import { isRecruitmentTestManager } from "@/lib/recruitment/permissions/recruitment-test-manager";
@@ -17,16 +22,22 @@ export default async function EmployeeLayout({
   if (!session || !canAccessOwnWorkspace(session.role, session.employeeId)) return redirectToLogin();
 
   const recruitmentOn = isRecruitmentModuleEnabled();
-  const showPanelistInterviews =
-    recruitmentOn && (await hasPanelistInterviewAssignment(session.employeeId));
+  // Both are small indexed lookups; run them together so the shell renders
+  // with the right nav and role label on first paint.
+  // My Team nav is presentation-only. Authorization for /employee/approvals
+  // remains hierarchy-based on that page.
+  const [showPanelistInterviews, myTeamNav] = await Promise.all([
+    recruitmentOn ? hasPanelistInterviewAssignment(session.employeeId) : false,
+    canAccessEmployeeShell(session.role) && session.employeeId != null
+      ? resolveMyTeamNavContext(session.employeeId)
+      : null,
+  ]);
 
-  // My Team nav is presentation-only (resolved after paint via deferMyTeamNav).
-  // Authorization for /employee/approvals remains hierarchy-based on that page.
   return (
     <AppShell
       user={session}
       variant="wide"
-      deferMyTeamNav
+      showMyTeamGroup={myTeamNav?.showMyTeamGroup ?? false}
       showPanelistInterviews={showPanelistInterviews}
       showRecruitmentNav={recruitmentOn && isRecruitmentTestManager(session)}
       showOwnWorkspaceNav={canAccessHRAdministration(session.role)}

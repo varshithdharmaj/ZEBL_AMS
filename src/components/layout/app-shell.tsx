@@ -9,7 +9,6 @@ import type { SessionUser } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { canAccessAdmin } from "@/lib/permissions";
 import { ROLE_LABELS } from "@/lib/roles";
-import { getMyTeamNavContextAction } from "@/actions/employee-nav";
 
 const COLLAPSED_STORAGE_KEY = "hrms.sidebar.collapsed";
 
@@ -31,11 +30,6 @@ export function AppShell({
   showMyTeamGroup = false,
   showRecruitmentNav = false,
   showPanelistInterviews = false,
-  /**
-   * Employee shell: resolve My Team nav after first paint so the layout
-   * does not block on eligibility (presentation-only).
-   */
-  deferMyTeamNav = false,
   /** Recruitment test managers: Hiring Workspace only (no other /admin nav). */
   recruitmentOpsOnly = false,
   /** HR/Super Admin linked to an Employee record: "My Workspace" nav group. */
@@ -49,14 +43,11 @@ export function AppShell({
   showRecruitmentNav?: boolean;
   /** Employee: Interviews nav when recruitment module is enabled. */
   showPanelistInterviews?: boolean;
-  deferMyTeamNav?: boolean;
   recruitmentOpsOnly?: boolean;
   showOwnWorkspaceNav?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(false);
-  const [myTeamVisible, setMyTeamVisible] = useState(
-    deferMyTeamNav ? false : showMyTeamGroup
-  );
+  const myTeamVisible = showMyTeamGroup;
   const displayName = user.employeeName ?? user.email;
   const isAdminShell = canAccessAdmin(user.role);
   const helpHref = isAdminShell ? "/admin/help" : "/employee/help";
@@ -65,6 +56,11 @@ export function AppShell({
       ? [PROFILE_ITEM]
       : []
     : EMPLOYEE_SHELL_ACCOUNT_ITEMS;
+  // Line managers usually log in with the "employee" role; having direct
+  // reports (the same signal as the My Team nav and the help guide) makes
+  // them a Manager in what we show.
+  const roleLabel =
+    !isAdminShell && myTeamVisible ? ROLE_LABELS.manager : ROLE_LABELS[user.role];
 
   useEffect(() => {
     try {
@@ -86,24 +82,6 @@ export function AppShell({
     });
   };
 
-  useEffect(() => {
-    if (!deferMyTeamNav) {
-      setMyTeamVisible(showMyTeamGroup);
-      return;
-    }
-    let cancelled = false;
-    void getMyTeamNavContextAction()
-      .then((ctx) => {
-        if (!cancelled) setMyTeamVisible(ctx?.showMyTeamGroup ?? false);
-      })
-      .catch(() => {
-        if (!cancelled) setMyTeamVisible(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [deferMyTeamNav, showMyTeamGroup]);
-
   return (
     <div className="min-h-screen bg-background">
       <AppSidebar
@@ -115,6 +93,7 @@ export function AppShell({
         showPanelistInterviews={showPanelistInterviews}
         recruitmentOpsOnly={recruitmentOpsOnly}
         showOwnWorkspaceNav={showOwnWorkspaceNav}
+        roleLabel={roleLabel}
       />
       <div
         className={cn(
@@ -128,7 +107,7 @@ export function AppShell({
           showApprovalsAction={myTeamVisible}
           userName={displayName}
           email={user.email}
-          roleLabel={ROLE_LABELS[user.role]}
+          roleLabel={roleLabel}
           accountMenuItems={accountMenuItems}
         />
         <main
@@ -144,7 +123,7 @@ export function AppShell({
             showApprovalsAction={myTeamVisible}
             userName={displayName}
             email={user.email}
-            roleLabel={ROLE_LABELS[user.role]}
+            roleLabel={roleLabel}
             accountMenuItems={accountMenuItems}
           />
           {children}
