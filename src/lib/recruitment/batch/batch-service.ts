@@ -6,10 +6,9 @@ import { prisma } from "@/lib/prisma";
 import type { SessionUser } from "@/lib/session";
 import { RecruitmentPermissionService } from "@/lib/recruitment/permissions/permission-service";
 import { RecruitmentDomainError } from "@/lib/recruitment/shared/errors";
-import { PIPELINE_STAGE_LABELS } from "@/lib/recruitment/shared/pipeline-stage-groups";
 import { readScorecardRatings, scorecardAverage } from "@/lib/recruitment/interview/scorecard";
 import { batchCodeBase, batchCodePrefix, nextBatchCode } from "@/lib/recruitment/batch/batch-code";
-import { batchBucket, countProgress, type BatchBucket, type BatchProgress } from "@/lib/recruitment/batch/batch-progress";
+import { BATCH_BUCKETS, batchBucket, countProgress, type BatchBucket, type BatchProgress } from "@/lib/recruitment/batch/batch-progress";
 import { planBatchAdds } from "@/lib/recruitment/batch/batch-membership";
 
 async function assertCanManage(session: SessionUser) {
@@ -217,14 +216,16 @@ function noticePeriodText(days: number | null, notes: string | null): string | n
   return notes;
 }
 
+/**
+ * The Stage column uses the paper plan's words (HR Round, Manager Round, Hire,
+ * Reject, Hold), the same as the Pipeline columns; a job's own Add stage
+ * column keeps its name.
+ */
 function stageLabel(stage: string, status: string, customLabel: string | null | undefined): string {
-  if (status === "rejected") return "Rejected";
-  if (status === "withdrawn") return "Withdrawn";
-  if (status === "on_hold") return "On Hold";
-  if (customLabel) return customLabel;
-  // The decision stage is where a candidate has passed the rounds: "Selected" in HR's words.
-  if (stage === "decision") return "Selected";
-  return PIPELINE_STAGE_LABELS[stage as keyof typeof PIPELINE_STAGE_LABELS] || stage;
+  const closed = status === "rejected" || status === "withdrawn" || status === "on_hold";
+  if (stage.startsWith("custom_") && customLabel && !closed) return customLabel;
+  const bucket = batchBucket(stage, status);
+  return BATCH_BUCKETS.find((b) => b.id === bucket)?.label ?? stage;
 }
 
 /** Average stars across submitted scorecards for one round (HR or manager), per application. */
@@ -511,3 +512,63 @@ export async function addApplicationsToBatch(
   return { added: count, skipped: plan.skipped };
 }
 
+
+export type BatchCandidateOption = {
+  applicationId: string;
+  name: string;
+  role: string;
+  stageLabel: string;
+  appliedAt: Date;
+};
+
+/**
+ * Candidates HR can add to this batch from the batch page: open applications
+ * (active or on hold) that aren't already in an open batch. Matches name,
+ * email or phone; with no search text, the most recent applications.
+ */
+export async function searchCandidatesForBatch(
+  session: SessionUser,
+  batchId: string,
+  query: string
+): Promise<BatchCandidateOption[]> {
+  await assertCanManage(session);
+  await getLiveBatch(batchId);
+  const q = query.trim();
+  const digits = q.replace(/\D/g, "");
+  const apps = await prisma.application.findMany({
+    where: {
+      deletedAt: null,
+      status: { in: ["active", "on_hold"] },
+      candidate: {
+        deletedAt: null,
+        ...(q
+          ? {
+              OR: [
+                { fullName: { contains: q, mode: "insensitive" as const } },
+                { email: { contains: q, mode: "insensitive" as const } },
+                ...(digits.length >= 4 ? [{ phone: { contains: digits } }] : []),
+              ],
+            }
+          : {}),
+      },
+      batchMemberships: { none: { batch: { status: HiringBatchStatus.open, deletedAt: null } } },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 25,
+    select: {
+      id: true,
+      status: true,
+      currentStage: true,
+      createdAt: true,
+      candidate: { select: { fullName: true } },
+      jobOpening: { select: { title: true } },
+    },
+  });
+  return apps.map((a) => ({
+    applicationId: a.id,
+    name: a.candidate.fullName,
+    role: a.jobOpening.title,
+    stageLabel: BATCH_BUCKETS.find((b) => b.id === batchBucket(a.currentStage, a.status))?.label ?? a.currentStage,
+    appliedAt: a.createdAt,
+  }));
+}

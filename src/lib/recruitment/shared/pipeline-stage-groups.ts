@@ -130,7 +130,7 @@ export const PIPELINE_STAGE_LABELS: Record<RecruitmentPipelineStage, string> = {
   [RecruitmentPipelineStage.manager_round]: "Manager Round",
   [RecruitmentPipelineStage.client_round]: "Client Round",
   [RecruitmentPipelineStage.reference_check]: "Reference Check",
-  [RecruitmentPipelineStage.decision]: "Decision",
+  [RecruitmentPipelineStage.decision]: "Hire",
   [RecruitmentPipelineStage.offer]: "Offer",
   [RecruitmentPipelineStage.hired]: "Joined",
   [RecruitmentPipelineStage.rejected]: "Rejected",

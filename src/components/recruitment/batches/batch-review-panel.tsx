@@ -144,6 +144,7 @@ export function BatchReviewPanel({
   const resume = application?.resume ?? (row.resume ? { ...row.resume, mimeType: null } : null);
   const isPdf = resume ? (resume.mimeType ?? "").includes("pdf") || resume.fileName.toLowerCase().endsWith(".pdf") : false;
   const bucket = row.bucket;
+  const latestOffer = application?.offers?.[0] ?? null;
 
   let steps: Step[] = [];
   let showReject = false;
@@ -197,8 +198,19 @@ export function BatchReviewPanel({
           </p>
           {editable ? (
             <div className="flex flex-wrap gap-2">
+              {bucket === "hire" && row.stage !== "hired" ? (
+                latestOffer ? (
+                  <Button asChild size="sm">
+                    <Link href={`/admin/recruitment/offers/${latestOffer.id}`}>Open offer</Link>
+                  </Button>
+                ) : (
+                  <Button asChild size="sm">
+                    <Link href={`/admin/recruitment/offers/new?applicationId=${row.applicationId}`}>Make offer</Link>
+                  </Button>
+                )
+              ) : null}
               {steps.map((s, i) => (
-                <Button key={s.label} size="sm" variant={i === 0 && !isRejected ? "default" : "outline"} disabled={isPending} onClick={() => run(s)}>
+                <Button key={s.label} size="sm" variant={i === 0 && !isRejected && bucket !== "hire" ? "default" : "outline"} disabled={isPending} onClick={() => run(s)}>
                   {s.label}
                 </Button>
               ))}

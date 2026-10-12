@@ -16,6 +16,7 @@ import {
 import { StarRatingDisplay } from "@/components/recruitment/interviews/star-rating";
 import { BatchProgressLegend } from "@/components/recruitment/batches/batch-progress-legend";
 import { BatchReviewPanel } from "@/components/recruitment/batches/batch-review-panel";
+import { AddCandidatesButton } from "@/components/recruitment/batches/add-candidates-button";
 import {
   removeBatchMembersAction,
   renameBatchAction,
@@ -193,14 +194,7 @@ export function BatchSheetView({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {isOpen ? (
-              <Button asChild variant="outline">
-                <Link href="/admin/recruitment/pipeline?view=list">
-                  <Layers className="h-4 w-4" />
-                  Add candidates
-                </Link>
-              </Button>
-            ) : null}
+            {isOpen ? <AddCandidatesButton batchId={sheet.id} batchCode={sheet.code} /> : null}
             <Button
               variant="ghost"
               disabled={isPending}
@@ -242,14 +236,10 @@ export function BatchSheetView({
           <div className="space-y-1">
             <p className="font-medium">No candidates in this batch yet</p>
             <p className="text-sm text-muted-foreground">
-              On the Pipeline list, tick the candidates for this interview and choose Add to batch.
+              Add the candidates for this interview here, or tick them on the Pipeline list and choose Add to batch.
             </p>
           </div>
-          {isOpen ? (
-            <Button asChild>
-              <Link href="/admin/recruitment/pipeline?view=list">Go to Pipeline list</Link>
-            </Button>
-          ) : null}
+          {isOpen ? <AddCandidatesButton batchId={sheet.id} batchCode={sheet.code} /> : null}
         </div>
       ) : (
         <>

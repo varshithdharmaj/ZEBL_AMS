@@ -12,11 +12,13 @@ import {
   createBatch,
   listOpenBatchOptions,
   removeMembers,
+  searchCandidatesForBatch,
   renameBatch,
   setBatchInterviewDate,
   setBatchStatus,
   updateMemberRemarks,
   type AddToBatchResult,
+  type BatchCandidateOption,
   type OpenBatchOption,
 } from "@/lib/recruitment/batch/batch-service";
 import { parseInterviewDate } from "@/lib/recruitment/batch/batch-membership";
@@ -174,6 +176,19 @@ export async function addToBatchAction(input: unknown): Promise<AddToBatchState>
     const result = await addApplicationsToBatch(session, batch.id, applicationIds);
     revalidateBatch(batch.id);
     return { batchId: batch.id, code: batch.code, result };
+  } catch (error) {
+    return mapUnknownToActionState(error);
+  }
+}
+
+export async function searchCandidatesForBatchAction(
+  input: unknown
+): Promise<ActionState & { options?: BatchCandidateOption[] }> {
+  try {
+    const parsed = safeParseWithSchema(z.object({ batchId: id, query: z.string().max(100) }), input);
+    if (!parsed.ok) return { error: parsed.error };
+    const session = await requireRecruitmentAdminSession();
+    return { options: await searchCandidatesForBatch(session, parsed.data.batchId, parsed.data.query) };
   } catch (error) {
     return mapUnknownToActionState(error);
   }
