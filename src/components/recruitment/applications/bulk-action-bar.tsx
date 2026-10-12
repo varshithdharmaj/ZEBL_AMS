@@ -6,12 +6,13 @@ import { RecruitmentPipelineStage } from "@/generated/prisma/enums";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ErrorAlert } from "@/components/ui/error-alert";
-import { X } from "lucide-react";
+import { Layers, X } from "lucide-react";
 import {
   bulkMoveApplicationsStageAction,
   bulkAssignRecruiterAction,
 } from "@/actions/recruitment-applications";
 import { STAGE_OPTIONS } from "@/components/recruitment/applications/application-pipeline-drawer";
+import { AddToBatchDialog } from "@/components/recruitment/batches/add-to-batch-dialog";
 
 export type BulkActionBarEmployeeOption = {
   id: number;
@@ -21,10 +22,10 @@ export type BulkActionBarEmployeeOption = {
 
 /**
  * Sticky bottom bar shown when the recruiter has selected 1+ rows in List
- * view. Only two actions are exposed here — Move Stage (non-terminal
- * stages only, via STAGE_OPTIONS) and Assign Recruiter — matching the
- * explicit safe/unsafe split: Reject, Hiring Decision, Offer creation, and
- * Conversion are single-candidate flows and are never offered here.
+ * view. Only safe bulk actions are exposed here — Add to batch, Move Stage
+ * (non-terminal stages only, via STAGE_OPTIONS) and Assign Recruiter.
+ * Reject, Hiring Decision, Offer creation, and Conversion are
+ * single-candidate flows and are never offered here.
  */
 export function BulkActionBar({
   selectedIds,
@@ -43,6 +44,7 @@ export function BulkActionBar({
   const [error, setError] = useState<string | null>(null);
   const [stage, setStage] = useState<RecruitmentPipelineStage | "">("");
   const [recruiterUserId, setRecruiterUserId] = useState<string>("");
+  const [batchOpen, setBatchOpen] = useState(false);
 
   if (selectedIds.length === 0) return null;
 
@@ -94,6 +96,18 @@ export function BulkActionBar({
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-9 text-xs font-semibold"
+            disabled={isPending}
+            onClick={() => setBatchOpen(true)}
+          >
+            <Layers className="h-3.5 w-3.5" />
+            Add to batch
+          </Button>
+
           <Select value={stage} onValueChange={(v) => setStage(v as RecruitmentPipelineStage)}>
             <SelectTrigger className="h-9 w-[190px] bg-background text-xs" aria-label="Move to stage">
               <SelectValue placeholder="Move stage to…" />
@@ -155,6 +169,12 @@ export function BulkActionBar({
           </Button>
         </div>
       </div>
+      <AddToBatchDialog
+        open={batchOpen}
+        onOpenChange={setBatchOpen}
+        applicationIds={selectedIds}
+        onAdded={onDone}
+      />
     </div>
   );
 }

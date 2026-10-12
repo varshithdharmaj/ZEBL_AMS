@@ -93,6 +93,7 @@ export {
   sendOfferSchema,
   acceptOfferSchema,
   declineOfferSchema,
+  updateOfferNegotiationSchema,
   withdrawOfferSchema,
   createOfferRevisionSchema,
   attachOfferPdfSchema,

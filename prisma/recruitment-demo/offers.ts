@@ -83,7 +83,7 @@ export async function seedOffers(ctx: DemoCtx): Promise<void> {
     if (spec.outcome === "accepted") {
       await svc.acceptOffer(ctx.session, { id });
     } else if (spec.outcome === "declined") {
-      await svc.declineOffer(ctx.session, { id, reason: "Accepted competing offer" });
+      await svc.declineOffer(ctx.session, { id, reasonCode: "other_offer", reason: "Accepted competing offer" });
     }
 
     ctx.offers.set(spec.purpose, { id, purpose: spec.outcome });

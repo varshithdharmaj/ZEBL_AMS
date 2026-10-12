@@ -314,16 +314,30 @@ export const prismaOfferRepository: OfferRepository = {
     });
   },
 
-  async declineOffer(id, declinedAt, reason, tx) {
+  async declineOffer(id, declinedAt, reason, tx, reasonCode) {
     const client: Client = tx ?? prisma;
     const updateData: Record<string, unknown> = {
       status: OfferStatus.declined,
       declinedAt: declinedAt ? new Date(declinedAt) : new Date(),
       declineReason: reason ?? null,
+      declineReasonCode: reasonCode ?? null,
     };
     await client.offer.update({
       where: { id },
       data: updateData as Prisma.OfferUpdateInput,
+    });
+  },
+
+  async updateNegotiation(id, data, tx) {
+    const client: Client = tx ?? prisma;
+    await client.offer.update({
+      where: { id },
+      data: {
+        negotiationStatus: data.negotiationStatus,
+        negotiationNote: data.note,
+        negotiationFollowUpAt: data.followUpAt,
+        negotiationUpdatedAt: new Date(),
+      },
     });
   },
 

@@ -11,6 +11,7 @@ import {
   withdrawOfferAction,
   generateOfferLetterAction,
 } from "@/actions/recruitment-offers";
+import { OFFER_DECLINE_REASONS, offerDeclineReasonLabel } from "@/lib/recruitment/offer/negotiation";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,7 +34,11 @@ export interface OfferDetailActionsProps {
     declinedAt?: Date | string | null;
     withdrawnAt?: Date | string | null;
     declineReason?: string | null;
+    declineReasonCode?: string | null;
     withdrawReason?: string | null;
+    negotiationStatus?: string | null;
+    negotiationNote?: string | null;
+    negotiationFollowUpAt?: Date | string | null;
   };
   userRole?: string;
 }
@@ -56,6 +61,7 @@ export function OfferDetailActions({ offer }: OfferDetailActionsProps) {
   const [error, setError] = React.useState<string | null>(null);
 
   const [declineReason, setDeclineReason] = React.useState("");
+  const [declineCode, setDeclineCode] = React.useState<string | null>(null);
   const [withdrawReason, setWithdrawReason] = React.useState("");
   const [expiresAt, setExpiresAt] = React.useState("");
 
@@ -87,13 +93,20 @@ export function OfferDetailActions({ offer }: OfferDetailActionsProps) {
   };
 
   const handleDecline = () => {
-    if (!declineReason.trim()) {
-      setError("Please provide a reason for declining.");
+    if (!declineCode) {
+      setError("Please choose why the candidate declined.");
+      return;
+    }
+    if (declineCode === "other" && !declineReason.trim()) {
+      setError("Please add a note when the reason is Other.");
       return;
     }
     setError(null);
     startTransition(async () => {
-      const res = await declineOfferAction({}, { id: offer.id, reason: declineReason.trim() });
+      const res = await declineOfferAction(
+        {},
+        { id: offer.id, reasonCode: declineCode, reason: declineReason.trim() || null }
+      );
       if (res.error) setError(res.error);
       else router.refresh();
     });
@@ -225,18 +238,33 @@ export function OfferDetailActions({ offer }: OfferDetailActionsProps) {
               <AlertDialogHeader>
                 <AlertDialogTitle>Decline Offer</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Mark this offer as declined. Please enter the decline reason.
+                  Why did the candidate decline? This helps spot why offers are lost.
                 </AlertDialogDescription>
               </AlertDialogHeader>
-              <div className="py-4">
-                <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
-                  Decline Reason <span className="text-red-500">*</span>
-                </label>
+              <div className="space-y-3 py-2">
+                <div role="radiogroup" className="flex flex-wrap gap-1.5">
+                  {OFFER_DECLINE_REASONS.map((r) => (
+                    <button
+                      key={r.code}
+                      type="button"
+                      role="radio"
+                      aria-checked={declineCode === r.code}
+                      onClick={() => setDeclineCode(r.code)}
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                        declineCode === r.code
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-background hover:bg-muted/40"
+                      }`}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
                 <textarea
                   value={declineReason}
                   onChange={(e) => setDeclineReason(e.target.value)}
-                  placeholder="Reason candidate declined..."
-                  rows={3}
+                  placeholder={declineCode === "other" ? "Note (required for Other)" : "Note (optional)"}
+                  rows={2}
                   className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 />
               </div>
@@ -308,11 +336,12 @@ export function OfferDetailActions({ offer }: OfferDetailActionsProps) {
             <span className="h-2 w-2 rounded-full bg-rose-500" />
             Offer Declined {offer.declinedAt ? `on ${formatDate(offer.declinedAt)}` : ""}
           </div>
-          {offer.declineReason && (
+          {offer.declineReasonCode || offer.declineReason ? (
             <p className="text-rose-700">
-              <span className="font-medium">Reason:</span> {offer.declineReason}
+              <span className="font-medium">Reason:</span>{" "}
+              {[offerDeclineReasonLabel(offer.declineReasonCode), offer.declineReason].filter(Boolean).join(" — ")}
             </p>
-          )}
+          ) : null}
         </div>
       )}
 

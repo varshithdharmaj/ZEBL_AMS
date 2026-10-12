@@ -303,6 +303,8 @@ model User {
   savedRecruitmentFilters       RecruitmentSavedFilter[]      @relation("RecruitmentSavedFilters")
   emailTemplatesCreated         RecruitmentEmailTemplate[]    @relation("EmailTemplateCreatedBy")
   communicationsSent            RecruitmentCommunication[]    @relation("CommunicationSender")
+  hiringBatchesCreated          HiringBatch[]                 @relation("HiringBatchCreatedBy")
+  hiringBatchMembersAdded       HiringBatchMember[]           @relation("HiringBatchMemberAddedBy")
   // Employee statutory details & documents
   employeeStatutoryUpdates      EmployeeStatutoryDetail[]     @relation("EmployeeStatutoryUpdatedBy")
   employeeDocumentsUploaded     EmployeeDocument[]            @relation("EmployeeDocUploadedBy")
@@ -2244,6 +2246,7 @@ model Application {
   offers             Offer[]
   conversionSnapshot EmployeeConversionSnapshot?
   communications     RecruitmentCommunication[]
+  batchMemberships   HiringBatchMember[]
 
   @@index([jobOpeningId, currentStage, deletedAt])
   @@index([currentStageId])
@@ -2418,6 +2421,13 @@ model Offer {
   proposedStartDate       DateTime?       @map("proposed_start_date")
   expiresAt               DateTime?       @map("expires_at")
   declineReason           String?         @map("decline_reason")
+  /// Code from OFFER_DECLINE_REASONS (src/lib/recruitment/offer/negotiation.ts); declineReason holds the note.
+  declineReasonCode       String?         @map("decline_reason_code")
+  /// "in_negotiation" while the candidate is negotiating a released offer, else null.
+  negotiationStatus       String?         @map("negotiation_status")
+  negotiationNote         String?         @map("negotiation_note")
+  negotiationFollowUpAt   DateTime?       @map("negotiation_follow_up_at")
+  negotiationUpdatedAt    DateTime?       @map("negotiation_updated_at")
   withdrawReason          String?         @map("withdraw_reason")
   releasedAt              DateTime?       @map("released_at")
   acceptedAt              DateTime?       @map("accepted_at")
@@ -2642,6 +2652,55 @@ model RecruitmentSavedFilter {
   @@unique([userId, entity, name])
   @@index([userId, entity])
   @@map("recruitment_saved_filters")
+}
+
+enum HiringBatchStatus {
+  open
+  closed
+}
+
+/// A group of candidates HR interviews together, usually on one date.
+/// `code` is the Batch ID shown to users, e.g. B-2026-001.
+model HiringBatch {
+  id              String            @id @default(cuid())
+  code            String            @unique
+  name            String?
+  interviewDate   DateTime?         @map("interview_date") @db.Date
+  status          HiringBatchStatus @default(open)
+  createdByUserId String?           @map("created_by_user_id")
+  createdBy       User?             @relation("HiringBatchCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  closedAt        DateTime?         @map("closed_at")
+  deletedAt       DateTime?         @map("deleted_at")
+
+  members HiringBatchMember[]
+
+  @@index([status, deletedAt])
+  @@index([createdAt])
+  @@map("recruitment_hiring_batches")
+}
+
+/// One application in a batch. The stage is never stored here — it is always
+/// the application's current stage, so the batch and the pipeline agree.
+/// An application sits in at most one open batch (enforced in the service).
+model HiringBatchMember {
+  id            String      @id @default(cuid())
+  batchId       String      @map("batch_id")
+  batch         HiringBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  applicationId String      @map("application_id")
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  /// Row number in the batch ("Sl.no"); new rows go to the end.
+  slNo          Int         @map("sl_no")
+  remarks       String?     @db.Text
+  addedByUserId String?     @map("added_by_user_id")
+  addedBy       User?       @relation("HiringBatchMemberAddedBy", fields: [addedByUserId], references: [id], onDelete: SetNull)
+  addedAt       DateTime    @default(now()) @map("added_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  @@unique([batchId, applicationId])
+  @@index([applicationId])
+  @@map("recruitment_hiring_batch_members")
 }
 
 /// Raw biometric punch events from the eSSL Attendance Bridge.

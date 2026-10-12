@@ -9,9 +9,11 @@ import {
   ClipboardList,
   Plus,
   ArrowRight,
+  Layers,
 } from "lucide-react";
 import type { JobStatusCounts } from "@/lib/recruitment/job/types";
 import type { HiringFunnelCounts } from "@/lib/recruitment/dashboard/build-funnel-counts";
+import type { BatchListItem } from "@/lib/recruitment/batch/batch-service";
 import { StatsGrid } from "@/components/ui/stats-grid";
 import { DashboardCard } from "@/components/ui/dashboard-card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +23,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { DashboardFunnelWidget } from "@/components/recruitment/dashboard/dashboard-funnel-widget";
 import { DashboardPendingConversionsWidget } from "@/components/recruitment/dashboard/dashboard-pending-conversions-widget";
 import { DashboardOfferSummaryWidget } from "@/components/recruitment/dashboard/dashboard-offer-summary-widget";
+import { BatchListTable } from "@/components/recruitment/batches/batch-list-table";
+import { NewBatchButton } from "@/components/recruitment/batches/new-batch-button";
 
 type RecentCandidate = {
   id: string;
@@ -75,6 +79,7 @@ export function RecruitmentDashboardView({
   pendingConversions = [],
   recentCandidates = [],
   upcomingInterviews = [],
+  openBatches = [],
   activityFeed = [],
 }: {
   counts: JobStatusCounts;
@@ -102,6 +107,7 @@ export function RecruitmentDashboardView({
   pendingConversions?: PendingConversionItem[];
   recentCandidates?: RecentCandidate[];
   upcomingInterviews?: UpcomingInterview[];
+  openBatches?: BatchListItem[];
   activityFeed?: ActivityItem[];
 }) {
   return (
@@ -154,6 +160,33 @@ export function RecruitmentDashboardView({
         </Link>
       </StatsGrid>
 
+      <SectionCard
+        title="Open batches"
+        description="Interview-day groups. Open one to work the sheet."
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            <NewBatchButton variant="outline" />
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/admin/recruitment/batches">
+                All
+                <ArrowRight className="ml-1 h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </div>
+        }
+        isEmpty={openBatches.length === 0}
+        emptyIcon={Layers}
+        emptyMessage="No open batches. Create one for an interview date, then add people from the Pipeline list."
+        noPadding={openBatches.length > 0}
+      >
+        <BatchListTable
+          batches={openBatches}
+          hrefBase="/admin/recruitment/batches"
+          showCreated={false}
+          className="rounded-none border-0"
+        />
+      </SectionCard>
+
       <DashboardFunnelWidget funnel={funnel} />
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -188,6 +221,12 @@ export function RecruitmentDashboardView({
             <Link href="/admin/recruitment/pipeline">
               <ClipboardList className="mr-1.5 h-4 w-4" />
               Open Pipeline
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="font-semibold shadow-subtle">
+            <Link href="/admin/recruitment/batches">
+              <Layers className="mr-1.5 h-4 w-4" />
+              Batches
             </Link>
           </Button>
           <Button asChild variant="outline" className="font-semibold shadow-subtle">

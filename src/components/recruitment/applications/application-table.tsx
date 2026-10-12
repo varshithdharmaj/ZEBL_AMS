@@ -51,6 +51,7 @@ import type { ApplicationScoreSummary } from "@/lib/recruitment/interview/score-
 import { VERDICTS } from "@/lib/recruitment/interview/scorecard";
 import { StarRatingDisplay } from "@/components/recruitment/interviews/star-rating";
 import { VerdictBadge } from "@/components/recruitment/interviews/scorecard-summary";
+import { isFollowUpOverdue, offerStageLabel } from "@/lib/recruitment/offer/negotiation";
 
 function formatOptionalColumn(key: OptionalListColumnKey, app: ApplicationTableItem): string {
   const candidate = app.candidate as
@@ -564,9 +565,26 @@ function ScoreCells({ summary }: { summary: ApplicationScoreSummary | undefined 
           <span className="text-xs text-muted-foreground">—</span>
         )}
       </DataTableCell>
-      <DataTableCell className="text-xs capitalize text-foreground">
-        {summary?.offer ? summary.offer.status.replace(/_/g, " ") : <span className="text-muted-foreground">—</span>}
+      <DataTableCell className="text-xs text-foreground">
+        {summary?.offer ? <OfferCell offer={summary.offer} /> : <span className="text-muted-foreground">—</span>}
       </DataTableCell>
     </>
+  );
+}
+
+function OfferCell({ offer }: { offer: NonNullable<ApplicationScoreSummary["offer"]> }) {
+  const view = { status: offer.status, negotiationStatus: offer.negotiationStatus, negotiationFollowUpAt: offer.followUpAt };
+  const label = offerStageLabel(view);
+  const overdue = isFollowUpOverdue(view);
+  return (
+    <span className="flex flex-col">
+      <span className={label === "In negotiation" ? "font-semibold text-amber-700 dark:text-amber-400" : ""}>{label}</span>
+      {label === "In negotiation" && offer.followUpAt ? (
+        <span className={overdue ? "text-[10px] font-semibold text-red-600 dark:text-red-400" : "text-[10px] text-muted-foreground"}>
+          Follow up {new Date(offer.followUpAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+          {overdue ? " · overdue" : ""}
+        </span>
+      ) : null}
+    </span>
   );
 }

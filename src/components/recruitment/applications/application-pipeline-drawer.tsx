@@ -40,6 +40,7 @@ import { StarRatingDisplay } from "@/components/recruitment/interviews/star-rati
 import { INTERVIEW_STAGES } from "@/lib/recruitment/shared/pipeline-stage-groups";
 import { movableStageOptions, nextStageAfter, stageLabel, type StageOption } from "@/lib/recruitment/shared/next-stage";
 import { cn } from "@/lib/utils";
+import { isFollowUpOverdue, offerStageLabel, type OfferTrackingView } from "@/lib/recruitment/offer/negotiation";
 import {
   buildRecruitmentEntityHref,
   currentPathWithSearch,
@@ -119,6 +120,9 @@ export type PipelineDrawerApplication = {
     offerNumber?: string | null;
     status: string;
     ctc?: number | string | null;
+    negotiationStatus?: string | null;
+    negotiationNote?: string | null;
+    negotiationFollowUpAt?: Date | string | null;
   }>;
   stageHistory?: Array<{
     id: string;
@@ -135,7 +139,8 @@ export type PipelineDrawerApplication = {
   requireDecisionForOffer?: boolean;
 };
 
-type Tab = "overview" | "resume" | "feedback" | "activity";
+export type PipelineDrawerTab = "overview" | "resume" | "feedback" | "activity";
+type Tab = PipelineDrawerTab;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -165,6 +170,7 @@ export function ApplicationPipelineDrawer({
   prevId,
   nextId,
   onNavigate,
+  initialTab = "overview",
 }: {
   application: PipelineDrawerApplication | null;
   open: boolean;
@@ -173,6 +179,8 @@ export function ApplicationPipelineDrawer({
   prevId?: string | null;
   nextId?: string | null;
   onNavigate?: (id: string) => void;
+  /** Tab to open on, e.g. "resume" from the batch sheet's Profile column. */
+  initialTab?: Tab;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -180,18 +188,18 @@ export function ApplicationPipelineDrawer({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [closeKind, setCloseKind] = useState<"reject" | "withdraw" | null>(null);
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>(initialTab);
   const pipelineReturnTo = (() => {
     const path = currentPathWithSearch(pathname, searchParams.toString());
     return isSafeRecruitmentReturnTo(path) ? path : "/admin/recruitment/pipeline";
   })();
 
-  // Each candidate opens on Overview.
+  // Each candidate opens on Overview (or the tab the caller asked for).
   const applicationId = application?.id;
   useEffect(() => {
-    setTab("overview");
+    setTab(initialTab);
     setError(null);
-  }, [applicationId]);
+  }, [applicationId, initialTab]);
 
   const stageOptions = useMemo(
     () => application?.stageOptions ?? movableStageOptions(null),
@@ -476,7 +484,7 @@ export function ApplicationPipelineDrawer({
                     <li key={item.id} className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
                       <div>
                         <p className="text-xs font-semibold">{item.offerNumber || "Draft offer"}</p>
-                        <p className="text-[11px] capitalize text-muted-foreground">{item.status.replace(/_/g, " ")}</p>
+                        <OfferTrackingLine offer={item} />
                       </div>
                       <Button asChild variant="ghost" size="sm" className="h-7 text-xs">
                         <Link href={`/admin/recruitment/offers/${item.id}`}>Open</Link>
@@ -606,7 +614,8 @@ function NextStepCard({
     ) : null;
   } else if (stage === RecruitmentPipelineStage.offer) {
     const offer = application.offers?.[0];
-    title = offer ? `Offer ${offer.status.replace(/_/g, " ")}` : "Prepare the offer";
+    title = offer ? `Offer: ${offerStageLabel(offer)}` : "Prepare the offer";
+    if (offer) body = <OfferTrackingLine offer={offer} />;
     action = offer ? (
       <Button asChild size="sm" variant="outline" className="h-8 text-xs">
         <Link href={`/admin/recruitment/offers/${offer.id}`}>Open offer</Link>
@@ -791,5 +800,22 @@ function ActivityPane({
         </li>
       ))}
     </ul>
+  );
+}
+
+/** "In negotiation · asked 6 LPA · follow up Fri 3 Oct" (red when overdue). */
+function OfferTrackingLine({ offer }: { offer: OfferTrackingView & { negotiationNote?: string | null } }) {
+  const overdue = isFollowUpOverdue(offer);
+  const negotiating = offerStageLabel(offer) === "In negotiation";
+  return (
+    <p className="text-[11px] text-muted-foreground">
+      <span className={cn("font-semibold", negotiating ? "text-amber-700 dark:text-amber-400" : "")}>{offerStageLabel(offer)}</span>
+      {negotiating && offer.negotiationNote ? ` · ${offer.negotiationNote}` : ""}
+      {negotiating && offer.negotiationFollowUpAt ? (
+        <span className={cn(overdue && "font-semibold text-red-600 dark:text-red-400")}>
+          {` · follow up ${formatDay(offer.negotiationFollowUpAt)}${overdue ? " (overdue)" : ""}`}
+        </span>
+      ) : null}
+    </p>
   );
 }

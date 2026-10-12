@@ -39,7 +39,7 @@ export async function loadApplicationScoreSummaries(
     prisma.offer.findMany({
       where: { applicationId: { in: ids } },
       orderBy: { createdAt: "desc" },
-      select: { applicationId: true, status: true },
+      select: { applicationId: true, status: true, negotiationStatus: true, negotiationFollowUpAt: true },
     }),
   ]);
 
@@ -78,7 +78,11 @@ export async function loadApplicationScoreSummaries(
   for (const o of offers) {
     const summary = out[o.applicationId];
     if (summary && !summary.offer) {
-      summary.offer = { status: o.status, negotiationStatus: null, followUpAt: null };
+      summary.offer = {
+        status: o.status,
+        negotiationStatus: o.negotiationStatus,
+        followUpAt: o.negotiationFollowUpAt?.toISOString() ?? null,
+      };
     }
   }
 
