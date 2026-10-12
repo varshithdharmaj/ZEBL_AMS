@@ -79,7 +79,7 @@ export const superAdminHelpChapters: HelpChapter[] = [
         items: [
           "Open a pending request to see the stated reason next to the original raw punch record.",
           "Approve or reject — approving applies a correction overlay; the original punch is preserved, never overwritten.",
-          "The employee is notified and sees the outcome on their own History page.",
+          "The employee is notified and sees the outcome on their own Attendance page.",
         ],
       },
     ],

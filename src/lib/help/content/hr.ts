@@ -88,7 +88,7 @@ export const hrHelpChapters: HelpChapter[] = [
         items: [
           "Open a pending request to see the employee's stated reason next to the original raw punch record.",
           "Approve or reject. Approving applies a correction overlay — the original punch is preserved underneath, never overwritten.",
-          "The employee is notified and can see the outcome on their own History page.",
+          "The employee is notified and can see the outcome on their own Attendance page.",
         ],
       },
       {
