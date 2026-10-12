@@ -6,7 +6,6 @@ import { buildRecruitmentBreadcrumbs } from "@/lib/recruitment/navigation/breadc
 import { ApplicationFilters } from "@/components/recruitment/applications/application-filters";
 import { ApplicationTable } from "@/components/recruitment/applications/application-table";
 import { PipelineBoard } from "@/components/recruitment/applications/pipeline-board";
-import type { PipelineDynamicColumn } from "@/components/recruitment/applications/pipeline-board";
 import { Button } from "@/components/ui/button";
 import { requireRecruitmentAdminSession } from "@/lib/auth-guards";
 import { listApplicationsCached } from "@/lib/recruitment/application";
@@ -18,13 +17,11 @@ import type { ApplicationTableItem } from "@/components/recruitment/applications
 import { getEmployeeOptions } from "@/lib/recruitment/candidate";
 import { prisma } from "@/lib/prisma";
 import { ApplicationStatus, RecruitmentPipelineStage } from "@/generated/prisma/enums";
-import { PIPELINE_STAGE_LABELS } from "@/lib/recruitment/shared/pipeline-stage-groups";
 import {
   LIST_MAX_PAGE_SIZE,
   LIST_PAGE_SIZE_OPTIONS,
   DEFAULT_PAGE_SIZE,
   PIPELINE_BOARD_MAX_ITEMS,
-  PIPELINE_COLUMN_PAGE_SIZE,
   normalizePipelineBoardTake,
 } from "@/lib/recruitment/shared/pagination";
 import type { PipelineDrawerApplication } from "@/components/recruitment/applications/application-pipeline-drawer";
@@ -98,17 +95,8 @@ export default async function RecruitmentPipelinePage({
     appliedTo,
   };
 
-  // A job-scoped board renders one column per JobOpeningStage instead of the
-  // fixed 5-column cross-job fallback — only possible once a single job is
-  // selected and that job actually has a configured stage list.
-  const jobDetail =
-    view === "board" && jobFilter ? await prismaJobRepository.getJob(jobFilter) : null;
-  const dynamicStages = (jobDetail?.stages ?? [])
-    .filter((s) => s.isEnabled)
-    .slice()
-    .sort((a, b) => a.sortOrder - b.sortOrder);
-  const boardMode: "dynamic" | "static" =
-    view === "board" && jobFilter && dynamicStages.length > 0 ? "dynamic" : "static";
+  // Paper plan is a fixed board: HR Round, Manager Round, Hire, Reject, Hold.
+  const jobDetail = jobFilter ? await prismaJobRepository.getJob(jobFilter) : null;
 
   // Side panel loads alongside the board.
   const selectedApplicationPromise: Promise<PipelineDrawerApplication | null> = applicationId
@@ -117,7 +105,6 @@ export default async function RecruitmentPipelinePage({
 
   const [
     listResult,
-    dynamicColumnsData,
     staticBoardResult,
     employeeOptions,
     jobs,
@@ -131,28 +118,7 @@ export default async function RecruitmentPipelinePage({
           { maxPageSize: LIST_MAX_PAGE_SIZE }
         )
       : Promise.resolve(null),
-    boardMode === "dynamic"
-      ? Promise.all(
-          dynamicStages.map(async (stage): Promise<PipelineDynamicColumn> => {
-            const res = await listApplicationsCached(
-              session,
-              { ...baseFilters, currentStage: stage.stage },
-              { page: 1, pageSize: PIPELINE_COLUMN_PAGE_SIZE },
-              { field: "createdAt", direction: "desc" }
-            );
-            return {
-              id: stage.id,
-              stage: stage.stage,
-              title: stage.label ?? PIPELINE_STAGE_LABELS[stage.stage] ?? String(stage.stage),
-              items: sanitizeApplicationsForClient(
-                res.items
-              ) as unknown as PipelineDrawerApplication[],
-              total: res.total,
-            };
-          })
-        )
-      : Promise.resolve(null),
-    boardMode === "static"
+    view === "board"
       ? listApplicationsCached(
           session,
           baseFilters,
@@ -209,7 +175,7 @@ export default async function RecruitmentPipelinePage({
       />
       <WorkspacePageHeader
         title="Pipeline"
-        description="Move candidates through hiring stages. Interviews, offers, and Convert to Employee live on each card. Joined is for converted hires only."
+        description="HR Round, Manager Round, Hire, Reject, Hold."
         backHref={
           nav.returnTo
             ? resolveRecruitmentReturnTo(nav.returnTo, "/admin/recruitment/pipeline")
@@ -231,56 +197,44 @@ export default async function RecruitmentPipelinePage({
 
       {view === "board" ? (
         <Suspense fallback={<div className="text-sm text-muted-foreground">Loading board…</div>}>
-          {boardMode === "dynamic" ? (
-            <PipelineBoard
-              mode="dynamic"
-              jobOpeningId={jobFilter}
-              dynamicColumns={dynamicColumnsData ?? []}
-              employeeOptions={employeeOptions}
-              selectedApplication={selectedApplication}
-            />
-          ) : (
-            <>
-              <PipelineBoard
-                mode="static"
-                applications={staticBoardItems as unknown as PipelineDrawerApplication[]}
-                employeeOptions={employeeOptions}
-                selectedApplication={selectedApplication}
-              />
-              <div className="flex flex-col items-center gap-2 pt-2">
-                <p className="text-xs text-muted-foreground">
-                  Showing {staticBoardItems.length} of {staticBoardResult?.total ?? 0} applications
-                </p>
-                {boardTake.hasMoreCapacity &&
-                (staticBoardResult?.total ?? 0) > (staticBoardResult?.items.length ?? 0) ? (
-                  <Button asChild variant="outline" size="sm" className="font-semibold text-xs">
-                    <Link
-                      href={`/admin/recruitment/pipeline?${new URLSearchParams({
-                        ...(filters.q ? { q: filters.q } : {}),
-                        ...(filters.status !== "all" ? { status: filters.status } : {}),
-                        ...(filters.currentStage !== "all"
-                          ? { currentStage: filters.currentStage }
-                          : {}),
-                        ...(filters.jobOpeningId !== "all"
-                          ? { jobOpeningId: filters.jobOpeningId }
-                          : {}),
-                        ...(mine ? { mine: "1" } : {}),
-                        ...(needsAttention ? { needsAttention: "1" } : {}),
-                        ...(hiringBatch.batch !== "all" ? { batch: hiringBatch.batch } : {}),
-                        ...(customFrom ? { appliedFrom: customFrom } : {}),
-                        ...(customTo ? { appliedTo: customTo } : {}),
-                        view: "board",
-                        page: String(boardTake.page + 1),
-                        ...(applicationId ? { applicationId } : {}),
-                      }).toString()}`}
-                    >
-                      Load more
-                    </Link>
-                  </Button>
-                ) : null}
-              </div>
-            </>
-          )}
+          <PipelineBoard
+            mode="static"
+            applications={staticBoardItems as unknown as PipelineDrawerApplication[]}
+            employeeOptions={employeeOptions}
+            selectedApplication={selectedApplication}
+          />
+          <div className="flex flex-col items-center gap-2 pt-2">
+            <p className="text-xs text-muted-foreground">
+              Showing {staticBoardItems.length} of {staticBoardResult?.total ?? 0} applications
+            </p>
+            {boardTake.hasMoreCapacity &&
+            (staticBoardResult?.total ?? 0) > (staticBoardResult?.items.length ?? 0) ? (
+              <Button asChild variant="outline" size="sm" className="font-semibold text-xs">
+                <Link
+                  href={`/admin/recruitment/pipeline?${new URLSearchParams({
+                    ...(filters.q ? { q: filters.q } : {}),
+                    ...(filters.status !== "all" ? { status: filters.status } : {}),
+                    ...(filters.currentStage !== "all"
+                      ? { currentStage: filters.currentStage }
+                      : {}),
+                    ...(filters.jobOpeningId !== "all"
+                      ? { jobOpeningId: filters.jobOpeningId }
+                      : {}),
+                    ...(mine ? { mine: "1" } : {}),
+                    ...(needsAttention ? { needsAttention: "1" } : {}),
+                    ...(hiringBatch.batch !== "all" ? { batch: hiringBatch.batch } : {}),
+                    ...(customFrom ? { appliedFrom: customFrom } : {}),
+                    ...(customTo ? { appliedTo: customTo } : {}),
+                    view: "board",
+                    page: String(boardTake.page + 1),
+                    ...(applicationId ? { applicationId } : {}),
+                  }).toString()}`}
+                >
+                  Load more
+                </Link>
+              </Button>
+            ) : null}
+          </div>
         </Suspense>
       ) : (
         <ApplicationTable

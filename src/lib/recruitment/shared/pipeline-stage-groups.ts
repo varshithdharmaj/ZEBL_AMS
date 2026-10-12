@@ -61,6 +61,64 @@ export const INTERVIEW_STAGES: readonly RecruitmentPipelineStage[] = [
  */
 export const INTERVIEWING_STAGE_FILTER = "interviewing";
 
+/** Paper-plan board columns. Filter `currentStage` uses these ids, not every enum value. */
+export const PIPELINE_BOARD_COLUMN_FILTERS = [
+  {
+    id: "hr_round",
+    label: "HR Round",
+    defaultStage: RecruitmentPipelineStage.hr_round,
+    stages: [
+      RecruitmentPipelineStage.resume_received,
+      RecruitmentPipelineStage.screening,
+      RecruitmentPipelineStage.assessment,
+      RecruitmentPipelineStage.hr_round,
+    ],
+  },
+  {
+    id: "manager_round",
+    label: "Manager Round",
+    defaultStage: RecruitmentPipelineStage.manager_round,
+    stages: [
+      RecruitmentPipelineStage.technical_round,
+      RecruitmentPipelineStage.team_lead_round,
+      RecruitmentPipelineStage.manager_round,
+      RecruitmentPipelineStage.client_round,
+      RecruitmentPipelineStage.reference_check,
+      ...CUSTOM_STAGE_SLOTS,
+    ],
+  },
+  {
+    id: "hire",
+    label: "Hire",
+    defaultStage: RecruitmentPipelineStage.decision,
+    stages: [
+      RecruitmentPipelineStage.decision,
+      RecruitmentPipelineStage.offer,
+      RecruitmentPipelineStage.hired,
+    ],
+  },
+  {
+    id: "reject",
+    label: "Reject",
+    defaultStage: RecruitmentPipelineStage.rejected,
+    stages: [RecruitmentPipelineStage.rejected, RecruitmentPipelineStage.withdrawn],
+  },
+  {
+    id: "hold",
+    label: "Hold",
+    defaultStage: RecruitmentPipelineStage.on_hold,
+    stages: [RecruitmentPipelineStage.on_hold],
+  },
+] as const;
+
+export type PipelineBoardColumnFilterId = (typeof PIPELINE_BOARD_COLUMN_FILTERS)[number]["id"];
+
+export function pipelineBoardColumnFilter(
+  value: string
+): (typeof PIPELINE_BOARD_COLUMN_FILTERS)[number] | undefined {
+  return PIPELINE_BOARD_COLUMN_FILTERS.find((column) => column.id === value);
+}
+
 /** Default display label for a stage when a job hasn't set a custom `JobOpeningStage.label`. */
 export const PIPELINE_STAGE_LABELS: Record<RecruitmentPipelineStage, string> = {
   [RecruitmentPipelineStage.resume_received]: "Applied",

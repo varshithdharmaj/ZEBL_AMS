@@ -8,7 +8,7 @@ import { RecruitmentPermissionService } from "@/lib/recruitment/permissions/perm
 import { RecruitmentDomainError } from "@/lib/recruitment/shared/errors";
 import { PIPELINE_STAGE_LABELS } from "@/lib/recruitment/shared/pipeline-stage-groups";
 import { readScorecardRatings, scorecardAverage } from "@/lib/recruitment/interview/scorecard";
-import { batchCodePrefix, nextBatchCode } from "@/lib/recruitment/batch/batch-code";
+import { batchCodeBase, batchCodePrefix, nextBatchCode } from "@/lib/recruitment/batch/batch-code";
 import { batchBucket, countProgress, type BatchBucket, type BatchProgress } from "@/lib/recruitment/batch/batch-progress";
 import { planBatchAdds } from "@/lib/recruitment/batch/batch-membership";
 
@@ -127,7 +127,8 @@ export async function setBatchInterviewDate(session: SessionUser, batchId: strin
   await assertCanManage(session);
   const batch = await getLiveBatch(batchId);
   // The Batch ID comes from the date, so a new date gets a new ID.
-  if (batch.code.startsWith(batchCodePrefix(interviewDate))) {
+  const base = batchCodeBase(interviewDate);
+  if (batch.code === base || batch.code.startsWith(`${base}-`)) {
     await prisma.hiringBatch.update({ where: { id: batchId }, data: { interviewDate } });
     return;
   }

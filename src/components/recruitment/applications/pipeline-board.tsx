@@ -24,7 +24,7 @@ import {
   type CardDensity,
 } from "./candidate-card-density-toggle";
 import {
-  CUSTOM_STAGE_SLOTS,
+  PIPELINE_BOARD_COLUMN_FILTERS,
   SYSTEM_STAGE_VALUES,
   pipelineStageLabel,
 } from "@/lib/recruitment/shared/pipeline-stage-groups";
@@ -38,54 +38,25 @@ interface BoardColumn {
   color: string;
 }
 
-/** Startup-first 5 columns — cross-job fallback board when no single job is selected. */
-const COLUMNS: BoardColumn[] = [
-  {
-    id: "applied",
-    title: "Applied",
-    stages: [RecruitmentPipelineStage.resume_received],
-    defaultStage: RecruitmentPipelineStage.resume_received,
-    color: "border-t-blue-500",
-  },
-  {
-    id: "screening",
-    title: "Screening",
-    stages: [
-      RecruitmentPipelineStage.screening,
-      RecruitmentPipelineStage.assessment,
-      RecruitmentPipelineStage.hr_round,
-    ],
-    defaultStage: RecruitmentPipelineStage.screening,
-    color: "border-t-amber-500",
-  },
-  {
-    id: "interview",
-    title: "Interview",
-    stages: [
-      RecruitmentPipelineStage.technical_round,
-      RecruitmentPipelineStage.team_lead_round,
-      RecruitmentPipelineStage.manager_round,
-      RecruitmentPipelineStage.client_round,
-      ...CUSTOM_STAGE_SLOTS,
-    ],
-    defaultStage: RecruitmentPipelineStage.technical_round,
-    color: "border-t-indigo-500",
-  },
-  {
-    id: "offer",
-    title: "Offer",
-    stages: [RecruitmentPipelineStage.offer, RecruitmentPipelineStage.decision],
-    defaultStage: RecruitmentPipelineStage.offer,
-    color: "border-t-pink-500",
-  },
-  {
-    id: "joined",
-    title: "Joined",
-    stages: [RecruitmentPipelineStage.hired],
-    defaultStage: RecruitmentPipelineStage.hired,
-    color: "border-t-emerald-500",
-  },
-];
+/** Paper plan: HR Round, Manager Round, Hire, Reject, Hold. */
+const COLUMNS: BoardColumn[] = PIPELINE_BOARD_COLUMN_FILTERS.map((column) => ({
+  id: column.id,
+  title: column.label,
+  stages: [...column.stages],
+  defaultStage: column.defaultStage,
+  color: "border-t-border",
+}));
+
+function applicationInColumn(
+  app: { currentStage: string; status?: string },
+  col: BoardColumn
+): boolean {
+  const status = app.status ?? "";
+  if (col.id === "reject") return status === "rejected" || status === "withdrawn" || col.stages.includes(app.currentStage as RecruitmentPipelineStage);
+  if (col.id === "hold") return status === "on_hold" || app.currentStage === RecruitmentPipelineStage.on_hold;
+  if (status === "rejected" || status === "withdrawn" || status === "on_hold") return false;
+  return col.stages.includes(app.currentStage as RecruitmentPipelineStage);
+}
 
 export type PipelineDynamicColumn = {
   id: string;
@@ -330,14 +301,10 @@ function StaticBoard({
 
   const drawerApp = selectedApplication ?? applications.find((a) => a.id === selectedId) ?? null;
   const closeDialog = useBoardCloseDialog();
-  const selectedStage = applications.find((a) => a.id === selectedId)?.currentStage;
-  const selectedColumn = COLUMNS.find((c) => c.stages.includes(selectedStage as RecruitmentPipelineStage));
+  const selectedApp = applications.find((a) => a.id === selectedId);
+  const selectedColumn = selectedApp ? COLUMNS.find((c) => applicationInColumn(selectedApp, c)) : undefined;
   const neighbours = columnNeighbours(
-    selectedColumn
-      ? applications
-          .filter((a) => selectedColumn.stages.includes(a.currentStage as RecruitmentPipelineStage))
-          .map((a) => a.id)
-      : [],
+    selectedColumn ? applications.filter((a) => applicationInColumn(a, selectedColumn)).map((a) => a.id) : [],
     selectedId
   );
 
@@ -358,10 +325,23 @@ function StaticBoard({
 
     const app = applications.find((a) => a.id === id);
     if (!app) return;
-    if (column.stages.includes(app.currentStage as RecruitmentPipelineStage)) return;
+    if (applicationInColumn(app, column)) {
+      setDraggedId(null);
+      return;
+    }
+
+    if (column.id === "reject") {
+      closeDialog.requestClose("reject", {
+        id: app.id,
+        candidateName: app.candidate.fullName,
+        jobTitle: app.jobOpening.title,
+      });
+      setDraggedId(null);
+      return;
+    }
 
     const targetStage = column.defaultStage;
-    if (targetStage === RecruitmentPipelineStage.hired || column.id === "joined") {
+    if (targetStage === RecruitmentPipelineStage.hired) {
       setError(JOINED_STAGE_ERROR);
       setDraggedId(null);
       return;
@@ -369,7 +349,15 @@ function StaticBoard({
 
     const previousApplications = [...applications];
     setApplications((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, currentStage: targetStage } : a))
+      prev.map((a) =>
+        a.id === id
+          ? {
+              ...a,
+              currentStage: targetStage,
+              status: column.id === "hold" ? "on_hold" : a.status === "on_hold" ? "active" : a.status,
+            }
+          : a
+      )
     );
     setError(null);
 
@@ -400,9 +388,7 @@ function StaticBoard({
       <div className="w-full min-w-0 max-w-full overflow-x-auto pb-4">
         <div className="flex min-w-max gap-4">
         {COLUMNS.map((col) => {
-          const colApps = applications.filter((app) =>
-            col.stages.includes(app.currentStage as RecruitmentPipelineStage)
-          );
+          const colApps = applications.filter((app) => applicationInColumn(app, col));
 
           return (
             <div

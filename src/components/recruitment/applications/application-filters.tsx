@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ApplicationStatus } from "@/generated/prisma/enums";
-import { DEFAULT_STAGE_SEED_ORDER } from "@/lib/recruitment/shared/pipeline-stage-groups";
+import {
+  PIPELINE_BOARD_COLUMN_FILTERS,
+  pipelineBoardColumnFilter,
+} from "@/lib/recruitment/shared/pipeline-stage-groups";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { LayoutGrid, List, UserRound, AlertTriangle } from "lucide-react";
 import type { HiringBatch } from "@/lib/recruitment/shared/hiring-batch";
 import { HiringBatchPicker } from "@/components/recruitment/applications/hiring-batch-picker";
@@ -69,7 +69,6 @@ export function ApplicationFilters({
 }) {
   const router = useRouter();
   const [q, setQ] = useState(filters.q ?? "");
-  const [status, setStatus] = useState(filters.status ?? "all");
   const [currentStage, setCurrentStage] = useState(filters.currentStage ?? "all");
   const [jobOpeningId, setJobOpeningId] = useState(filters.jobOpeningId ?? "all");
   const [view, setView] = useState<"board" | "list">(filters.view ?? "board");
@@ -93,7 +92,6 @@ export function ApplicationFilters({
       applicationListHref(
         {
           q,
-          status,
           currentStage,
           jobOpeningId,
           view,
@@ -158,51 +156,25 @@ export function ApplicationFilters({
         </Select>
       </div>
 
-      <div className="min-w-[150px] flex-1 space-y-1.5">
-        <span className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Status
-        </span>
-        <Select
-          value={status}
-          onValueChange={(v) => {
-            setStatus(v);
-            navigate({ status: v });
-          }}
-        >
-          <SelectTrigger className="h-10 bg-background" aria-label="Status filter">
-            <SelectValue placeholder="All Statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            {Object.values(ApplicationStatus).map((s) => (
-              <SelectItem key={s} value={s}>
-                {s.replace("_", " ").toUpperCase()}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
       <div className="min-w-[180px] flex-1 space-y-1.5">
         <span className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">
           Pipeline Stage
         </span>
         <Select
-          value={currentStage}
+          value={stageSelectValue(currentStage)}
           onValueChange={(v) => {
             setCurrentStage(v);
             navigate({ currentStage: v });
           }}
         >
           <SelectTrigger className="h-10 bg-background" aria-label="Stage filter">
-            <SelectValue placeholder="All Stages" />
+            <SelectValue placeholder="All stages" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Stages</SelectItem>
-            <SelectItem value="interviewing">INTERVIEWING (any round)</SelectItem>
-            {DEFAULT_STAGE_SEED_ORDER.map((s) => (
-              <SelectItem key={s} value={s}>
-                {s.replace("_", " ").toUpperCase()}
+            <SelectItem value="all">All stages</SelectItem>
+            {PIPELINE_BOARD_COLUMN_FILTERS.map((column) => (
+              <SelectItem key={column.id} value={column.id}>
+                {column.label}
               </SelectItem>
             ))}
           </SelectContent>
@@ -300,4 +272,14 @@ export function ApplicationFilters({
       </div>
     </form>
   );
+}
+
+/** Map a bookmark like `technical_round` onto the board column that contains it. */
+function stageSelectValue(currentStage: string): string {
+  if (!currentStage || currentStage === "all") return "all";
+  if (pipelineBoardColumnFilter(currentStage)) return currentStage;
+  const column = PIPELINE_BOARD_COLUMN_FILTERS.find((item) =>
+    (item.stages as readonly string[]).includes(currentStage)
+  );
+  return column?.id ?? "all";
 }

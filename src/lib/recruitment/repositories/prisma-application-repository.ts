@@ -6,10 +6,7 @@ import {
   RecruitmentPipelineStage,
 } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
-import {
-  INTERVIEW_STAGES,
-  INTERVIEWING_STAGE_FILTER,
-} from "@/lib/recruitment/shared/pipeline-stage-groups";
+import { pipelineStageFilterWhere } from "@/lib/recruitment/application/pipeline-column-filter-where";
 import type { RepositoryTx } from "@/lib/recruitment/repositories/types";
 import type { RecruitmentScope } from "@/lib/recruitment/types/scope";
 import {
@@ -256,17 +253,6 @@ function filtersWhere(
   if (status && status !== "all") {
     where.status = status as ApplicationStatus;
   }
-  const currentStage = readStringFilter(filters, "currentStage");
-  if (currentStage && currentStage !== "all") {
-    // "interviewing" is an internal filter sentinel used by Job Opening metric
-    // deep-links to represent any configured interview stage. It is not a
-    // persisted pipeline stage — every other value here is an exact
-    // RecruitmentPipelineStage match.
-    where.currentStage =
-      currentStage === INTERVIEWING_STAGE_FILTER
-        ? { in: [...INTERVIEW_STAGES] }
-        : (currentStage as RecruitmentPipelineStage);
-  }
   const assignedRecruiterUserId = readStringFilter(filters, "assignedRecruiterUserId");
   if (assignedRecruiterUserId) {
     where.assignedRecruiterUserId = assignedRecruiterUserId;
@@ -287,6 +273,11 @@ function filtersWhere(
     where.createdAt = appliedRange;
   }
   const andConditions: Prisma.ApplicationWhereInput[] = [];
+
+  const currentStage = readStringFilter(filters, "currentStage");
+  if (currentStage && currentStage !== "all") {
+    andConditions.push(pipelineStageFilterWhere(currentStage));
+  }
 
   const q = readStringFilter(filters, "q");
   if (q?.trim()) {

@@ -248,10 +248,10 @@ export function createApplicationService(
       input: { id: string; stage: RecruitmentPipelineStage; note?: string }
     ): Promise<void> {
       RecruitmentPermissionService.requireModuleEnabled();
-      await RecruitmentPermissionService.assertCanManageCandidates(session);
       const actor = toRecruitmentActor(session);
 
       const parsed = moveStageSchema.parse(input);
+      await RecruitmentPermissionService.assertCanManageCandidates(session);
 
       const app = await repository.getApplication(parsed.id);
       if (!app) {
@@ -281,6 +281,7 @@ export function createApplicationService(
       const terminalStages: RecruitmentPipelineStage[] = [
         RecruitmentPipelineStage.rejected,
         RecruitmentPipelineStage.withdrawn,
+        RecruitmentPipelineStage.on_hold,
       ];
       const isTerminal = terminalStages.includes(parsed.stage);
 
@@ -294,10 +295,17 @@ export function createApplicationService(
         }
       }
 
+      const nextStatus =
+        parsed.stage === RecruitmentPipelineStage.on_hold
+          ? ApplicationStatus.on_hold
+          : app.status === ApplicationStatus.on_hold
+            ? ApplicationStatus.active
+            : undefined;
+
       const events = createAfterCommitBuffer();
       await withRecruitmentTransaction(async (tx) => {
         const fromStage = app.currentStage;
-        await repository.moveApplicationStage(parsed.id, parsed.stage, new Date(), undefined, tx);
+        await repository.moveApplicationStage(parsed.id, parsed.stage, new Date(), nextStatus, tx);
 
         const [fromStageId, toStageId] = await Promise.all([
           resolveJobStageId(tx, app.jobOpeningId, fromStage),
@@ -477,10 +485,10 @@ export function createApplicationService(
       input: { id: string; reasonCode: string; note?: string }
     ): Promise<void> {
       RecruitmentPermissionService.requireModuleEnabled();
-      await RecruitmentPermissionService.assertCanManageCandidates(session);
       const actor = toRecruitmentActor(session);
 
       const parsed = rejectApplicationSchema.parse(input);
+      await RecruitmentPermissionService.assertCanManageCandidates(session);
       const reasonSummary = describeCloseReason("reject", parsed.reasonCode, parsed.note) ?? "";
 
       const app = await repository.getApplication(parsed.id);
