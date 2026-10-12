@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowDown, ArrowLeft, ArrowUp, CalendarDays, Columns3, FileText, Layers, Pencil, Search, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, CalendarDays, Columns3, Eye, FileText, Layers, Pencil, Search, X } from "lucide-react";
 import { RecruitmentPipelineStage } from "@/generated/prisma/enums";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -384,13 +384,23 @@ export function BatchSheetView({
                       </td>
                       <td className={cn(cell, "text-right tabular-nums text-muted-foreground")}>{r.slNo}</td>
                       <td className={cn(cell, "sticky left-10 z-10", stickyBg)}>
-                        <button
-                          type="button"
-                          onClick={() => setPanel(r.applicationId)}
-                          className="text-left font-medium text-foreground hover:underline focus-visible:underline focus-visible:outline-none"
-                        >
-                          {r.name}
-                        </button>
+                        <span className="flex items-center gap-1.5">
+                          <Link
+                            href={`/admin/recruitment/candidates/${r.candidateId}`}
+                            className="font-medium text-foreground hover:underline focus-visible:underline focus-visible:outline-none"
+                          >
+                            {r.name}
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => setPanel(r.applicationId)}
+                            className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                            title="Quick view"
+                            aria-label={`Quick view of ${r.name}`}
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </button>
+                        </span>
                       </td>
                       <td className={cn(cell, "whitespace-nowrap")}>
                         <Link href={`/admin/recruitment/jobs/${r.jobOpeningId}`} className="text-accent-blue hover:underline">
@@ -478,7 +488,7 @@ export function BatchSheetView({
             </table>
           </div>
           <p className="text-xs text-muted-foreground">
-            Click a name to see the candidate without leaving the batch. In the panel, J and K move to the next and previous person.
+            Click a name to open the candidate&apos;s profile, or the eye icon to see them without leaving the batch. In that panel, J and K move to the next and previous person.
           </p>
         </>
       )}

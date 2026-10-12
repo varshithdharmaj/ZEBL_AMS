@@ -8,7 +8,7 @@ import { RecruitmentPermissionService } from "@/lib/recruitment/permissions/perm
 import { RecruitmentDomainError } from "@/lib/recruitment/shared/errors";
 import { PIPELINE_STAGE_LABELS } from "@/lib/recruitment/shared/pipeline-stage-groups";
 import { readScorecardRatings, scorecardAverage } from "@/lib/recruitment/interview/scorecard";
-import { batchCodePrefix, istYear, nextBatchCode } from "@/lib/recruitment/batch/batch-code";
+import { batchCodePrefix, nextBatchCode } from "@/lib/recruitment/batch/batch-code";
 import { batchBucket, countProgress, type BatchBucket, type BatchProgress } from "@/lib/recruitment/batch/batch-progress";
 import { planBatchAdds } from "@/lib/recruitment/batch/batch-membership";
 
@@ -42,13 +42,14 @@ export type BatchListItem = {
 
 export async function listBatches(
   session: SessionUser,
-  options: { status?: HiringBatchStatus | "all" } = {}
+  options: { status?: HiringBatchStatus | "all"; limit?: number } = {}
 ): Promise<BatchListItem[]> {
   await assertCanManage(session);
   const status = options.status ?? HiringBatchStatus.open;
   const batches = await prisma.hiringBatch.findMany({
     where: { deletedAt: null, ...(status === "all" ? {} : { status }) },
     orderBy: [{ interviewDate: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+    ...(options.limit ? { take: options.limit } : {}),
     select: {
       id: true,
       code: true,
@@ -87,31 +88,33 @@ export async function createBatch(
 ): Promise<{ id: string; code: string }> {
   await assertCanManage(session);
   const name = input.name?.trim() || null;
-  const year = istYear();
+  return withNextBatchCode(input.interviewDate, (code) =>
+    prisma.hiringBatch.create({
+      data: { code, name, interviewDate: input.interviewDate, createdByUserId: session.id },
+      select: { id: true, code: true },
+    })
+  );
+}
 
-  // Two HR users creating a batch at the same moment can pick the same next
-  // code; the unique index rejects one, which then retries with the next code.
+/**
+ * Runs `write` with the next Batch ID for that interview date. Two HR users
+ * saving at the same moment can pick the same ID; the unique index rejects
+ * one, which then retries with the next number.
+ */
+async function withNextBatchCode<T>(interviewDate: Date, write: (code: string) => Promise<T>): Promise<T> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const existing = await prisma.hiringBatch.findMany({
-      where: { code: { startsWith: batchCodePrefix(year) } },
+      where: { code: { startsWith: batchCodePrefix(interviewDate) } },
       select: { code: true },
     });
-    const code = nextBatchCode(
-      existing.map((b) => b.code),
-      year
-    );
     try {
-      const created = await prisma.hiringBatch.create({
-        data: { code, name, interviewDate: input.interviewDate, createdByUserId: session.id },
-        select: { id: true, code: true },
-      });
-      return created;
+      return await write(nextBatchCode(existing.map((b) => b.code), interviewDate));
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") continue;
       throw error;
     }
   }
-  throw new RecruitmentDomainError("REC_CONFLICT", "Couldn't create the batch. Please try again.");
+  throw new RecruitmentDomainError("REC_CONFLICT", "Couldn't save the batch. Please try again.");
 }
 
 export async function renameBatch(session: SessionUser, batchId: string, name: string | null) {
@@ -122,8 +125,15 @@ export async function renameBatch(session: SessionUser, batchId: string, name: s
 
 export async function setBatchInterviewDate(session: SessionUser, batchId: string, interviewDate: Date) {
   await assertCanManage(session);
-  await getLiveBatch(batchId);
-  await prisma.hiringBatch.update({ where: { id: batchId }, data: { interviewDate } });
+  const batch = await getLiveBatch(batchId);
+  // The Batch ID comes from the date, so a new date gets a new ID.
+  if (batch.code.startsWith(batchCodePrefix(interviewDate))) {
+    await prisma.hiringBatch.update({ where: { id: batchId }, data: { interviewDate } });
+    return;
+  }
+  await withNextBatchCode(interviewDate, (code) =>
+    prisma.hiringBatch.update({ where: { id: batchId }, data: { interviewDate, code } })
+  );
 }
 
 export async function setBatchStatus(session: SessionUser, batchId: string, status: HiringBatchStatus) {

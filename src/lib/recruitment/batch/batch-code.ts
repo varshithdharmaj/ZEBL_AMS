@@ -1,23 +1,26 @@
-/** Batch IDs read B-2026-001, B-2026-002, … and restart at 001 each year (IST). */
+/**
+ * Batch IDs come from the interview date: B-15Oct26-1, and B-15Oct26-2 for a
+ * second batch on the same day. Interview dates are stored as calendar days
+ * (midnight UTC), so the day is read in UTC.
+ */
 
-export function batchCodePrefix(year: number): string {
-  return `B-${year}-`;
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+export function batchCodePrefix(interviewDate: Date): string {
+  const day = String(interviewDate.getUTCDate()).padStart(2, "0");
+  const month = MONTHS[interviewDate.getUTCMonth()];
+  const year = String(interviewDate.getUTCFullYear()).slice(-2);
+  return `B-${day}${month}${year}-`;
 }
 
-export function istYear(now: Date = new Date()): number {
-  return Number(
-    new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric" }).format(now)
-  );
-}
-
-/** The next code after the highest one already used this year. */
-export function nextBatchCode(existingCodes: readonly string[], year: number): string {
-  const prefix = batchCodePrefix(year);
+/** The next code for that interview date, after the highest one already used. */
+export function nextBatchCode(existingCodes: readonly string[], interviewDate: Date): string {
+  const prefix = batchCodePrefix(interviewDate);
   let max = 0;
   for (const code of existingCodes) {
     if (!code.startsWith(prefix)) continue;
     const n = Number.parseInt(code.slice(prefix.length), 10);
     if (Number.isFinite(n) && n > max) max = n;
   }
-  return `${prefix}${String(max + 1).padStart(3, "0")}`;
+  return `${prefix}${max + 1}`;
 }
