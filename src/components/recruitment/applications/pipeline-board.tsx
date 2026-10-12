@@ -28,6 +28,10 @@ import {
   SYSTEM_STAGE_VALUES,
   pipelineStageLabel,
 } from "@/lib/recruitment/shared/pipeline-stage-groups";
+import {
+  customStagesInLayout,
+  type BoardLayoutEntry,
+} from "@/lib/recruitment/shared/board-layout";
 import { Clock, Loader2, Plus } from "lucide-react";
 
 interface BoardColumn {
@@ -36,16 +40,51 @@ interface BoardColumn {
   stages: RecruitmentPipelineStage[];
   defaultStage: RecruitmentPipelineStage;
   color: string;
+  /** A column HR added with "Add stage" (its JobOpeningStage id). */
+  customRowId?: string;
+  /** The job's first / last stage rows behind this column, for "Add stage" before / after it. */
+  firstRowId?: string | null;
+  lastRowId?: string | null;
 }
 
 /** Paper plan: HR Round, Manager Round, Hire, Reject, Hold. */
-const COLUMNS: BoardColumn[] = PIPELINE_BOARD_COLUMN_FILTERS.map((column) => ({
+const DEFAULT_COLUMNS: BoardColumn[] = PIPELINE_BOARD_COLUMN_FILTERS.map((column) => ({
   id: column.id,
   title: column.label,
   stages: [...column.stages],
   defaultStage: column.defaultStage,
   color: "border-t-border",
 }));
+
+/** One job's columns: the five groups plus its own "Add stage" columns, in the job's order. */
+function columnsForLayout(layout: readonly BoardLayoutEntry[]): BoardColumn[] {
+  const custom = customStagesInLayout(layout);
+  return layout.map((entry) => {
+    if (entry.kind === "custom") {
+      return {
+        id: `custom:${entry.rowId}`,
+        title: entry.label,
+        stages: [entry.stage],
+        defaultStage: entry.stage,
+        color: "border-t-border",
+        customRowId: entry.rowId,
+      };
+    }
+    const base = DEFAULT_COLUMNS.find((c) => c.id === entry.groupId)!;
+    return {
+      ...base,
+      // A job's own columns show on their own, not inside Manager Round too.
+      stages: base.stages.filter((s) => !custom.has(s)),
+      firstRowId: entry.firstRowId,
+      lastRowId: entry.lastRowId,
+    };
+  });
+}
+
+/** "Add stage" fits between the rounds and before Hire, not after Hire / Reject / Hold. */
+function canAddStageAfter(col: BoardColumn): boolean {
+  return Boolean(col.customRowId) || ((col.id === "hr_round" || col.id === "manager_round") && Boolean(col.lastRowId));
+}
 
 function applicationInColumn(
   app: { currentStage: string; status?: string },
@@ -217,6 +256,7 @@ export function PipelineBoard({
   jobOpeningId,
   employeeOptions,
   selectedApplication = null,
+  layout,
 }: {
   mode?: "static" | "dynamic";
   applications?: PipelineDrawerApplication[];
@@ -224,6 +264,8 @@ export function PipelineBoard({
   jobOpeningId?: string;
   employeeOptions: EmployeeOption[];
   selectedApplication?: PipelineDrawerApplication | null;
+  /** One job's columns (groups plus its "Add stage" columns); omit for the all-jobs board. */
+  layout?: BoardLayoutEntry[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -268,6 +310,8 @@ export function PipelineBoard({
       selectedId={selectedId}
       selectedApplication={selectedApplication}
       setApplicationId={setApplicationId}
+      jobOpeningId={jobOpeningId}
+      layout={layout}
     />
   );
 }
@@ -280,6 +324,8 @@ function StaticBoard({
   selectedId,
   selectedApplication,
   setApplicationId,
+  jobOpeningId,
+  layout,
 }: {
   initialApplications: PipelineDrawerApplication[];
   employeeMap: Map<string, string>;
@@ -288,12 +334,17 @@ function StaticBoard({
   selectedId: string | null;
   selectedApplication: PipelineDrawerApplication | null;
   setApplicationId: (id: string | null) => void;
+  jobOpeningId?: string;
+  layout?: BoardLayoutEntry[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [applications, setApplications] = useState(initialApplications);
+  const [addStageAt, setAddStageAt] = useState<{ afterStageId?: string | null; beforeStageId?: string | null } | null>(null);
+  const COLUMNS = React.useMemo(() => (layout ? columnsForLayout(layout) : DEFAULT_COLUMNS), [layout]);
+  const canAddStages = Boolean(jobOpeningId && layout);
 
   useEffect(() => {
     setApplications(initialApplications);
@@ -386,24 +437,40 @@ function StaticBoard({
       ) : null}
 
       <div className="w-full min-w-0 max-w-full overflow-x-auto pb-4">
-        <div className="flex min-w-max gap-4">
-        {COLUMNS.map((col) => {
+        <div className={`flex min-w-max ${canAddStages ? "gap-1" : "gap-4"}`}>
+        {COLUMNS.map((col, index) => {
           const colApps = applications.filter((app) => applicationInColumn(app, col));
+          const next = COLUMNS[index + 1];
+          const afterId = col.customRowId ?? col.lastRowId ?? null;
+          const beforeId = next ? (next.customRowId ?? next.firstRowId ?? null) : null;
 
           return (
+            <React.Fragment key={col.id}>
             <div
-              key={col.id}
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, col)}
               className="flex min-h-[600px] w-[300px] shrink-0 flex-col rounded-xl border border-border/60 bg-muted/35 p-3"
             >
               <div
-                className={`flex items-center justify-between border-t-4 px-1 pb-3 pt-2 ${col.color}`}
+                className={`flex items-center justify-between gap-1.5 border-t-4 px-1 pb-3 pt-2 ${col.color}`}
               >
-                <h4 className="text-sm font-bold tracking-tight text-foreground">{col.title}</h4>
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border/80 bg-muted text-[10px] font-bold tabular-nums text-muted-foreground">
+                <h4 className="line-clamp-1 flex-1 text-sm font-bold tracking-tight text-foreground">{col.title}</h4>
+                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-border/80 bg-muted px-1 text-[10px] font-bold tabular-nums text-muted-foreground">
                   {colApps.length}
                 </span>
+                {canAddStages && col.customRowId ? (
+                  <StageColumnMenu
+                    stage={{ id: col.customRowId, label: col.title, isSystemStage: false, canMoveLeft: false, canMoveRight: false }}
+                    onAddBefore={() =>
+                      setAddStageAt({
+                        beforeStageId: col.customRowId,
+                        afterStageId: COLUMNS[index - 1]?.customRowId ?? COLUMNS[index - 1]?.lastRowId ?? null,
+                      })
+                    }
+                    onAddAfter={() => setAddStageAt({ afterStageId: afterId, beforeStageId: beforeId })}
+                    onChanged={() => router.refresh()}
+                  />
+                ) : null}
               </div>
 
               <div className="max-h-[550px] flex-1 space-y-3 overflow-y-auto pr-0.5">
@@ -426,6 +493,14 @@ function StaticBoard({
                 )}
               </div>
             </div>
+            {canAddStages ? (
+              canAddStageAfter(col) ? (
+                <AddStageGap onClick={() => setAddStageAt({ afterStageId: afterId, beforeStageId: beforeId })} />
+              ) : (
+                <div className="w-3 shrink-0" />
+              )
+            ) : null}
+            </React.Fragment>
           );
         })}
         </div>
@@ -439,6 +514,19 @@ function StaticBoard({
         nextId={neighbours.nextId}
         onNavigate={setApplicationId}
       />
+
+      {canAddStages && jobOpeningId ? (
+        <AddPipelineStageDialog
+          open={Boolean(addStageAt)}
+          onOpenChange={(open) => {
+            if (!open) setAddStageAt(null);
+          }}
+          jobOpeningId={jobOpeningId}
+          afterStageId={addStageAt?.afterStageId}
+          beforeStageId={addStageAt?.beforeStageId}
+          onCreated={() => router.refresh()}
+        />
+      ) : null}
     </div>
   );
 }

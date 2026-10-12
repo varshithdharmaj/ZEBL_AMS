@@ -6,6 +6,7 @@ import { buildRecruitmentBreadcrumbs } from "@/lib/recruitment/navigation/breadc
 import { ApplicationFilters } from "@/components/recruitment/applications/application-filters";
 import { ApplicationTable } from "@/components/recruitment/applications/application-table";
 import { PipelineBoard } from "@/components/recruitment/applications/pipeline-board";
+import { buildBoardLayout } from "@/lib/recruitment/shared/board-layout";
 import { Button } from "@/components/ui/button";
 import { requireRecruitmentAdminSession } from "@/lib/auth-guards";
 import { listApplicationsCached } from "@/lib/recruitment/application";
@@ -202,6 +203,8 @@ export default async function RecruitmentPipelinePage({
             applications={staticBoardItems as unknown as PipelineDrawerApplication[]}
             employeeOptions={employeeOptions}
             selectedApplication={selectedApplication}
+            jobOpeningId={jobFilter}
+            layout={jobDetail?.stages?.length ? buildBoardLayout(jobDetail.stages) : undefined}
           />
           <div className="flex flex-col items-center gap-2 pt-2">
             <p className="text-xs text-muted-foreground">
