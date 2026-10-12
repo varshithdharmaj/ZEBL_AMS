@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowDown, ArrowLeft, ArrowUp, CalendarDays, Columns3, Eye, FileText, Layers, Pencil, Search, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, CalendarDays, Eye, FileText, Layers, Pencil, Search, X } from "lucide-react";
 import { RecruitmentPipelineStage } from "@/generated/prisma/enums";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Popover } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ApplicationPipelineDrawer,
@@ -22,7 +21,6 @@ import {
   renameBatchAction,
   setBatchInterviewDateAction,
   setBatchStatusAction,
-  updateBatchRemarksAction,
 } from "@/actions/recruitment-batches";
 import { bulkMoveApplicationsStageAction } from "@/actions/recruitment-applications";
 import type { BatchSheet, BatchSheetRow } from "@/lib/recruitment/batch/batch-service";
@@ -38,15 +36,8 @@ const MOVE_OPTIONS = [
   { stage: RecruitmentPipelineStage.decision, label: "Selected" },
 ] as const;
 
-const EXTRA_COLUMNS = [
-  { id: "email", label: "Email ID" },
-  { id: "phone", label: "Phone Number" },
-  { id: "location", label: "Current Location" },
-] as const;
-type ExtraColumnId = (typeof EXTRA_COLUMNS)[number]["id"];
-
-/** Checkbox, Sl.no, Name, Role, Experience, CTC, HR ★, Education, Notice, Resume, Stage, Remarks. */
-const BASE_COLUMNS = 12;
+/** Checkbox, Sl.no, Name, Role, Experience, CTC, HR ★, Education, Notice, Resume, Stage. */
+const COLUMN_COUNT = 11;
 
 function compare(a: BatchSheetRow, b: BatchSheetRow, key: SortKey): number {
   const av = a[key];
@@ -80,12 +71,9 @@ export function BatchSheetView({
   const [bucket, setBucket] = useState<BatchBucket | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "slNo", dir: "asc" });
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [extras, setExtras] = useState<Set<ExtraColumnId>>(new Set());
-  const [columnsOpen, setColumnsOpen] = useState(false);
   const [notice, setNotice] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [isPending, startTransition] = useTransition();
   const isOpen = sheet.status === "open";
-  const show = (id: ExtraColumnId) => extras.has(id);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -98,8 +86,7 @@ export function BatchSheetView({
         (r.email ?? "").toLowerCase().includes(q) ||
         (digits.length >= 3 && (r.phone ?? "").replace(/\D/g, "").includes(digits)) ||
         r.role.toLowerCase().includes(q) ||
-        r.experiences.some((e) => e.company.toLowerCase().includes(q)) ||
-        (r.remarks ?? "").toLowerCase().includes(q)
+        r.experiences.some((e) => e.company.toLowerCase().includes(q))
       );
     });
     const sorted = filtered.slice().sort((a, b) => compare(a, b, sort.key));
@@ -134,15 +121,6 @@ export function BatchSheetView({
 
   function toggleSort(key: SortKey) {
     setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
-  }
-
-  function toggleExtra(id: ExtraColumnId) {
-    setExtras((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
   }
 
   const allShownSelected = rows.length > 0 && rows.every((r) => selected.has(r.memberId));
@@ -183,7 +161,7 @@ export function BatchSheetView({
     });
   }
 
-  const columnCount = BASE_COLUMNS + extras.size;
+  const columnCount = COLUMN_COUNT;
 
   return (
     <div className="space-y-4">
@@ -312,35 +290,6 @@ export function BatchSheetView({
                 Showing {rows.length} of {sheet.rows.length}
               </span>
             ) : null}
-            <Popover
-              open={columnsOpen}
-              onOpenChange={setColumnsOpen}
-              align="end"
-              className="ml-auto"
-              trigger={
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  aria-expanded={columnsOpen}
-                  onClick={() => setColumnsOpen((open) => !open)}
-                >
-                  <Columns3 className="h-3.5 w-3.5" />
-                  Columns
-                  {extras.size > 0 ? <span className="text-muted-foreground">{extras.size}</span> : null}
-                </Button>
-              }
-            >
-              <div className="space-y-2 p-1">
-                <p className="px-1 text-xs font-medium text-muted-foreground">More columns</p>
-                {EXTRA_COLUMNS.map((col) => (
-                  <label key={col.id} className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-sm hover:bg-muted">
-                    <Checkbox checked={extras.has(col.id)} onCheckedChange={() => toggleExtra(col.id)} aria-label={col.label} />
-                    {col.label}
-                  </label>
-                ))}
-              </div>
-            </Popover>
           </div>
 
           <div className="max-h-[calc(100vh-15rem)] overflow-auto rounded-xl border border-border bg-card">
@@ -360,10 +309,6 @@ export function BatchSheetView({
                   <SortHeader label="Notice period" k="noticePeriod" sort={sort} onSort={toggleSort} />
                   <th className="border-b border-border px-3 py-2 font-medium">Resume</th>
                   <SortHeader label="Stage" k="stageLabel" sort={sort} onSort={toggleSort} />
-                  <th className="min-w-56 border-b border-border px-3 py-2 font-medium">Remarks</th>
-                  {show("email") ? <th className="border-b border-border px-3 py-2 font-medium">Email ID</th> : null}
-                  {show("phone") ? <th className="border-b border-border px-3 py-2 font-medium">Phone Number</th> : null}
-                  {show("location") ? <th className="border-b border-border px-3 py-2 font-medium">Current Location</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -451,26 +396,6 @@ export function BatchSheetView({
                       <td className={cn(cell, "whitespace-nowrap")}>
                         {r.stageLabel}
                       </td>
-                      <td className={cn(cell, "p-0")}>
-                        <RemarksCell memberId={r.memberId} value={r.remarks} editable={isOpen} />
-                      </td>
-                      {show("email") ? (
-                        <td className={cn(cell, "max-w-56 truncate")} title={r.email ?? undefined}>
-                          {r.email ?? <Blank />}
-                        </td>
-                      ) : null}
-                      {show("phone") ? (
-                        <td className={cn(cell, "whitespace-nowrap tabular-nums")}>
-                          {r.phone ? (
-                            <a href={`tel:${r.phone}`} className="hover:underline">
-                              {r.phone}
-                            </a>
-                          ) : (
-                            <Blank />
-                          )}
-                        </td>
-                      ) : null}
-                      {show("location") ? <td className={cell}>{r.location ?? <Blank />}</td> : null}
                     </tr>
                   );
                 })}
@@ -663,100 +588,6 @@ function SelectionBar({
         Clear
       </Button>
     </div>
-  );
-}
-
-/** Click to edit; Enter or clicking away saves, Shift+Enter adds a line, Esc cancels. */
-function RemarksCell({ memberId, value, editable }: { memberId: string; value: string | null; editable: boolean }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value ?? "");
-  const [saved, setSaved] = useState(value);
-  const [state, setState] = useState<"idle" | "saving" | "error">("idle");
-  const [error, setError] = useState<string | null>(null);
-  const ref = useRef<HTMLTextAreaElement>(null);
-
-  // Take the server's value when it changes (after a save or a refresh), not on every edit toggle.
-  const editingRef = useRef(editing);
-  editingRef.current = editing;
-  useEffect(() => {
-    if (editingRef.current) return;
-    setSaved(value);
-    setDraft(value ?? "");
-  }, [value]);
-
-  useEffect(() => {
-    if (editing) {
-      const el = ref.current;
-      el?.focus();
-      el?.setSelectionRange(el.value.length, el.value.length);
-    }
-  }, [editing]);
-
-  async function save() {
-    const next = draft.trim();
-    setEditing(false);
-    if (next === (saved ?? "")) return;
-    const previous = saved;
-    setSaved(next || null);
-    setState("saving");
-    const res = await updateBatchRemarksAction({ memberId, remarks: next || null });
-    if (res.error) {
-      setSaved(previous);
-      setDraft(previous ?? "");
-      setState("error");
-      setError(res.error);
-    } else {
-      setState("idle");
-      setError(null);
-    }
-  }
-
-  if (editing) {
-    return (
-      <textarea
-        ref={ref}
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={save}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            void save();
-          } else if (e.key === "Escape") {
-            setDraft(saved ?? "");
-            setEditing(false);
-          }
-        }}
-        rows={Math.min(6, Math.max(2, draft.split("\n").length))}
-        maxLength={2000}
-        className="block w-full min-w-56 resize-y bg-background px-3 py-2 text-[13px] outline-none ring-2 ring-inset ring-ring/40"
-        aria-label="Remarks"
-      />
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      disabled={!editable}
-      onClick={() => setEditing(true)}
-      className={cn(
-        "group/remark block h-full min-h-9 w-full min-w-56 px-3 py-2 text-left",
-        editable && "cursor-text hover:bg-muted/80",
-        state === "error" && "bg-danger-muted"
-      )}
-      title={error ?? (editable ? "Click to edit" : undefined)}
-    >
-      {saved ? (
-        <span className="line-clamp-3 whitespace-pre-line">{saved}</span>
-      ) : editable ? (
-        <span className="text-muted-foreground/60 opacity-0 group-hover/remark:opacity-100">Add remark</span>
-      ) : (
-        <Blank />
-      )}
-      {state === "saving" ? <span className="ml-1 text-[11px] text-muted-foreground">Saving…</span> : null}
-      {state === "error" ? <span className="block text-[11px] text-danger">Not saved. Click to try again.</span> : null}
-    </button>
   );
 }
 
