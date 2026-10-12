@@ -10,12 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  ApplicationPipelineDrawer,
   type PipelineDrawerApplication,
   type PipelineDrawerTab,
 } from "@/components/recruitment/applications/application-pipeline-drawer";
 import { StarRatingDisplay } from "@/components/recruitment/interviews/star-rating";
 import { BatchProgressLegend } from "@/components/recruitment/batches/batch-progress-legend";
+import { BatchReviewPanel } from "@/components/recruitment/batches/batch-review-panel";
 import {
   removeBatchMembersAction,
   renameBatchAction,
@@ -58,11 +58,11 @@ function formatExperience(years: number | null): string | null {
 export function BatchSheetView({
   sheet,
   selectedApplication,
-  initialTab,
 }: {
   sheet: BatchSheet;
   selectedApplication: PipelineDrawerApplication | null;
-  initialTab: PipelineDrawerTab;
+  /** Kept for the page; the batch panel always opens on its one view. */
+  initialTab?: PipelineDrawerTab;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -418,14 +418,15 @@ export function BatchSheetView({
         </>
       )}
 
-      <ApplicationPipelineDrawer
+      <BatchReviewPanel
+        row={openId ? (sheet.rows.find((r) => r.applicationId === openId) ?? null) : null}
         application={openId ? selectedApplication : null}
         open={Boolean(openId)}
         onClose={() => setPanel(null)}
         prevId={openIndex > 0 ? order[openIndex - 1] : null}
         nextId={openIndex >= 0 && openIndex < order.length - 1 ? order[openIndex + 1] : null}
         onNavigate={(id) => setPanel(id)}
-        initialTab={initialTab}
+        editable={isOpen}
       />
     </div>
   );

@@ -195,6 +195,8 @@ export type BatchSheetRow = {
   bucket: BatchBucket;
   hrStars: number | null;
   hrScorecards: number;
+  managerStars: number | null;
+  managerScorecards: number;
 };
 
 export type BatchSheet = {
@@ -225,14 +227,14 @@ function stageLabel(stage: string, status: string, customLabel: string | null | 
   return PIPELINE_STAGE_LABELS[stage as keyof typeof PIPELINE_STAGE_LABELS] || stage;
 }
 
-/** Average stars across submitted HR-round scorecards, per application. */
-async function loadHrStars(applicationIds: string[]) {
+/** Average stars across submitted scorecards for one round (HR or manager), per application. */
+async function loadRoundStars(applicationIds: string[], roundType: "hr" | "manager") {
   const out: Record<string, { stars: number | null; count: number }> = {};
   if (applicationIds.length === 0) return out;
   const feedback = await prisma.interviewFeedback.findMany({
     where: {
       submittedAt: { not: null },
-      interview: { applicationId: { in: applicationIds }, roundType: "hr" },
+      interview: { applicationId: { in: applicationIds }, roundType },
     },
     select: { ratingsJson: true, interview: { select: { applicationId: true } } },
   });
@@ -324,7 +326,8 @@ export async function getBatchSheet(session: SessionUser, batchId: string): Prom
   });
   if (!batch) return null;
 
-  const stars = await loadHrStars(batch.members.map((m) => m.application.id));
+  const ids = batch.members.map((m) => m.application.id);
+  const [stars, managerStars] = await Promise.all([loadRoundStars(ids, "hr"), loadRoundStars(ids, "manager")]);
 
   const rows: BatchSheetRow[] = batch.members.map((m) => {
     const app = m.application;
@@ -363,6 +366,8 @@ export async function getBatchSheet(session: SessionUser, batchId: string): Prom
       bucket: batchBucket(app.currentStage, app.status),
       hrStars: stars[app.id]?.stars ?? null,
       hrScorecards: stars[app.id]?.count ?? 0,
+      managerStars: managerStars[app.id]?.stars ?? null,
+      managerScorecards: managerStars[app.id]?.count ?? 0,
     };
   });
 
