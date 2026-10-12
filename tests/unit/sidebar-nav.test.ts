@@ -30,6 +30,7 @@ const ADMIN_PAGES = [
 ];
 const RECRUITMENT_PAGES = [
   "/admin/recruitment",
+  "/admin/recruitment/batches",
   "/admin/recruitment/jobs",
   "/admin/recruitment/candidates",
   "/admin/recruitment/pipeline",

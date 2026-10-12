@@ -28,6 +28,7 @@ export type AdminShellNavOptions = {
 
 export const RECRUITMENT_WORKSPACE_LINKS: SidebarLink[] = [
   { href: "/admin/recruitment", label: "Dashboard" },
+  { href: "/admin/recruitment/batches", label: "Batches" },
   { href: "/admin/recruitment/jobs", label: "Jobs" },
   { href: "/admin/recruitment/candidates", label: "Candidates" },
   { href: "/admin/recruitment/pipeline", label: "Pipeline" },
