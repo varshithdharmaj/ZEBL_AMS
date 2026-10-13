@@ -1,29 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowDown, ArrowLeft, ArrowUp, CalendarDays, Eye, FileText, Layers, Pencil, Search, X } from "lucide-react";
-import { RecruitmentPipelineStage } from "@/generated/prisma/enums";
+import { ArrowDown, ArrowLeft, ArrowUp, CalendarDays, Eye, FileText, Layers, MessageSquare, Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AlertDialog } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  type PipelineDrawerApplication,
-  type PipelineDrawerTab,
-} from "@/components/recruitment/applications/application-pipeline-drawer";
 import { StarRatingDisplay } from "@/components/recruitment/interviews/star-rating";
 import { BatchProgressLegend } from "@/components/recruitment/batches/batch-progress-legend";
-import { BatchReviewPanel } from "@/components/recruitment/batches/batch-review-panel";
+import { CandidateReviewPanel } from "@/components/recruitment/applications/candidate-review-panel";
 import { AddCandidatesButton } from "@/components/recruitment/batches/add-candidates-button";
+import { ShareBatchButton } from "@/components/recruitment/batches/share-batch-button";
 import {
-  removeBatchMembersAction,
   renameBatchAction,
   setBatchInterviewDateAction,
   setBatchStatusAction,
 } from "@/actions/recruitment-batches";
-import { bulkMoveApplicationsStageAction } from "@/actions/recruitment-applications";
 import type { BatchSheet, BatchSheetRow } from "@/lib/recruitment/batch/batch-service";
 import type { BatchBucket } from "@/lib/recruitment/batch/batch-progress";
 import { formatCtc, formatInterviewDate } from "@/lib/recruitment/batch/batch-membership";
@@ -31,14 +24,8 @@ import { cn } from "@/lib/utils";
 
 type SortKey = "slNo" | "name" | "role" | "experienceYears" | "currentCtc" | "hrStars" | "education" | "noticePeriod" | "stageLabel";
 
-const MOVE_OPTIONS = [
-  { stage: RecruitmentPipelineStage.hr_round, label: "HR Round" },
-  { stage: RecruitmentPipelineStage.manager_round, label: "Manager Round" },
-  { stage: RecruitmentPipelineStage.decision, label: "Selected" },
-] as const;
-
-/** Checkbox, Sl.no, Name, Role, Experience, CTC, HR ★, Education, Notice, Resume, Stage. */
-const COLUMN_COUNT = 11;
+/** Sl.no, Name, Role, Experience, CTC, HR ★, Education, Notice, Resume, Stage. */
+const COLUMN_COUNT = 10;
 
 function compare(a: BatchSheetRow, b: BatchSheetRow, key: SortKey): number {
   const av = a[key];
@@ -58,91 +45,55 @@ function formatExperience(years: number | null): string | null {
 
 export function BatchSheetView({
   sheet,
-  selectedApplication,
+  variant = "page",
+  mode = "hr",
 }: {
   sheet: BatchSheet;
-  selectedApplication: PipelineDrawerApplication | null;
-  /** Kept for the page; the batch panel always opens on its one view. */
-  initialTab?: PipelineDrawerTab;
+  /** "manager": a manager HR shared the batch with. Read-only header, Manager Round steps in the panel. */
+  mode?: "hr" | "manager";
+  /** "overlay" is the dashboard's pop-up: no back link, the table fits the overlay. */
+  variant?: "page" | "overlay";
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [query, setQuery] = useState("");
+  const [confirmClose, setConfirmClose] = useState(false);
   const [bucket, setBucket] = useState<BatchBucket | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "slNo", dir: "asc" });
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [isPending, startTransition] = useTransition();
   const isOpen = sheet.status === "open";
+  const isManager = mode === "manager";
 
   const rows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const digits = q.replace(/\D/g, "");
-    const filtered = sheet.rows.filter((r) => {
-      if (bucket && r.bucket !== bucket) return false;
-      if (!q) return true;
-      return (
-        r.name.toLowerCase().includes(q) ||
-        (r.email ?? "").toLowerCase().includes(q) ||
-        (digits.length >= 3 && (r.phone ?? "").replace(/\D/g, "").includes(digits)) ||
-        r.role.toLowerCase().includes(q) ||
-        r.experiences.some((e) => e.company.toLowerCase().includes(q))
-      );
-    });
+    // The stage chips above the table are the only filter.
+    const filtered = bucket ? sheet.rows.filter((r) => r.bucket === bucket) : sheet.rows;
     const sorted = filtered.slice().sort((a, b) => compare(a, b, sort.key));
     return sort.dir === "asc" ? sorted : sorted.reverse();
-  }, [sheet.rows, query, bucket, sort]);
-
-  // Drop selections that are no longer in the batch after a refresh.
-  useEffect(() => {
-    setSelected((prev) => {
-      const ids = new Set(sheet.rows.map((r) => r.memberId));
-      const next = new Set([...prev].filter((id) => ids.has(id)));
-      return next.size === prev.size ? prev : next;
-    });
-  }, [sheet.rows]);
+  }, [sheet.rows, bucket, sort]);
 
   const setPanel = useCallback(
-    (applicationId: string | null, tab?: PipelineDrawerTab) => {
+    (applicationId: string | null) => {
       const params = new URLSearchParams(searchParams.toString());
       if (applicationId) params.set("applicationId", applicationId);
       else params.delete("applicationId");
-      if (applicationId && tab && tab !== "overview") params.set("tab", tab);
-      else params.delete("tab");
+      params.delete("tab");
       const qs = params.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      // Only the address changes: the panel loads its own details, so the
+      // next person opens at once instead of after a page reload.
+      window.history.replaceState(null, "", qs ? `${pathname}?${qs}` : pathname);
     },
-    [pathname, router, searchParams]
+    [pathname, searchParams]
   );
 
   const openId = searchParams.get("applicationId");
   const order = rows.map((r) => r.applicationId);
   const openIndex = openId ? order.indexOf(openId) : -1;
+  const openRow = openId ? (sheet.rows.find((r) => r.applicationId === openId) ?? null) : null;
 
   function toggleSort(key: SortKey) {
     setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
   }
-
-  const allShownSelected = rows.length > 0 && rows.every((r) => selected.has(r.memberId));
-  function toggleAll() {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (allShownSelected) rows.forEach((r) => next.delete(r.memberId));
-      else rows.forEach((r) => next.add(r.memberId));
-      return next;
-    });
-  }
-  function toggleOne(memberId: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(memberId)) next.delete(memberId);
-      else next.add(memberId);
-      return next;
-    });
-  }
-
-  const selectedRows = sheet.rows.filter((r) => selected.has(r.memberId));
 
   /** Batch actions refresh the sheet themselves; pass refresh for actions from elsewhere. */
   function run(
@@ -168,45 +119,90 @@ export function BatchSheetView({
     <div className="space-y-4">
       {/* Title row */}
       <div className="space-y-3">
-        <Link
-          href="/admin/recruitment/batches"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Batches
-        </Link>
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        {variant === "page" ? (
+          <Link
+            href="/admin/recruitment/batches"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Batches
+          </Link>
+        ) : null}
+        <div className={cn("flex flex-wrap items-start justify-between gap-3", variant === "overlay" && "pr-10")}>
           <div className="min-w-0 space-y-1">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <h1 className="font-mono text-2xl font-semibold tracking-tight">{sheet.code}</h1>
-              <BatchName batchId={sheet.id} name={sheet.name} />
+              {isManager ? (
+                sheet.name ? <span className="text-lg text-muted-foreground">{sheet.name}</span> : null
+              ) : (
+                <BatchName batchId={sheet.id} name={sheet.name} />
+              )}
               {!isOpen ? (
                 <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">Closed</span>
               ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-              <InterviewDate batchId={sheet.id} value={sheet.interviewDate} editable={isOpen} />
+              <InterviewDate batchId={sheet.id} value={sheet.interviewDate} editable={isOpen && !isManager} />
               <span>
                 {sheet.rows.length} candidate{sheet.rows.length === 1 ? "" : "s"} · created{" "}
                 {new Date(sheet.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" })}
                 {sheet.createdByName ? ` by ${sheet.createdByName}` : ""}
               </span>
+              {!isManager && sheet.managers.length > 0 ? (
+                <span>Shared with {sheet.managers.map((m) => m.name).join(", ")}</span>
+              ) : null}
             </div>
           </div>
+          {isManager ? null : (
           <div className="flex flex-wrap items-center gap-2">
             {isOpen ? <AddCandidatesButton batchId={sheet.id} batchCode={sheet.code} /> : null}
+            <ShareBatchButton batchId={sheet.id} batchCode={sheet.code} sharedCount={sheet.managers.length} />
             <Button
               variant="ghost"
               disabled={isPending}
               onClick={() =>
-                run(() => setBatchStatusAction({ batchId: sheet.id, status: isOpen ? "closed" : "open" }))
+                isOpen ? setConfirmClose(true) : run(() => setBatchStatusAction({ batchId: sheet.id, status: "open" }))
               }
             >
               {isOpen ? "Close batch" : "Reopen batch"}
             </Button>
+            <AlertDialog
+              isOpen={confirmClose}
+              onOpenChange={setConfirmClose}
+              title={`Close ${sheet.code}?`}
+              description={closeBatchMessage(sheet)}
+              actionLabel="Close batch"
+              isPending={isPending}
+              onAction={() =>
+                run(() => setBatchStatusAction({ batchId: sheet.id, status: "closed" }), {
+                  after: () => setConfirmClose(false),
+                })
+              }
+            />
           </div>
+          )}
         </div>
       </div>
+
+      {/* Everyone decided: offer to close, with the outcome. */}
+      {isOpen && !isManager && sheet.rows.length > 0 && sheet.progress.hr_round + sheet.progress.manager_round === 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-success/30 bg-success-muted px-4 py-3 text-sm">
+          <span className="text-success">
+            <span className="font-medium">Everyone in this batch is decided.</span>{" "}
+            {[
+              sheet.progress.hire > 0 ? `${sheet.progress.hire} hired` : null,
+              sheet.progress.rejected > 0 ? `${sheet.progress.rejected} rejected` : null,
+              sheet.progress.on_hold > 0 ? `${sheet.progress.on_hold} on hold` : null,
+            ]
+              .filter(Boolean)
+              .join(", ")}
+            .
+          </span>
+          <Button size="sm" variant="outline" disabled={isPending} onClick={() => setConfirmClose(true)}>
+            Close batch
+          </Button>
+        </div>
+      ) : null}
 
       {/* Progress */}
       {sheet.rows.length > 0 ? (
@@ -243,54 +239,26 @@ export function BatchSheetView({
         </div>
       ) : (
         <>
-          {/* Toolbar: search, or actions for selected rows */}
-          <div className="flex min-h-10 flex-wrap items-center gap-2">
-            {selectedRows.length > 0 ? (
-              <SelectionBar
-                count={selectedRows.length}
-                disabled={isPending}
-                onMove={(stage) =>
-                  run(
-                    () => bulkMoveApplicationsStageAction({}, { ids: selectedRows.map((r) => r.applicationId), stage }),
-                    { after: () => setSelected(new Set()), refresh: true }
-                  )
-                }
-                onRemove={() =>
-                  run(
-                    () => removeBatchMembersAction({ batchId: sheet.id, memberIds: selectedRows.map((r) => r.memberId) }),
-                    { after: () => setSelected(new Set()) }
-                  )
-                }
-                onClear={() => setSelected(new Set())}
-              />
-            ) : (
-              <div className="relative w-full max-w-xs">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search name, role, company"
-                  className="h-9 pl-8"
-                  aria-label="Search this batch"
-                />
-              </div>
-            )}
-            {(query || bucket) && selectedRows.length === 0 ? (
-              <span className="text-xs text-muted-foreground">
-                Showing {rows.length} of {sheet.rows.length}
-              </span>
-            ) : null}
-          </div>
+          {bucket ? (
+            <p className="text-xs text-muted-foreground">
+              Showing {rows.length} of {sheet.rows.length}.{" "}
+              <button type="button" className="underline" onClick={() => setBucket(null)}>
+                Show everyone
+              </button>
+            </p>
+          ) : null}
 
-          <div className="max-h-[calc(100vh-15rem)] overflow-auto rounded-xl border border-border bg-card">
+          <div
+            className={cn(
+              "overflow-auto rounded-xl border border-border bg-card",
+              variant === "overlay" ? "max-h-[calc(100vh-19rem)]" : "max-h-[calc(100vh-15rem)]"
+            )}
+          >
             <table className="w-full border-separate border-spacing-0 text-[13px]">
               <thead className="sticky top-0 z-20 bg-muted text-left text-xs text-muted-foreground">
                 <tr>
-                  <th className="sticky left-0 z-30 w-10 border-b border-border bg-muted px-3 py-2">
-                    <Checkbox checked={allShownSelected} onCheckedChange={toggleAll} aria-label="Select all shown" />
-                  </th>
                   <SortHeader label="Sl.no" k="slNo" sort={sort} onSort={toggleSort} className="w-14 text-right" />
-                  <SortHeader label="Name" k="name" sort={sort} onSort={toggleSort} className="sticky left-10 z-30 min-w-44 bg-muted" />
+                  <SortHeader label="Name" k="name" sort={sort} onSort={toggleSort} className="sticky left-0 z-30 min-w-44 bg-muted" />
                   <SortHeader label="Applied role" k="role" sort={sort} onSort={toggleSort} />
                   <SortHeader label="Experience" k="experienceYears" sort={sort} onSort={toggleSort} className="min-w-52" />
                   <SortHeader label="CTC (current / expected)" k="currentCtc" sort={sort} onSort={toggleSort} />
@@ -303,29 +271,35 @@ export function BatchSheetView({
               </thead>
               <tbody>
                 {rows.map((r) => {
-                  const isSelected = selected.has(r.memberId);
                   const isActive = openId === r.applicationId;
                   const cell = "border-b border-border px-3 py-2 align-top";
-                  const stickyBg = isActive ? "bg-accent-blue-muted" : isSelected ? "bg-muted" : "bg-card group-hover:bg-muted/60";
+                  const stickyBg = isActive ? "bg-accent-blue-muted" : "bg-card group-hover:bg-muted/60";
                   const current = formatCtc(r.currentCtc);
                   const expected = formatCtc(r.expectedCtc);
                   return (
                     <tr
                       key={r.memberId}
-                      className={cn("group", isActive ? "bg-accent-blue-muted" : isSelected ? "bg-muted" : "hover:bg-muted/60")}
+                      className={cn("group", isActive ? "bg-accent-blue-muted" : "hover:bg-muted/60")}
                     >
-                      <td className={cn(cell, "sticky left-0 z-10", stickyBg)}>
-                        <Checkbox checked={isSelected} onCheckedChange={() => toggleOne(r.memberId)} aria-label={`Select ${r.name}`} />
-                      </td>
                       <td className={cn(cell, "text-right tabular-nums text-muted-foreground")}>{r.slNo}</td>
-                      <td className={cn(cell, "sticky left-10 z-10", stickyBg)}>
+                      <td className={cn(cell, "sticky left-0 z-10", stickyBg)}>
                         <span className="flex items-center gap-1.5">
-                          <Link
-                            href={`/admin/recruitment/candidates/${r.candidateId}`}
-                            className="font-medium text-foreground hover:underline focus-visible:underline focus-visible:outline-none"
-                          >
-                            {r.name}
-                          </Link>
+                          {isManager ? (
+                            <button
+                              type="button"
+                              onClick={() => setPanel(r.applicationId)}
+                              className="text-left font-medium text-foreground hover:underline focus-visible:underline focus-visible:outline-none"
+                            >
+                              {r.name}
+                            </button>
+                          ) : (
+                            <Link
+                              href={`/admin/recruitment/candidates/${r.candidateId}`}
+                              className="font-medium text-foreground hover:underline focus-visible:underline focus-visible:outline-none"
+                            >
+                              {r.name}
+                            </Link>
+                          )}
                           <button
                             type="button"
                             onClick={() => setPanel(r.applicationId)}
@@ -335,12 +309,28 @@ export function BatchSheetView({
                           >
                             <Eye className="h-3.5 w-3.5" />
                           </button>
+                          {r.commentCount > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => setPanel(r.applicationId)}
+                              className="inline-flex items-center gap-0.5 rounded px-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                              title={`${r.commentCount} comment${r.commentCount === 1 ? "" : "s"}`}
+                              aria-label={`${r.commentCount} comments on ${r.name}`}
+                            >
+                              <MessageSquare className="h-3.5 w-3.5" />
+                              {r.commentCount}
+                            </button>
+                          ) : null}
                         </span>
                       </td>
                       <td className={cn(cell, "whitespace-nowrap")}>
-                        <Link href={`/admin/recruitment/jobs/${r.jobOpeningId}`} className="text-accent-blue hover:underline">
-                          {r.role}
-                        </Link>
+                        {isManager ? (
+                          r.role
+                        ) : (
+                          <Link href={`/admin/recruitment/jobs/${r.jobOpeningId}`} className="text-accent-blue hover:underline">
+                            {r.role}
+                          </Link>
+                        )}
                       </td>
                       <td className={cell}>
                         <ExperienceCell years={r.experienceYears} experiences={r.experiences} />
@@ -392,9 +382,9 @@ export function BatchSheetView({
                 {rows.length === 0 ? (
                   <tr>
                     <td colSpan={columnCount} className="px-3 py-10 text-center text-sm text-muted-foreground">
-                      No candidates match.{" "}
-                      <button type="button" className="underline" onClick={() => { setQuery(""); setBucket(null); }}>
-                        Clear search
+                      No one here.{" "}
+                      <button type="button" className="underline" onClick={() => setBucket(null)}>
+                        Show everyone
                       </button>
                     </td>
                   </tr>
@@ -403,14 +393,18 @@ export function BatchSheetView({
             </table>
           </div>
           <p className="text-xs text-muted-foreground">
-            Click a name to open the candidate&apos;s profile, or the eye icon to see them without leaving the batch. In that panel, J and K move to the next and previous person.
+            {isManager
+              ? "Click a name to see the candidate. In that panel, J and K move to the next and previous person."
+              : "Click a name to open the candidate's profile, or the eye icon to see them without leaving the batch. In that panel, J and K move to the next and previous person."}
           </p>
         </>
       )}
 
-      <BatchReviewPanel
-        row={openId ? (sheet.rows.find((r) => r.applicationId === openId) ?? null) : null}
-        application={openId ? selectedApplication : null}
+      <CandidateReviewPanel
+        facts={openRow}
+        batch={openRow && !isManager ? { batchId: sheet.id, memberId: openRow.memberId } : undefined}
+        mode={mode}
+        application={null}
         open={Boolean(openId)}
         onClose={() => setPanel(null)}
         prevId={openIndex > 0 ? order[openIndex - 1] : null}
@@ -420,6 +414,14 @@ export function BatchSheetView({
       />
     </div>
   );
+}
+
+/** What closing does, and who is still waiting if anyone is. */
+function closeBatchMessage(sheet: BatchSheet): string {
+  const waiting = sheet.progress.hr_round + sheet.progress.manager_round;
+  const base = "It moves to Closed batches. You can reopen it any time.";
+  if (waiting === 0) return base;
+  return `${waiting} ${waiting === 1 ? "person is" : "people are"} still in HR Round or Manager Round. ${base}`;
 }
 
 function Blank() {
@@ -522,63 +524,6 @@ function SortHeader({
         {active ? <Icon className="h-3 w-3" /> : null}
       </button>
     </th>
-  );
-}
-
-function SelectionBar({
-  count,
-  disabled,
-  onMove,
-  onRemove,
-  onClear,
-}: {
-  count: number;
-  disabled: boolean;
-  onMove: (stage: RecruitmentPipelineStage) => void;
-  onRemove: () => void;
-  onClear: () => void;
-}) {
-  const [confirmRemove, setConfirmRemove] = useState(false);
-  useEffect(() => {
-    if (!confirmRemove) return;
-    const t = setTimeout(() => setConfirmRemove(false), 4000);
-    return () => clearTimeout(t);
-  }, [confirmRemove]);
-
-  return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-2 py-1.5">
-      <span className="px-1 text-sm font-medium">{count} selected</span>
-      <Select value="" onValueChange={(v) => onMove(v as RecruitmentPipelineStage)} disabled={disabled}>
-        <SelectTrigger className="h-8 w-[150px] text-xs" aria-label="Move selected to stage">
-          <SelectValue placeholder="Move to…" />
-        </SelectTrigger>
-        <SelectContent>
-          {MOVE_OPTIONS.map((o) => (
-            <SelectItem key={o.stage} value={o.stage}>
-              {o.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Button
-        variant={confirmRemove ? "destructive" : "outline"}
-        size="sm"
-        disabled={disabled}
-        onClick={() => {
-          if (confirmRemove) {
-            setConfirmRemove(false);
-            onRemove();
-          } else {
-            setConfirmRemove(true);
-          }
-        }}
-      >
-        {confirmRemove ? `Yes, remove ${count}` : "Remove from batch"}
-      </Button>
-      <Button variant="ghost" size="sm" onClick={onClear}>
-        Clear
-      </Button>
-    </div>
   );
 }
 

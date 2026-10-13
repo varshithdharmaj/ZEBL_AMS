@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { RecruitmentPipelineStage } from "@/generated/prisma/enums";
 import type { ActionState, BulkActionState } from "@/actions/types";
-import { requireRecruitmentAdminSession } from "@/lib/auth-guards";
+import { getSessionOrThrow, requireRecruitmentAdminSession } from "@/lib/auth-guards";
 import { safeParseWithSchema } from "@/lib/validation/parse";
 import {
   createApplicationSchema,
@@ -138,7 +140,9 @@ export async function moveApplicationStageAction(
     if (!parsed.ok) return { error: parsed.error };
 
     // 2. Permission Check
-    const session = await requireRecruitmentAdminSession();
+    // Logged in is enough here: the service lets HR do anything and a shared
+    // batch's manager take Manager Round steps.
+    const session = await getSessionOrThrow();
 
     // 3. Feature Flag Check
     if (!isRecruitmentModuleEnabled()) {
@@ -171,7 +175,9 @@ export async function rejectApplicationAction(
     if (!parsed.ok) return { error: parsed.error };
 
     // 2. Permission Check
-    const session = await requireRecruitmentAdminSession();
+    // Logged in is enough here: the service lets HR do anything and a shared
+    // batch's manager take Manager Round steps.
+    const session = await getSessionOrThrow();
 
     // 3. Feature Flag Check
     if (!isRecruitmentModuleEnabled()) {
@@ -233,11 +239,16 @@ export async function reopenApplicationAction(
 ): Promise<RecruitmentApplicationActionState> {
   try {
     // 1. Validation
-    const parsed = safeParseWithSchema(applicationIdSchema, input);
+    const parsed = safeParseWithSchema(
+      applicationIdSchema.extend({ toStage: z.nativeEnum(RecruitmentPipelineStage).optional() }),
+      input
+    );
     if (!parsed.ok) return { error: parsed.error };
 
     // 2. Permission Check
-    const session = await requireRecruitmentAdminSession();
+    // Logged in is enough here: the service lets HR do anything and a shared
+    // batch's manager take Manager Round steps.
+    const session = await getSessionOrThrow();
 
     // 3. Feature Flag Check
     if (!isRecruitmentModuleEnabled()) {
@@ -246,7 +257,7 @@ export async function reopenApplicationAction(
 
     // 4. Service Call
     const service = createApplicationService();
-    await service.reopenApplication(session, parsed.data.id);
+    await service.reopenApplication(session, parsed.data.id, parsed.data.toStage);
 
     // 5. Cache Invalidation
     revalidateApplicationList();

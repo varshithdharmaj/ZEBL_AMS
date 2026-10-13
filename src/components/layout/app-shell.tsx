@@ -30,6 +30,7 @@ export function AppShell({
   showMyTeamGroup = false,
   showRecruitmentNav = false,
   showPanelistInterviews = false,
+  showManagerHiring = false,
   /** Recruitment test managers: Hiring Workspace only (no other /admin nav). */
   recruitmentOpsOnly = false,
   /** HR/Super Admin linked to an Employee record: "My Workspace" nav group. */
@@ -43,6 +44,8 @@ export function AppShell({
   showRecruitmentNav?: boolean;
   /** Employee: Interviews nav when recruitment module is enabled. */
   showPanelistInterviews?: boolean;
+  /** HR shared a hiring batch with this person: show Hiring. */
+  showManagerHiring?: boolean;
   recruitmentOpsOnly?: boolean;
   showOwnWorkspaceNav?: boolean;
 }) {
@@ -91,6 +94,7 @@ export function AppShell({
         showMyTeamGroup={myTeamVisible}
         showRecruitmentNav={showRecruitmentNav}
         showPanelistInterviews={showPanelistInterviews}
+        showManagerHiring={showManagerHiring}
         recruitmentOpsOnly={recruitmentOpsOnly}
         showOwnWorkspaceNav={showOwnWorkspaceNav}
         roleLabel={roleLabel}

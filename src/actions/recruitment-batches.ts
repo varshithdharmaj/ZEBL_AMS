@@ -10,7 +10,11 @@ import { HiringBatchStatus } from "@/generated/prisma/enums";
 import {
   addApplicationsToBatch,
   createBatch,
+  listBatchManagers,
   listOpenBatchOptions,
+  searchManagerOptions,
+  shareBatch,
+  unshareBatch,
   removeMembers,
   searchCandidatesForBatch,
   renameBatch,
@@ -19,6 +23,7 @@ import {
   updateMemberRemarks,
   type AddToBatchResult,
   type BatchCandidateOption,
+  type BatchManagerOption,
   type OpenBatchOption,
 } from "@/lib/recruitment/batch/batch-service";
 import { parseInterviewDate } from "@/lib/recruitment/batch/batch-membership";
@@ -189,6 +194,65 @@ export async function searchCandidatesForBatchAction(
     if (!parsed.ok) return { error: parsed.error };
     const session = await requireRecruitmentAdminSession();
     return { options: await searchCandidatesForBatch(session, parsed.data.batchId, parsed.data.query) };
+  } catch (error) {
+    return mapUnknownToActionState(error);
+  }
+}
+
+export async function listBatchManagersAction(
+  input: unknown
+): Promise<ActionState & { managers?: BatchManagerOption[] }> {
+  try {
+    const parsed = safeParseWithSchema(z.object({ batchId: id }), input);
+    if (!parsed.ok) return { error: parsed.error };
+    const session = await requireRecruitmentAdminSession();
+    return { managers: await listBatchManagers(session, parsed.data.batchId) };
+  } catch (error) {
+    return mapUnknownToActionState(error);
+  }
+}
+
+export async function searchManagersAction(
+  input: unknown
+): Promise<ActionState & { options?: BatchManagerOption[] }> {
+  try {
+    const parsed = safeParseWithSchema(z.object({ batchId: id, query: z.string().max(100) }), input);
+    if (!parsed.ok) return { error: parsed.error };
+    const session = await requireRecruitmentAdminSession();
+    return { options: await searchManagerOptions(session, parsed.data.batchId, parsed.data.query) };
+  } catch (error) {
+    return mapUnknownToActionState(error);
+  }
+}
+
+export async function shareBatchAction(input: unknown): Promise<ActionState> {
+  try {
+    const parsed = safeParseWithSchema(
+      z.object({ batchId: id, userIds: z.array(id).min(1, "Pick at least one manager.").max(20) }),
+      input
+    );
+    if (!parsed.ok) return { error: parsed.error };
+    const session = await requireRecruitmentAdminSession();
+    const count = await shareBatch(session, parsed.data.batchId, parsed.data.userIds);
+    revalidateBatch(parsed.data.batchId);
+    revalidatePath("/admin/recruitment");
+    revalidatePath("/employee/hiring");
+    return { success: count === 1 ? "Shared with 1 manager." : `Shared with ${count} managers.` };
+  } catch (error) {
+    return mapUnknownToActionState(error);
+  }
+}
+
+export async function unshareBatchAction(input: unknown): Promise<ActionState> {
+  try {
+    const parsed = safeParseWithSchema(z.object({ batchId: id, userId: id }), input);
+    if (!parsed.ok) return { error: parsed.error };
+    const session = await requireRecruitmentAdminSession();
+    await unshareBatch(session, parsed.data.batchId, parsed.data.userId);
+    revalidateBatch(parsed.data.batchId);
+    revalidatePath("/admin/recruitment");
+    revalidatePath("/employee/hiring");
+    return { success: "Removed." };
   } catch (error) {
     return mapUnknownToActionState(error);
   }

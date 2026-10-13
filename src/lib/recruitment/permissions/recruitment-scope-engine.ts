@@ -17,6 +17,7 @@ import {
   unrestrictedRecruitmentScope,
 } from "@/lib/recruitment/types/scope";
 import { RecruitmentDomainError } from "@/lib/recruitment/shared/errors";
+import { sharedBatchApplications } from "@/lib/recruitment/batch/batch-access";
 
 /**
  * RecruitmentScopeEngine — single authority for recruitment query visibility.
@@ -36,11 +37,14 @@ async function resolveScopeUncached(actor: RecruitmentActor): Promise<Recruitmen
     return unrestrictedRecruitmentScope();
   }
 
-  if (actor.employeeId == null) {
+  // Batches HR shared with this user (managers): they see those candidates.
+  const sharedApps = await sharedBatchApplications(actor.userId);
+
+  if (actor.employeeId == null && sharedApps.length === 0) {
     return emptyRecruitmentScope();
   }
 
-  const employeeId = actor.employeeId;
+  const employeeId = actor.employeeId ?? -1;
 
   const [teamRows, panelRows, managedApps] = await Promise.all([
     prisma.hiringTeamMember.findMany({
@@ -84,6 +88,13 @@ async function resolveScopeUncached(actor: RecruitmentActor): Promise<Recruitmen
     applicationIds.add(row.interview.applicationId);
     candidateIds.add(row.interview.application.candidateId);
     jobOpeningIds.add(row.interview.application.jobOpeningId);
+  }
+
+  // Only the batch's own candidates, not every applicant on those jobs.
+  for (const app of sharedApps) {
+    applicationIds.add(app.id);
+    candidateIds.add(app.candidateId);
+    isHiringManager = true;
   }
 
   for (const app of managedApps) {

@@ -26,13 +26,14 @@ function navForRole(
   showRecruitmentNav: boolean,
   showPanelistInterviews: boolean,
   recruitmentOpsOnly: boolean,
-  showOwnWorkspaceNav: boolean
+  showOwnWorkspaceNav: boolean,
+  showManagerHiring: boolean
 ): SidebarNav {
   if (recruitmentOpsOnly) return buildRecruitmentOpsNav();
   if (role === "super_admin" || role === "hr") {
     return buildAdminShellNav({ role, showRecruitmentNav, showOwnWorkspaceNav });
   }
-  return buildEmployeeShellNav(showMyTeamGroup, showPanelistInterviews, showRecruitmentNav);
+  return buildEmployeeShellNav(showMyTeamGroup, showPanelistInterviews, showRecruitmentNav, showManagerHiring);
 }
 
 function readOpenSections(): Record<string, boolean> {
@@ -68,6 +69,7 @@ export function AppSidebar({
   showMyTeamGroup = false,
   showRecruitmentNav = false,
   showPanelistInterviews = false,
+  showManagerHiring = false,
   recruitmentOpsOnly = false,
   showOwnWorkspaceNav = false,
   roleLabel,
@@ -81,6 +83,7 @@ export function AppSidebar({
   showRecruitmentNav?: boolean;
   /** Employee: Interviews nav when assigned as a panelist (and recruitment is on). */
   showPanelistInterviews?: boolean;
+  showManagerHiring?: boolean;
   /** Recruitment test managers: Hiring Workspace only. */
   recruitmentOpsOnly?: boolean;
   /** HR/Super Admin linked to an Employee record: "My Workspace" section. */
@@ -103,9 +106,10 @@ export function AppSidebar({
         showRecruitmentNav,
         showPanelistInterviews,
         recruitmentOpsOnly,
-        showOwnWorkspaceNav
+        showOwnWorkspaceNav,
+        showManagerHiring
       ),
-    [role, showMyTeamGroup, showRecruitmentNav, showPanelistInterviews, recruitmentOpsOnly, showOwnWorkspaceNav]
+    [role, showMyTeamGroup, showRecruitmentNav, showPanelistInterviews, recruitmentOpsOnly, showOwnWorkspaceNav, showManagerHiring]
   );
   const activeHref = findActiveSidebarHref(pathname, sidebarHrefs(nav));
   const activeSectionId =

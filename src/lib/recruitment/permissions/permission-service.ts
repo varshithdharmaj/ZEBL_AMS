@@ -156,7 +156,12 @@ export const RecruitmentPermissionService = {
     applicationId: string
   ): Promise<void> {
     this.requireModuleEnabled();
-    this.requireHrAdministration(session);
+    if (!canAccessRecruitmentAdministration(session)) {
+      // A manager's Hire on a shared batch saves the decision too.
+      const { assertManagerCanDecide } = await import("@/lib/recruitment/batch/batch-access");
+      await assertManagerCanDecide(session.id, applicationId, "hire_decision");
+      return;
+    }
     const scope = await RecruitmentScopeEngine.getScope(session);
     RecruitmentScopeEngine.assertApplicationInScope(scope, applicationId);
   },

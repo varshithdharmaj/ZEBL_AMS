@@ -62,7 +62,14 @@ export function NewBatchFields({
 }
 
 /** "+ New batch": interview date and optional name, then into the (empty) batch. */
-export function NewBatchButton({ variant = "default" }: { variant?: "default" | "outline" }) {
+export function NewBatchButton({
+  variant = "default",
+  openOnDashboard = false,
+}: {
+  variant?: "default" | "outline";
+  /** Open the new batch in the dashboard overlay instead of its own page. */
+  openOnDashboard?: boolean;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState<NewBatchValues>({ interviewDate: todayIst(), name: "" });
@@ -80,7 +87,7 @@ export function NewBatchButton({ variant = "default" }: { variant?: "default" | 
       }
       setOpen(false);
       setValues({ interviewDate: todayIst(), name: "" });
-      router.push(`/admin/recruitment/batches/${res.batchId}`);
+      router.push(openOnDashboard ? `/admin/recruitment?batch=${res.batchId}` : `/admin/recruitment/batches/${res.batchId}`);
     });
   }
 
@@ -96,7 +103,7 @@ export function NewBatchButton({ variant = "default" }: { variant?: "default" | 
             <DialogHeader>
               <DialogTitle>New batch</DialogTitle>
               <DialogDescription>
-                The Batch ID is given automatically. Add candidates from the Pipeline list afterwards.
+                The Batch ID is given automatically. Add candidates once it is made.
               </DialogDescription>
             </DialogHeader>
             <NewBatchFields value={values} onChange={setValues} autoFocus />

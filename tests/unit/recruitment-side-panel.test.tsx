@@ -22,15 +22,8 @@ vi.mock("@/actions/recruitment-applications", () => ({
   rejectApplicationAction: vi.fn(),
   withdrawApplicationAction: vi.fn(),
 }));
-vi.mock("@/components/recruitment/applications/application-assessment-form", () => ({
-  ApplicationAssessmentForm: () => null,
-}));
-vi.mock("@/components/recruitment/applications/hiring-decision-form", () => ({
-  HiringDecisionForm: () => null,
-}));
-vi.mock("@/components/recruitment/applications/candidate-tags-input", () => ({
-  CandidateTagsInput: () => null,
-}));
+vi.mock("@/actions/recruitment-decisions", () => ({ markHireAction: vi.fn() }));
+vi.mock("@/actions/recruitment-batches", () => ({ removeBatchMembersAction: vi.fn() }));
 
 import { loadApplicationScoreSummaries } from "@/lib/recruitment/interview/score-summaries";
 import { ApplicationPipelineDrawer } from "@/components/recruitment/applications/application-pipeline-drawer";
@@ -122,43 +115,33 @@ describe("pipeline side panel", () => {
       />
     );
 
-  it("leads with stage, time in stage, owner and the next-stage button", () => {
+  it("shows the stage, days in it and the HR Round steps", () => {
     const html = render();
-    expect(html).toContain(">Applied<");
-    expect(html).toContain("3 days in stage");
-    expect(html).toContain("Owner: Sowmya");
-    expect(html).toMatch(/Move to (<!-- -->)?Phone screen/);
+    expect(html).toContain(">HR Round<");
+    expect(html).toMatch(/3 days/);
+    expect(html).toContain("Send to Manager Round");
     expect(html).toContain("Reject");
-    expect(html).toContain("Previous candidate (K)");
+    expect(html).toContain("Hold");
+    expect(html).toContain("Previous (K)");
   });
 
-  it("hides blank details and offers the resume", () => {
+  it("drops the assessment and decision forms and keeps the resume and comments", () => {
     const html = render();
-    expect(html).toContain("Hyderabad");
-    expect(html).not.toContain("Notice Period");
-    expect(html).toContain("Review the resume, then move on or reject");
-    expect(html).toContain("View resume");
+    expect(html).not.toContain("Recruiter Assessment");
+    expect(html).not.toContain("Hiring Decision");
+    expect(html).toContain("Open in new tab");
+    expect(html).toContain("Comments");
   });
 
-  it("warns when a decision exists without any scorecards", () => {
-    const html = render({
-      currentStage: S.decision,
-      currentDecision: { outcome: "strong_hire" },
-      feedback: [],
-      interviews: [],
-    });
-    expect(html).toContain("no interviewer has submitted a scorecard");
-    expect(html).toContain("No interviews are on record");
+  it("offers Hire in the Manager Round and Make offer once hired", () => {
+    expect(render({ currentStage: S.manager_round })).toContain(">Hire<");
+    expect(render({ currentStage: S.decision, offers: [] })).toContain("Make offer");
   });
 
-  it("asks to schedule when an interview round has nothing booked", () => {
-    const html = render({ currentStage: S.technical_round, interviews: [] });
-    expect(html).toContain("Schedule the interview for this round");
-  });
-
-  it("shows no move/reject actions for a rejected application", () => {
+  it("shows Reopen and the reason, not the steps, for a rejected application", () => {
     const html = render({ status: "rejected", currentStage: S.rejected, rejectionReasonCode: "failed_interview" });
-    expect(html).not.toContain("Move to");
+    expect(html).not.toContain("Send to Manager Round");
+    expect(html).toContain("Reopen");
     expect(html).toContain("Failed interview round");
   });
 });

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { canAccessAdmin } from "@/lib/permissions";
 import type { SessionUser } from "@/lib/session";
 import { getPendingApprovalsForActor } from "@/lib/workflow/pending-approvals";
+import { batchBellItems } from "@/lib/recruitment/batch/batch-bell";
 
 export type NotificationCenterItem = {
   id: string;
@@ -81,6 +82,9 @@ export async function getNotificationCenterItems(
       });
     }
   }
+
+  // Hiring batches: who waits for a manager, what managers decided and said.
+  items.push(...(await batchBellItems(session).catch(() => [])));
 
   return items;
 }

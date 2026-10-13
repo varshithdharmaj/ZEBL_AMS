@@ -41,6 +41,22 @@ import {
   type UpdateApplicationAssessmentInput,
 } from "@/lib/validation/schemas/recruitment/applications";
 import { describeCloseReason } from "@/lib/recruitment/application/close-reasons";
+import { canAccessRecruitmentAdministration } from "@/lib/recruitment/permissions/recruitment-test-manager";
+import { assertManagerCanDecide } from "@/lib/recruitment/batch/batch-access";
+import { batchBucket } from "@/lib/recruitment/batch/batch-progress";
+
+/**
+ * HR can move anyone. A manager can take Manager Round steps for people in a
+ * batch HR shared with them (Hire, Reject, Hold and their Undo).
+ */
+async function assertCanStep(session: SessionUser, applicationId: string, target: string): Promise<void> {
+  if (canAccessRecruitmentAdministration(session)) {
+    await RecruitmentPermissionService.assertCanManageCandidates(session);
+    return;
+  }
+  RecruitmentPermissionService.requireModuleEnabled();
+  await assertManagerCanDecide(session.id, applicationId, target);
+}
 
 export type AfterCommitBuffer = ReturnType<typeof createAfterCommitBuffer>;
 
@@ -251,7 +267,7 @@ export function createApplicationService(
       const actor = toRecruitmentActor(session);
 
       const parsed = moveStageSchema.parse(input);
-      await RecruitmentPermissionService.assertCanManageCandidates(session);
+      await assertCanStep(session, parsed.id, parsed.stage);
 
       const app = await repository.getApplication(parsed.id);
       if (!app) {
@@ -488,7 +504,7 @@ export function createApplicationService(
       const actor = toRecruitmentActor(session);
 
       const parsed = rejectApplicationSchema.parse(input);
-      await RecruitmentPermissionService.assertCanManageCandidates(session);
+      await assertCanStep(session, parsed.id, "reject");
       const reasonSummary = describeCloseReason("reject", parsed.reasonCode, parsed.note) ?? "";
 
       const app = await repository.getApplication(parsed.id);
@@ -640,9 +656,13 @@ export function createApplicationService(
       await events.flush();
     },
 
-    async reopenApplication(session: SessionUser, id: string): Promise<void> {
+    /** Back to active. `toStage` (e.g. for Undo) returns them where they were; otherwise the job's first stage. */
+    async reopenApplication(session: SessionUser, id: string, toStage?: RecruitmentPipelineStage): Promise<void> {
       RecruitmentPermissionService.requireModuleEnabled();
-      await RecruitmentPermissionService.assertCanManageCandidates(session);
+      await assertCanStep(session, id, "reopen");
+      if (!canAccessRecruitmentAdministration(session) && (!toStage || batchBucket(toStage, "active") !== "manager_round")) {
+        throw new PermissionError("Managers can only reopen someone back to the Manager Round.");
+      }
       const actor = toRecruitmentActor(session);
 
       const app = await repository.getApplication(id);
@@ -658,7 +678,10 @@ export function createApplicationService(
 
       let targetStage: RecruitmentPipelineStage = RecruitmentPipelineStage.resume_received;
       const activeJobStages = job.stages?.filter((s) => !s.isArchived) ?? [];
-      if (activeJobStages.length > 0) {
+      const closingStages: string[] = ["rejected", "withdrawn", "hired"];
+      if (toStage && !closingStages.includes(toStage) && (activeJobStages.length === 0 || activeJobStages.some((s) => s.stage === toStage))) {
+        targetStage = toStage;
+      } else if (activeJobStages.length > 0) {
         const sortedStages = [...activeJobStages].sort((a, b) => a.sortOrder - b.sortOrder);
         if (sortedStages[0]) {
           targetStage = sortedStages[0].stage;

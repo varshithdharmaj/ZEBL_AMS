@@ -304,6 +304,7 @@ model User {
   emailTemplatesCreated         RecruitmentEmailTemplate[]    @relation("EmailTemplateCreatedBy")
   communicationsSent            RecruitmentCommunication[]    @relation("CommunicationSender")
   hiringBatchesCreated          HiringBatch[]                 @relation("HiringBatchCreatedBy")
+  hiringBatchShares             HiringBatchManager[]          @relation("HiringBatchManagerUser")
   hiringBatchMembersAdded       HiringBatchMember[]           @relation("HiringBatchMemberAddedBy")
   // Employee statutory details & documents
   employeeStatutoryUpdates      EmployeeStatutoryDetail[]     @relation("EmployeeStatutoryUpdatedBy")
@@ -2674,11 +2675,28 @@ model HiringBatch {
   closedAt        DateTime?         @map("closed_at")
   deletedAt       DateTime?         @map("deleted_at")
 
-  members HiringBatchMember[]
+  members  HiringBatchMember[]
+  managers HiringBatchManager[]
 
   @@index([status, deletedAt])
   @@index([createdAt])
   @@map("recruitment_hiring_batches")
+}
+
+/// A manager HR shared a batch with: they see its candidates, rate the
+/// Manager Round and decide Hire / Reject / Hold for people in that round.
+model HiringBatchManager {
+  id            String      @id @default(cuid())
+  batchId       String      @map("batch_id")
+  batch         HiringBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  userId        String      @map("user_id")
+  user          User        @relation("HiringBatchManagerUser", fields: [userId], references: [id], onDelete: Cascade)
+  addedByUserId String?     @map("added_by_user_id")
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  @@unique([batchId, userId])
+  @@index([userId])
+  @@map("recruitment_hiring_batch_managers")
 }
 
 /// One application in a batch. The stage is never stored here — it is always

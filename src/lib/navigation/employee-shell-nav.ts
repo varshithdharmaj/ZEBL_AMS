@@ -23,7 +23,9 @@ import {
 export function buildEmployeeShellNav(
   showMyTeamGroup: boolean,
   showPanelistInterviews = false,
-  showRecruitmentOpsLink = false
+  showRecruitmentOpsLink = false,
+  /** HR shared a hiring batch with this person (a manager). */
+  showManagerHiring = false
 ): SidebarNav {
   // Prefer the full Recruitment workspace when present — avoid a duplicate Interviews entry.
   const hiringLink = showRecruitmentOpsLink
@@ -36,6 +38,9 @@ export function buildEmployeeShellNav(
     modules: compactModules([
       link("dashboard", "Dashboard", "/employee/dashboard", LayoutDashboard),
       link("profile", "Profile", "/employee/profile", UserRound),
+      showManagerHiring && !showRecruitmentOpsLink
+        ? link("hiring", "Hiring", "/employee/hiring", Users)
+        : null,
       hiringLink,
       link("attendance", "Attendance", "/employee/attendance", CalendarCheck),
       link("leaves", "Leaves", "/employee/leaves", CalendarDays),

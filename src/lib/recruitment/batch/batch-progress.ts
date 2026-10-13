@@ -55,16 +55,3 @@ export function countProgress(items: ReadonlyArray<{ stage: string; status: stri
 export function decidedCount(progress: BatchProgress): number {
   return progress.hire + progress.rejected + progress.on_hold;
 }
-
-export type BatchWaitKind = "you" | "manager" | "close";
-
-/**
- * One status for the HR dashboard's Waiting on column.
- * A named manager and a day count need batch sharing, which is not built yet.
- */
-export function batchWait(progress: BatchProgress): { kind: BatchWaitKind; label: string } | null {
-  if (progress.hr_round > 0) return { kind: "you", label: "You: HR round" };
-  if (progress.manager_round > 0) return { kind: "manager", label: "Manager round" };
-  if (decidedCount(progress) > 0) return { kind: "close", label: "Ready to close" };
-  return null;
-}

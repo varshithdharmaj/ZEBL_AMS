@@ -12,6 +12,7 @@ import { resolveMyTeamNavContext } from "@/lib/people-scope/nav-context";
 import { isRecruitmentModuleEnabled } from "@/lib/recruitment/config/feature-flags";
 import { hasPanelistInterviewAssignment } from "@/lib/recruitment/interview/queries";
 import { isRecruitmentTestManager } from "@/lib/recruitment/permissions/recruitment-test-manager";
+import { hasSharedBatches } from "@/lib/recruitment/batch/batch-access";
 
 export default async function EmployeeLayout({
   children,
@@ -26,11 +27,12 @@ export default async function EmployeeLayout({
   // with the right nav and role label on first paint.
   // My Team nav is presentation-only. Authorization for /employee/approvals
   // remains hierarchy-based on that page.
-  const [showPanelistInterviews, myTeamNav] = await Promise.all([
+  const [showPanelistInterviews, myTeamNav, showManagerHiring] = await Promise.all([
     recruitmentOn ? hasPanelistInterviewAssignment(session.employeeId) : false,
     canAccessEmployeeShell(session.role) && session.employeeId != null
       ? resolveMyTeamNavContext(session.employeeId)
       : null,
+    recruitmentOn ? hasSharedBatches(session.id) : false,
   ]);
 
   return (
@@ -39,6 +41,7 @@ export default async function EmployeeLayout({
       variant="wide"
       showMyTeamGroup={myTeamNav?.showMyTeamGroup ?? false}
       showPanelistInterviews={showPanelistInterviews}
+      showManagerHiring={showManagerHiring}
       showRecruitmentNav={recruitmentOn && isRecruitmentTestManager(session)}
       showOwnWorkspaceNav={canAccessHRAdministration(session.role)}
     >

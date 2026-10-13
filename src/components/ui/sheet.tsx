@@ -14,6 +14,7 @@ export function Sheet({
   side = "right",
   size = "md",
   headerActions,
+  plain = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -25,6 +26,8 @@ export function Sheet({
   size?: "md" | "lg";
   /** Extra buttons shown next to the close button. */
   headerActions?: React.ReactNode;
+  /** Light dim, no blur and a solid panel, so the page behind stays readable. */
+  plain?: boolean;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -48,7 +51,7 @@ export function Sheet({
     <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
       <button
         type="button"
-        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+        className={cn("absolute inset-0", plain ? "bg-slate-900/20" : "bg-slate-900/40 backdrop-blur-sm")}
         aria-label="Close panel"
         onClick={onClose}
       />
@@ -58,7 +61,8 @@ export function Sheet({
         className={cn(
           "relative ml-auto flex h-full w-full flex-col",
           size === "lg" ? "max-w-2xl" : "max-w-lg",
-          "border-border bg-background/80 shadow-xl outline-none backdrop-blur-2xl",
+          "border-border shadow-xl outline-none",
+          plain ? "border-l bg-background" : "bg-background/80 backdrop-blur-2xl",
           "animate-in slide-in-from-right duration-200",
           side === "left" && "mr-auto ml-0 slide-in-from-left"
         )}

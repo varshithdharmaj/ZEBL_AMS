@@ -10,10 +10,25 @@ import { readScorecardRatings, scorecardAverage } from "@/lib/recruitment/interv
 import { batchCodeBase, batchCodePrefix, nextBatchCode } from "@/lib/recruitment/batch/batch-code";
 import { BATCH_BUCKETS, batchBucket, countProgress, type BatchBucket, type BatchProgress } from "@/lib/recruitment/batch/batch-progress";
 import { planBatchAdds } from "@/lib/recruitment/batch/batch-membership";
+import { isBatchManagerOf } from "@/lib/recruitment/batch/batch-access";
+import { canAccessRecruitmentAdministration } from "@/lib/recruitment/permissions/recruitment-test-manager";
 
 async function assertCanManage(session: SessionUser) {
   RecruitmentPermissionService.requireModuleEnabled();
   await RecruitmentPermissionService.assertCanManageCandidates(session);
+}
+
+function isHr(session: SessionUser): boolean {
+  return canAccessRecruitmentAdministration(session);
+}
+
+/** HR, or a manager HR shared this batch with. */
+async function assertCanViewBatch(session: SessionUser, batchId: string) {
+  RecruitmentPermissionService.requireModuleEnabled();
+  if (isHr(session)) return;
+  if (!(await isBatchManagerOf(session.id, batchId))) {
+    throw new RecruitmentDomainError("REC_NOT_FOUND", "Batch not found.");
+  }
 }
 
 async function getLiveBatch(batchId: string) {
@@ -37,16 +52,27 @@ export type BatchListItem = {
   createdByName: string | null;
   candidateCount: number;
   progress: BatchProgress;
+  /** Managers HR shared the batch with. */
+  managers: Array<{ userId: string; name: string }>;
 };
 
+/**
+ * HR sees every batch. With `sharedWithMe`, only the batches HR shared with
+ * this user (the manager's page).
+ */
 export async function listBatches(
   session: SessionUser,
-  options: { status?: HiringBatchStatus | "all"; limit?: number } = {}
+  options: { status?: HiringBatchStatus | "all"; limit?: number; sharedWithMe?: boolean } = {}
 ): Promise<BatchListItem[]> {
-  await assertCanManage(session);
+  if (options.sharedWithMe) RecruitmentPermissionService.requireModuleEnabled();
+  else await assertCanManage(session);
   const status = options.status ?? HiringBatchStatus.open;
   const batches = await prisma.hiringBatch.findMany({
-    where: { deletedAt: null, ...(status === "all" ? {} : { status }) },
+    where: {
+      deletedAt: null,
+      ...(status === "all" ? {} : { status }),
+      ...(options.sharedWithMe ? { managers: { some: { userId: session.id } } } : {}),
+    },
     orderBy: [{ interviewDate: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
     ...(options.limit ? { take: options.limit } : {}),
     select: {
@@ -62,6 +88,10 @@ export async function listBatches(
         where: { application: { deletedAt: null } },
         select: { application: { select: { currentStage: true, status: true } } },
       },
+      managers: {
+        orderBy: { createdAt: "asc" },
+        select: { userId: true, user: { select: { email: true, employee: { select: { name: true } } } } },
+      },
     },
   });
 
@@ -75,6 +105,7 @@ export async function listBatches(
     closedAt: b.closedAt,
     createdByName: b.createdBy?.employee?.name ?? b.createdBy?.email ?? null,
     candidateCount: b.members.length,
+    managers: b.managers.map((m) => ({ userId: m.userId, name: m.user.employee?.name ?? m.user.email })),
     progress: countProgress(
       b.members.map((m) => ({ stage: m.application.currentStage, status: m.application.status }))
     ),
@@ -196,6 +227,8 @@ export type BatchSheetRow = {
   hrScorecards: number;
   managerStars: number | null;
   managerScorecards: number;
+  /** Team comments on the candidate (the candidate's notes this user can see). */
+  commentCount: number;
 };
 
 export type BatchSheet = {
@@ -209,6 +242,8 @@ export type BatchSheet = {
   createdByName: string | null;
   rows: BatchSheetRow[];
   progress: BatchProgress;
+  /** Managers HR shared the batch with. */
+  managers: Array<{ userId: string; name: string }>;
 };
 
 function noticePeriodText(days: number | null, notes: string | null): string | null {
@@ -256,8 +291,111 @@ async function loadRoundStars(applicationIds: string[], roundType: "hr" | "manag
   return out;
 }
 
+/** What a candidate panel shows about one application, for Batches and Pipeline alike. */
+export type CandidateFacts = Omit<BatchSheetRow, "memberId" | "slNo" | "remarks">;
+
+function factsApplicationSelect(viewer: SessionUser) {
+  return {
+    id: true,
+    status: true,
+    currentStage: true,
+    currentStageRef: { select: { label: true } },
+    jobOpening: { select: { id: true, title: true } },
+    candidate: {
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        phone: true,
+        location: true,
+        totalExperienceYears: true,
+        currentCtc: true,
+        expectedCtc: true,
+        noticePeriodDays: true,
+        availabilityNotes: true,
+        experiences: {
+          orderBy: { sortOrder: "asc" },
+          select: {
+            company: true,
+            companyName: true,
+            title: true,
+            designation: true,
+            isCurrent: true,
+            currentlyWorking: true,
+          },
+        },
+        educations: {
+          orderBy: { sortOrder: "asc" },
+          take: 1,
+          select: { degree: true, field: true, fieldOfStudy: true, institution: true },
+        },
+        documents: {
+          where: { documentType: "resume", deletedAt: null },
+          orderBy: [{ isPrimary: "desc" }, { createdAt: "desc" }],
+          take: 1,
+          select: { id: true, fileName: true },
+        },
+        _count: { select: { notes: { where: visibleNotesWhere(viewer) } } },
+      },
+    },
+  } satisfies Prisma.ApplicationSelect;
+}
+
+type FactsApplication = Prisma.ApplicationGetPayload<{ select: ReturnType<typeof factsApplicationSelect> }>;
+type RoundStars = Awaited<ReturnType<typeof loadRoundStars>>;
+
+function toCandidateFacts(app: FactsApplication, hr: RoundStars, manager: RoundStars): CandidateFacts {
+  const c = app.candidate;
+  const edu = c.educations[0];
+  const education = edu
+    ? [edu.degree, edu.fieldOfStudy || edu.field].filter(Boolean).join(" in ") || edu.institution || null
+    : null;
+  return {
+    applicationId: app.id,
+    candidateId: c.id,
+    name: c.fullName,
+    email: c.email,
+    phone: c.phone,
+    location: c.location,
+    education,
+    experienceYears: c.totalExperienceYears == null ? null : Number(c.totalExperienceYears),
+    experiences: c.experiences
+      .map((e) => ({
+        company: (e.companyName || e.company).trim(),
+        role: (e.designation || e.title).trim() || null,
+        current: Boolean(e.isCurrent || e.currentlyWorking),
+      }))
+      .filter((e) => e.company),
+    currentCtc: c.currentCtc == null ? null : Number(c.currentCtc),
+    expectedCtc: c.expectedCtc == null ? null : Number(c.expectedCtc),
+    noticePeriod: noticePeriodText(c.noticePeriodDays, c.availabilityNotes),
+    resume: c.documents[0] ? { id: c.documents[0].id, fileName: c.documents[0].fileName } : null,
+    role: app.jobOpening.title,
+    jobOpeningId: app.jobOpening.id,
+    stage: app.currentStage,
+    stageLabel: stageLabel(app.currentStage, app.status, app.currentStageRef?.label),
+    bucket: batchBucket(app.currentStage, app.status),
+    hrStars: hr[app.id]?.stars ?? null,
+    hrScorecards: hr[app.id]?.count ?? 0,
+    managerStars: manager[app.id]?.stars ?? null,
+    managerScorecards: manager[app.id]?.count ?? 0,
+    commentCount: c._count.notes,
+  };
+}
+
+/** The panel facts for one application (the Pipeline panel). Null if it is gone. */
+export async function loadCandidateFacts(session: SessionUser, applicationId: string): Promise<CandidateFacts | null> {
+  const app = await prisma.application.findFirst({
+    where: { id: applicationId, deletedAt: null },
+    select: factsApplicationSelect(session),
+  });
+  if (!app) return null;
+  const [hr, manager] = await Promise.all([loadRoundStars([app.id], "hr"), loadRoundStars([app.id], "manager")]);
+  return toCandidateFacts(app, hr, manager);
+}
+
 export async function getBatchSheet(session: SessionUser, batchId: string): Promise<BatchSheet | null> {
-  await assertCanManage(session);
+  await assertCanViewBatch(session, batchId);
   const batch = await prisma.hiringBatch.findFirst({
     where: { id: batchId, deletedAt: null },
     select: {
@@ -276,101 +414,25 @@ export async function getBatchSheet(session: SessionUser, batchId: string): Prom
           id: true,
           slNo: true,
           remarks: true,
-          application: {
-            select: {
-              id: true,
-              status: true,
-              currentStage: true,
-              currentStageRef: { select: { label: true } },
-              jobOpening: { select: { id: true, title: true } },
-              candidate: {
-                select: {
-                  id: true,
-                  fullName: true,
-                  email: true,
-                  phone: true,
-                  location: true,
-                  totalExperienceYears: true,
-                  currentCtc: true,
-                  expectedCtc: true,
-                  noticePeriodDays: true,
-                  availabilityNotes: true,
-                  experiences: {
-                    orderBy: { sortOrder: "asc" },
-                    select: {
-                      company: true,
-                      companyName: true,
-                      title: true,
-                      designation: true,
-                      isCurrent: true,
-                      currentlyWorking: true,
-                    },
-                  },
-                  educations: {
-                    orderBy: { sortOrder: "asc" },
-                    take: 1,
-                    select: { degree: true, field: true, fieldOfStudy: true, institution: true },
-                  },
-                  documents: {
-                    where: { documentType: "resume", deletedAt: null },
-                    orderBy: [{ isPrimary: "desc" }, { createdAt: "desc" }],
-                    take: 1,
-                    select: { id: true, fileName: true },
-                  },
-                },
-              },
-            },
-          },
+          application: { select: factsApplicationSelect(session) },
         },
+      },
+      managers: {
+        orderBy: { createdAt: "asc" },
+        select: { userId: true, user: { select: { email: true, employee: { select: { name: true } } } } },
       },
     },
   });
   if (!batch) return null;
 
   const ids = batch.members.map((m) => m.application.id);
-  const [stars, managerStars] = await Promise.all([loadRoundStars(ids, "hr"), loadRoundStars(ids, "manager")]);
-
-  const rows: BatchSheetRow[] = batch.members.map((m) => {
-    const app = m.application;
-    const c = app.candidate;
-    const edu = c.educations[0];
-    const education = edu
-      ? [edu.degree, edu.fieldOfStudy || edu.field].filter(Boolean).join(" in ") || edu.institution || null
-      : null;
-    return {
-      memberId: m.id,
-      slNo: m.slNo,
-      applicationId: app.id,
-      candidateId: c.id,
-      name: c.fullName,
-      email: c.email,
-      phone: c.phone,
-      location: c.location,
-      education,
-      experienceYears: c.totalExperienceYears == null ? null : Number(c.totalExperienceYears),
-      experiences: c.experiences
-        .map((e) => ({
-          company: (e.companyName || e.company).trim(),
-          role: (e.designation || e.title).trim() || null,
-          current: Boolean(e.isCurrent || e.currentlyWorking),
-        }))
-        .filter((e) => e.company),
-      currentCtc: c.currentCtc == null ? null : Number(c.currentCtc),
-      expectedCtc: c.expectedCtc == null ? null : Number(c.expectedCtc),
-      noticePeriod: noticePeriodText(c.noticePeriodDays, c.availabilityNotes),
-      remarks: m.remarks,
-      resume: c.documents[0] ? { id: c.documents[0].id, fileName: c.documents[0].fileName } : null,
-      role: app.jobOpening.title,
-      jobOpeningId: app.jobOpening.id,
-      stage: app.currentStage,
-      stageLabel: stageLabel(app.currentStage, app.status, app.currentStageRef?.label),
-      bucket: batchBucket(app.currentStage, app.status),
-      hrStars: stars[app.id]?.stars ?? null,
-      hrScorecards: stars[app.id]?.count ?? 0,
-      managerStars: managerStars[app.id]?.stars ?? null,
-      managerScorecards: managerStars[app.id]?.count ?? 0,
-    };
-  });
+  const [hr, manager] = await Promise.all([loadRoundStars(ids, "hr"), loadRoundStars(ids, "manager")]);
+  const rows: BatchSheetRow[] = batch.members.map((m) => ({
+    memberId: m.id,
+    slNo: m.slNo,
+    remarks: m.remarks,
+    ...toCandidateFacts(m.application, hr, manager),
+  }));
 
   return {
     id: batch.id,
@@ -382,10 +444,61 @@ export async function getBatchSheet(session: SessionUser, batchId: string): Prom
     closedAt: batch.closedAt,
     createdByName: batch.createdBy?.employee?.name ?? batch.createdBy?.email ?? null,
     rows,
+    managers: batch.managers.map((m) => ({ userId: m.userId, name: m.user.employee?.name ?? m.user.email })),
     progress: countProgress(
       batch.members.map((m) => ({ stage: m.application.currentStage, status: m.application.status }))
     ),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Comments (the candidate's notes, shown in the batch panel)
+// ---------------------------------------------------------------------------
+
+/** Team notes (and HR-only ones for HR), plus the viewer's own private ones. */
+function visibleNotesWhere(viewer: SessionUser): Prisma.CandidateNoteWhereInput {
+  const shared: Prisma.CandidateNoteWhereInput = isHr(viewer)
+    ? { visibility: { not: "private" } }
+    : { visibility: "team" };
+  return { deletedAt: null, OR: [shared, { authorUserId: viewer.id }] };
+}
+
+export type BatchComment = {
+  id: string;
+  body: string;
+  authorName: string;
+  mine: boolean;
+  /** Only HR can see it. */
+  hrOnly: boolean;
+  createdAt: Date;
+};
+
+export async function listCandidateComments(session: SessionUser, candidateId: string): Promise<BatchComment[]> {
+  RecruitmentPermissionService.requireModuleEnabled();
+  if (!isHr(session) && !(await RecruitmentPermissionService.canWriteCandidateDiscussion(session, candidateId))) {
+    throw new RecruitmentDomainError("REC_NOT_FOUND", "Candidate not found.");
+  }
+  const notes = await prisma.candidateNote.findMany({
+    where: { candidateId, ...visibleNotesWhere(session) },
+    orderBy: { createdAt: "asc" },
+    take: 200,
+    select: {
+      id: true,
+      body: true,
+      createdAt: true,
+      authorUserId: true,
+      visibility: true,
+      author: { select: { email: true, employee: { select: { name: true } } } },
+    },
+  });
+  return notes.map((n) => ({
+    id: n.id,
+    body: n.body,
+    authorName: n.author.employee?.name ?? n.author.email,
+    mine: n.authorUserId === session.id,
+    hrOnly: n.visibility === "hr_only",
+    createdAt: n.createdAt,
+  }));
 }
 
 export async function updateMemberRemarks(session: SessionUser, memberId: string, remarks: string | null) {
@@ -400,6 +513,81 @@ export async function updateMemberRemarks(session: SessionUser, memberId: string
     data: { remarks: remarks?.trim() || null },
   });
   return member.batchId;
+}
+
+// ---------------------------------------------------------------------------
+// Sharing a batch with managers
+// ---------------------------------------------------------------------------
+
+export type BatchManagerOption = {
+  userId: string;
+  name: string;
+  email: string;
+  designation: string | null;
+};
+
+const managerUserSelect = {
+  id: true,
+  email: true,
+  employee: { select: { name: true, designation: true } },
+} as const;
+
+function toManagerOption(u: { id: string; email: string; employee: { name: string; designation: string | null } | null }): BatchManagerOption {
+  return { userId: u.id, name: u.employee?.name ?? u.email, email: u.email, designation: u.employee?.designation ?? null };
+}
+
+export async function listBatchManagers(session: SessionUser, batchId: string): Promise<BatchManagerOption[]> {
+  await assertCanManage(session);
+  const rows = await prisma.hiringBatchManager.findMany({
+    where: { batchId },
+    orderBy: { createdAt: "asc" },
+    select: { user: { select: managerUserSelect } },
+  });
+  return rows.map((r) => toManagerOption(r.user));
+}
+
+/**
+ * People HR can share a batch with: active logins linked to an employee,
+ * other than HR / Super Admin (they see every batch already). Managers first.
+ */
+export async function searchManagerOptions(session: SessionUser, batchId: string, query: string): Promise<BatchManagerOption[]> {
+  await assertCanManage(session);
+  const q = query.trim();
+  const users = await prisma.user.findMany({
+    where: {
+      isActive: true,
+      employeeId: { not: null },
+      role: { in: ["manager", "employee"] },
+      hiringBatchShares: { none: { batchId } },
+      ...(q
+        ? {
+            OR: [
+              { email: { contains: q, mode: "insensitive" } },
+              { employee: { name: { contains: q, mode: "insensitive" } } },
+            ],
+          }
+        : {}),
+    },
+    orderBy: [{ role: "asc" }, { email: "asc" }],
+    take: 20,
+    select: managerUserSelect,
+  });
+  return users.map(toManagerOption);
+}
+
+export async function shareBatch(session: SessionUser, batchId: string, userIds: string[]): Promise<number> {
+  await assertCanManage(session);
+  await getLiveBatch(batchId);
+  const res = await prisma.hiringBatchManager.createMany({
+    data: userIds.map((userId) => ({ batchId, userId, addedByUserId: session.id })),
+    skipDuplicates: true,
+  });
+  return res.count;
+}
+
+export async function unshareBatch(session: SessionUser, batchId: string, userId: string): Promise<void> {
+  await assertCanManage(session);
+  await prisma.hiringBatchManager.deleteMany({ where: { batchId, userId } });
 }
 
 export async function removeMembers(session: SessionUser, batchId: string, memberIds: string[]) {
