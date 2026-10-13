@@ -1,364 +1,233 @@
 import Link from "next/link";
-import {
-  Briefcase,
-  Calendar,
-  Clock,
-  FileCheck,
-  UserCheck,
-  Users,
-  ClipboardList,
-  Plus,
-  ArrowRight,
-  Layers,
-} from "lucide-react";
-import type { JobStatusCounts } from "@/lib/recruitment/job/types";
-import type { HiringFunnelCounts } from "@/lib/recruitment/dashboard/build-funnel-counts";
+import { Plus } from "lucide-react";
 import type { BatchListItem } from "@/lib/recruitment/batch/batch-service";
-import { StatsGrid } from "@/components/ui/stats-grid";
-import { DashboardCard } from "@/components/ui/dashboard-card";
+import { BATCH_BUCKETS, batchWait, type BatchWaitKind } from "@/lib/recruitment/batch/batch-progress";
+import type { HrToday } from "@/lib/recruitment/dashboard/hr-today";
 import { Button } from "@/components/ui/button";
-import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
-import { SectionCard } from "@/components/ui/section-card";
-import { EmptyState } from "@/components/ui/empty-state";
-import { DashboardFunnelWidget } from "@/components/recruitment/dashboard/dashboard-funnel-widget";
-import { DashboardPendingConversionsWidget } from "@/components/recruitment/dashboard/dashboard-pending-conversions-widget";
-import { DashboardOfferSummaryWidget } from "@/components/recruitment/dashboard/dashboard-offer-summary-widget";
-import { BatchListTable } from "@/components/recruitment/batches/batch-list-table";
 import { NewBatchButton } from "@/components/recruitment/batches/new-batch-button";
+import { cn } from "@/lib/utils";
 
-type RecentCandidate = {
-  id: string;
-  fullName: string;
-  currentTitle: string | null;
-  currentCompany: string | null;
-  createdAt: Date | string;
-};
+const IST: Intl.DateTimeFormatOptions = { timeZone: "Asia/Kolkata" };
 
-type UpcomingInterview = {
-  id: string;
-  title: string;
-  scheduledStart: Date | string;
-  candidateName?: string | null;
-  jobTitle?: string | null;
-};
+function clock(value: Date): string {
+  return value.toLocaleTimeString("en-IN", { ...IST, hour: "numeric", minute: "2-digit" });
+}
 
-type ActivityItem = {
-  id: string;
-  summary: string;
-  createdAt: Date | string;
-};
+function shortDate(value: Date): string {
+  return value.toLocaleDateString("en-IN", { ...IST, day: "numeric", month: "short" });
+}
 
-type PendingConversionItem = {
-  id: string;
-  offerNumber?: string | null;
-  acceptedAt?: Date | string | null;
-  candidate: { id: string; fullName: string };
-  jobTitle: string;
+function weekRange(weekStart: Date): string {
+  const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
+  const start = weekStart.toLocaleDateString("en-IN", { ...IST, weekday: "short", day: "numeric" });
+  const end = weekEnd.toLocaleDateString("en-IN", { ...IST, weekday: "short", day: "numeric", month: "short" });
+  return `${start} – ${end}`;
+}
+
+function withNames(names: string[], count: number): string {
+  if (names.length === 0) return "";
+  const extra = count - names.length;
+  const shown = extra > 0 ? `${names.join(", ")} and ${extra} more` : names.join(", ");
+  return `: ${shown}`;
+}
+
+type Need = { count: number; href: string; text: string };
+
+function needsYouToday(today: HrToday): Need[] {
+  const items: Need[] = [];
+  const hire = today.hireWithoutOffer;
+  if (hire.count > 0) {
+    items.push({
+      count: hire.count,
+      href: "/admin/recruitment/pipeline?currentStage=hire",
+      text: `hired. Make their offers${withNames(hire.names, hire.count)}`,
+    });
+  }
+  const stars = today.missingHrStars;
+  if (stars.count > 0) {
+    items.push({
+      count: stars.count,
+      href: stars.batchId ? `/admin/recruitment/batches/${stars.batchId}` : "/admin/recruitment/batches",
+      text: stars.batchCode
+        ? `candidates in ${stars.batchCode} have no HR stars yet`
+        : "candidates have no HR stars yet",
+    });
+  }
+  if (today.interviewsToday.length > 0) {
+    const shown = today.interviewsToday
+      .slice(0, 3)
+      .map((interview) => `${clock(interview.start)} ${interview.candidateName}`)
+      .join(", ");
+    const only = today.interviewsToday.length === 1 ? today.interviewsToday[0] : null;
+    items.push({
+      count: today.interviewsToday.length,
+      href: only ? `/admin/recruitment/interviews/${only.id}` : "/admin/recruitment/interviews",
+      text: `interviews today: ${shown}`,
+    });
+  }
+  const offers = today.offersNoReply;
+  if (offers.count > 0) {
+    items.push({
+      count: offers.count,
+      href: "/admin/recruitment/offers?status=released",
+      text: `${offers.count === 1 ? "offer" : "offers"} with no reply for 3 days${withNames(offers.names, offers.count)}`,
+    });
+  }
+  if (today.pendingConversions > 0) {
+    items.push({
+      count: today.pendingConversions,
+      href: "/admin/recruitment/conversions",
+      text: today.pendingConversions === 1 ? "accepted offer to convert" : "accepted offers to convert",
+    });
+  }
+  return items;
+}
+
+function weekLine(week: HrToday["week"]): string {
+  const parts = [
+    week.added > 0 ? `${week.added} added` : null,
+    week.hrRated > 0 ? `${week.hrRated} rated` : null,
+    week.sentToManager > 0 ? `${week.sentToManager} sent to managers` : null,
+    week.hired > 0 ? `${week.hired} hired` : null,
+    week.joined > 0 ? `${week.joined} joined` : null,
+  ].filter((part): part is string => part !== null);
+  return parts.length > 0 ? parts.join(" · ") : "Nothing moved";
+}
+
+const WAIT_STYLE: Record<BatchWaitKind, string> = {
+  you: "bg-muted text-foreground",
+  manager: "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200",
+  close: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
 };
 
 export function RecruitmentDashboardView({
-  counts,
-  interviewMetrics,
-  applicationTotal,
-  funnel,
-  offerMetrics = {
-    draft: 0,
-    sent: 0,
-    accepted: 0,
-    declined: 0,
-    withdrawn: 0,
-    expired: 0,
-    acceptanceRate: 0,
-  },
-  conversionMetrics = {
-    offersAccepted: 0,
-    employeesJoined: 0,
-    pendingConversions: 0,
-    conversionRate: 0,
-  },
-  pendingConversions = [],
-  recentCandidates = [],
-  upcomingInterviews = [],
-  openBatches = [],
-  activityFeed = [],
+  today,
+  openBatches,
 }: {
-  counts: JobStatusCounts;
-  interviewMetrics: {
-    todayInterviews: number;
-    upcomingInterviews: number;
-  };
-  applicationTotal: number;
-  funnel: HiringFunnelCounts;
-  offerMetrics?: {
-    draft: number;
-    sent: number;
-    accepted: number;
-    declined: number;
-    withdrawn: number;
-    expired: number;
-    acceptanceRate: number;
-  };
-  conversionMetrics?: {
-    offersAccepted: number;
-    employeesJoined: number;
-    pendingConversions: number;
-    conversionRate: number;
-  };
-  pendingConversions?: PendingConversionItem[];
-  recentCandidates?: RecentCandidate[];
-  upcomingInterviews?: UpcomingInterview[];
-  openBatches?: BatchListItem[];
-  activityFeed?: ActivityItem[];
+  today: HrToday;
+  openBatches: BatchListItem[];
 }) {
+  const needs = needsYouToday(today);
+
   return (
-    <div className="space-y-6 lg:space-y-8">
-      <WorkspacePageHeader
-        title="Recruitment Dashboard"
-        description="Today’s hiring command center — interviews, pipeline, and next actions."
-        action={
-          <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline" className="font-semibold shadow-subtle">
-              <Link href="/admin/recruitment/pipeline">Open Pipeline</Link>
-            </Button>
-            <Button asChild className="font-semibold shadow-subtle">
-              <Link href="/admin/recruitment/jobs/new">Create Job</Link>
-            </Button>
-          </div>
-        }
-      />
-
-      <StatsGrid>
-        <DashboardCard
-          label="Today's Interviews"
-          value={interviewMetrics.todayInterviews}
-          icon={Clock}
-          accent="amber"
-        />
-        <DashboardCard label="Open Jobs" value={counts.open} icon={Briefcase} accent="green" />
-        <DashboardCard
-          label="Applications"
-          value={applicationTotal}
-          icon={ClipboardList}
-          accent="blue"
-        />
-        <Link href="/admin/recruitment/offers?status=released" className="block h-full">
-          <DashboardCard
-            label="Offers Awaiting Response"
-            value={offerMetrics.sent}
-            icon={FileCheck}
-            accent="teal"
-          />
-        </Link>
-        <Link href="/admin/recruitment/conversions" className="block h-full">
-          <DashboardCard
-            label="Pending Conversions"
-            value={conversionMetrics.pendingConversions}
-            icon={UserCheck}
-            accent="amber"
-            hint="Open queue"
-          />
-        </Link>
-      </StatsGrid>
-
-      <SectionCard
-        title="Open batches"
-        description="Interview-day groups. Open one to work the sheet."
-        action={
-          <div className="flex flex-wrap items-center gap-2">
-            <NewBatchButton variant="outline" />
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/admin/recruitment/batches">
-                All
-                <ArrowRight className="ml-1 h-3.5 w-3.5" />
-              </Link>
-            </Button>
-          </div>
-        }
-        isEmpty={openBatches.length === 0}
-        emptyIcon={Layers}
-        emptyMessage="No open batches. Create one for an interview date, then add people from the Pipeline list."
-        noPadding={openBatches.length > 0}
-      >
-        <BatchListTable
-          batches={openBatches}
-          hrefBase="/admin/recruitment/batches"
-          showCreated={false}
-          className="rounded-none border-0"
-        />
-      </SectionCard>
-
-      <DashboardFunnelWidget funnel={funnel} />
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <DashboardOfferSummaryWidget
-          summary={{
-            draft: offerMetrics.draft,
-            sent: offerMetrics.sent,
-            accepted: offerMetrics.accepted,
-            declined: offerMetrics.declined,
-            withdrawn: offerMetrics.withdrawn,
-            expired: offerMetrics.expired,
-          }}
-        />
-        <DashboardPendingConversionsWidget items={pendingConversions} />
-      </div>
-
-      <SectionCard title="Quick Actions" description="Common hiring tasks in one place.">
+    <div className="mx-auto max-w-4xl space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-xl font-semibold tracking-tight">Recruitment</h1>
         <div className="flex flex-wrap gap-2">
-          <Button asChild className="font-semibold shadow-subtle">
-            <Link href="/admin/recruitment/jobs/new">
-              <Plus className="mr-1.5 h-4 w-4" />
-              Create Job
-            </Link>
-          </Button>
-          <Button asChild variant="outline" className="font-semibold shadow-subtle">
+          <NewBatchButton />
+          <Button asChild variant="outline">
             <Link href="/admin/recruitment/candidates/new">
-              <Plus className="mr-1.5 h-4 w-4" />
-              Add Candidate
+              <Plus className="h-4 w-4" />
+              Add candidate
             </Link>
           </Button>
-          <Button asChild variant="outline" className="font-semibold shadow-subtle">
-            <Link href="/admin/recruitment/pipeline">
-              <ClipboardList className="mr-1.5 h-4 w-4" />
-              Open Pipeline
-            </Link>
-          </Button>
-          <Button asChild variant="outline" className="font-semibold shadow-subtle">
-            <Link href="/admin/recruitment/batches">
-              <Layers className="mr-1.5 h-4 w-4" />
-              Batches
-            </Link>
-          </Button>
-          <Button asChild variant="outline" className="font-semibold shadow-subtle">
-            <Link href="/admin/recruitment/conversions">
-              <UserCheck className="mr-1.5 h-4 w-4" />
-              Pending Conversions
-            </Link>
-          </Button>
-          <Button asChild variant="outline" className="font-semibold shadow-subtle">
-            <Link href="/admin/recruitment/offers/new">
-              <FileCheck className="mr-1.5 h-4 w-4" />
-              Create Offer
-            </Link>
+          <Button asChild variant="outline">
+            <Link href="/admin/recruitment/jobs/new">Create job</Link>
           </Button>
         </div>
-      </SectionCard>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <SectionCard
-          title="Upcoming Interviews"
-          description={`${interviewMetrics.upcomingInterviews} scheduled ahead.`}
-          action={
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/admin/recruitment/interviews">
-                Interviews
-                <ArrowRight className="ml-1 h-3.5 w-3.5" />
-              </Link>
-            </Button>
-          }
-        >
-          {upcomingInterviews.length === 0 ? (
-            <EmptyState
-              title="No upcoming interviews"
-              description="Schedule from an application in Pipeline."
-            />
-          ) : (
-            <ul className="divide-y divide-border">
-              {upcomingInterviews.map((item) => (
-                <li
-                  key={item.id}
-                  className="flex items-center justify-between gap-3 py-3 text-sm"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{item.title}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {[item.candidateName, item.jobTitle].filter(Boolean).join(" · ") ||
-                        "Interview"}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                      <Calendar className="h-3.5 w-3.5" />
-                      {new Date(item.scheduledStart).toLocaleString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                    <Button asChild variant="outline" size="sm" className="h-7 text-xs">
-                      <Link href={`/admin/recruitment/interviews/${item.id}`}>Open</Link>
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </SectionCard>
-
-        <SectionCard
-          title="Recent Candidates"
-          description="Latest profiles added."
-          action={
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/admin/recruitment/candidates">
-                All
-                <ArrowRight className="ml-1 h-3.5 w-3.5" />
-              </Link>
-            </Button>
-          }
-        >
-          {recentCandidates.length === 0 ? (
-            <EmptyState title="No candidates yet" description="Add a candidate to get started." />
-          ) : (
-            <ul className="divide-y divide-border">
-              {recentCandidates.map((c) => (
-                <li
-                  key={c.id}
-                  className="flex items-center justify-between gap-3 py-3 text-sm"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{c.fullName}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {[c.currentTitle, c.currentCompany].filter(Boolean).join(" · ") ||
-                        "Candidate"}
-                    </p>
-                  </div>
-                  <Button asChild variant="outline" size="sm" className="h-7 text-xs shrink-0">
-                    <Link href={`/admin/recruitment/candidates/${c.id}`}>
-                      <Users className="mr-1 h-3 w-3" />
-                      Open
-                    </Link>
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </SectionCard>
       </div>
 
-      <SectionCard title="Recent Activity" description="Latest recruitment events.">
-        {activityFeed.length === 0 ? (
-          <EmptyState
-            title="No activity yet"
-            description="Pipeline moves and hires will show here."
-          />
+      <section className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="flex items-baseline justify-between gap-3 border-b border-border px-4 py-3">
+          <h2 className="text-sm font-semibold">Needs you today</h2>
+          <p className="text-xs text-muted-foreground">A line stays until that work is done</p>
+        </div>
+        {needs.length === 0 ? (
+          <p className="px-4 py-4 text-sm">All caught up.</p>
         ) : (
           <ul className="divide-y divide-border">
-            {activityFeed.map((item) => (
-              <li
-                key={item.id}
-                className="flex items-start justify-between gap-3 py-2.5 text-sm"
-              >
-                <p className="text-muted-foreground">{item.summary}</p>
-                <span className="shrink-0 text-[11px] text-muted-foreground">
-                  {new Date(item.createdAt).toLocaleDateString()}
-                </span>
+            {needs.map((item) => (
+              <li key={item.href + item.text}>
+                <Link href={item.href} className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50">
+                  <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-amber-100 px-1.5 text-xs font-semibold tabular-nums text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
+                    {item.count}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="font-medium tabular-nums">{item.count}</span> {item.text}
+                  </span>
+                  <span className="shrink-0 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground">
+                    Open
+                  </span>
+                </Link>
               </li>
             ))}
           </ul>
         )}
-      </SectionCard>
+      </section>
+
+      <section className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="flex items-baseline justify-between gap-3 border-b border-border px-4 py-3">
+          <h2 className="text-sm font-semibold">Open batches</h2>
+          <Link href="/admin/recruitment/batches" className="text-xs text-muted-foreground hover:text-foreground">
+            All batches
+          </Link>
+        </div>
+        {openBatches.length === 0 ? (
+          <p className="px-4 py-4 text-sm text-muted-foreground">
+            No open batches. Create one for an interview date, then add people from the batch page or the Pipeline list.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[40rem] text-sm">
+              <thead className="text-left text-xs text-muted-foreground">
+                <tr className="border-b border-border">
+                  <th className="px-4 py-2 font-medium">Batch ID</th>
+                  <th className="px-4 py-2 font-medium">Role</th>
+                  <th className="px-4 py-2 text-right font-medium">Candidates</th>
+                  <th className="px-4 py-2 font-medium">Where they are</th>
+                  <th className="px-4 py-2 font-medium">Waiting on</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {openBatches.map((batch) => {
+                  const wait = batchWait(batch.progress);
+                  const places = BATCH_BUCKETS.filter((bucket) => batch.progress[bucket.id] > 0);
+                  return (
+                    <tr key={batch.id} className="hover:bg-muted/40">
+                      <td className="whitespace-nowrap px-4 py-3">
+                        <Link href={`/admin/recruitment/batches/${batch.id}`} className="font-mono text-[13px] font-semibold hover:underline">
+                          {batch.code}
+                        </Link>
+                        {batch.interviewDate ? (
+                          <span className="block text-xs text-muted-foreground">{shortDate(batch.interviewDate)}</span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3">{batch.name ?? <span className="text-muted-foreground">—</span>}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{batch.candidateCount}</td>
+                      <td className="px-4 py-3">
+                        <span className="flex flex-wrap gap-1.5">
+                          {places.map((bucket) => (
+                            <span key={bucket.id} className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                              {bucket.label} <span className="font-medium text-foreground">{batch.progress[bucket.id]}</span>
+                            </span>
+                          ))}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {wait ? (
+                          <span className={cn("inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium", WAIT_STYLE[wait.kind])}>
+                            {wait.label}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-border bg-card px-4 py-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="text-sm font-semibold">This week</h2>
+          <p className="text-xs text-muted-foreground">{weekRange(today.week.weekStart)}</p>
+        </div>
+        <p className="mt-2 text-sm text-muted-foreground">{weekLine(today.week)}</p>
+      </section>
     </div>
   );
 }
