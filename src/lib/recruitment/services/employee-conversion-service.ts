@@ -26,6 +26,7 @@ import type {
   PendingConversionListItem,
 } from "@/lib/recruitment/conversion/types";
 import { Prisma } from "@/generated/prisma/client";
+import { toUtcDateInputValue } from "@/lib/utils";
 
 function generateEmployeeCode(): string {
   const rand = Math.floor(1000 + Math.random() * 9000);
@@ -151,7 +152,7 @@ export function createEmployeeConversionService(
         managerId: offer.reportingManagerId || null,
         employmentType: offer.employmentType || "Full-time",
         workLocation: offer.location || "Bangalore",
-        joiningDate: offer.joiningDate ? new Date(offer.joiningDate).toISOString().slice(0, 10) : "",
+        joiningDate: offer.joiningDate ? toUtcDateInputValue(offer.joiningDate) : "",
         grade: offer.grade || "L1",
         ctc: offer.ctc ? Number(offer.ctc) : 0,
       };

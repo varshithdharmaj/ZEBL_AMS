@@ -8,6 +8,7 @@ import type {
   EmployeeConversionFormData,
   EmployeeConversionFormField,
 } from "@/lib/recruitment/conversion/types";
+import { formatDate } from "@/lib/utils";
 
 interface EmployeePreviewCardProps {
   formData: EmployeeConversionFormData;
@@ -211,6 +212,9 @@ export function EmployeePreviewCard({ formData, onChange, managers }: EmployeePr
               className="text-xs rounded-lg border-slate-200"
               required
             />
+            {formData.joiningDate ? (
+              <p className="text-xs text-muted-foreground">Shown as {formatDate(formData.joiningDate)}</p>
+            ) : null}
           </div>
         </div>
 

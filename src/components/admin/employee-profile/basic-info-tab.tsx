@@ -13,6 +13,7 @@ import { ManagerAssignmentFields } from "@/components/admin/employee-profile/man
 import type { ProfileEmployee } from "@/components/admin/employee-profile/profile-shell";
 import type { ManagerSummary } from "@/lib/org-types";
 import type { ShiftSummary } from "@/lib/shifts";
+import { formatDate, toUtcDateInputValue } from "@/lib/utils";
 
 const initialState: ActionState = {};
 
@@ -78,10 +79,11 @@ export function BasicInfoTab({
               id="dateOfBirth"
               name="dateOfBirth"
               type="date"
-              defaultValue={employee.dateOfBirth
-                ? new Date(employee.dateOfBirth).toISOString().split("T")[0]
-                : ""}
+              defaultValue={employee.dateOfBirth ? toUtcDateInputValue(employee.dateOfBirth) : ""}
             />
+            {employee.dateOfBirth ? (
+              <p className="text-xs text-muted-foreground">Shown as {formatDate(employee.dateOfBirth)}</p>
+            ) : null}
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
@@ -163,9 +165,10 @@ export function BasicInfoTab({
               id="joiningDate"
               name="joiningDate"
               type="date"
-              defaultValue={new Date(employee.joiningDate).toISOString().split("T")[0]}
+              defaultValue={toUtcDateInputValue(employee.joiningDate)}
               required
             />
+            <p className="text-xs text-muted-foreground">Shown as {formatDate(employee.joiningDate)}</p>
           </div>
           <div className="space-y-2">
             <Label>Status</Label>

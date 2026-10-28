@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { Offer } from "@/generated/prisma/client";
 import { DEPARTMENTS } from "@/lib/employee-types";
+import { formatDate, toUtcDateInputValue } from "@/lib/utils";
 
 export interface OfferFormApplicationOption {
   id: string;
@@ -141,10 +142,10 @@ export function OfferForm({
     offer?.reportingManagerId ? String(offer.reportingManagerId) : ""
   );
   const [joiningDate, setJoiningDate] = React.useState(
-    offer?.joiningDate ? new Date(offer.joiningDate).toISOString().slice(0, 10) : ""
+    offer?.joiningDate ? toUtcDateInputValue(offer.joiningDate) : ""
   );
   const [expiresAt, setExpiresAt] = React.useState(
-    offer?.expiresAt ? new Date(offer.expiresAt).toISOString().slice(0, 10) : ""
+    offer?.expiresAt ? toUtcDateInputValue(offer.expiresAt) : ""
   );
   const [currency, setCurrency] = React.useState(offer?.currency ?? "INR");
   const [baseSalary, setBaseSalary] = React.useState<string>(
@@ -652,6 +653,9 @@ export function OfferForm({
                 onChange={(e) => setJoiningDate(e.target.value)}
                 className="w-full h-9 rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-subtle focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
+              {joiningDate ? (
+                <p className="mt-1 text-xs text-muted-foreground">Shown as {formatDate(joiningDate)}</p>
+              ) : null}
             </div>
 
             <div>
@@ -664,6 +668,9 @@ export function OfferForm({
                 onChange={(e) => setExpiresAt(e.target.value)}
                 className="w-full h-9 rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-subtle focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
+              {expiresAt ? (
+                <p className="mt-1 text-xs text-muted-foreground">Shown as {formatDate(expiresAt)}</p>
+              ) : null}
             </div>
 
             <div>

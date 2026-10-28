@@ -63,6 +63,20 @@ export function toISODate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * YYYY-MM-DD for `<input type="date">` when the Date is a calendar field stored at UTC midnight
+ * (joiningDate, DOB, offer dates — same contract as `new Date("YYYY-MM-DD")` / import utcDate).
+ * Use `toISODate` instead for local attendance/range Dates built with startOfDay.
+ */
+export function toUtcDateInputValue(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  if (Number.isNaN(d.getTime())) return "";
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export function isSameDay(a: Date, b: Date): boolean {
   return toISODate(startOfDay(a)) === toISODate(startOfDay(b));
 }
