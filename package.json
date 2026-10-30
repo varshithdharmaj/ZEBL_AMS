@@ -24,6 +24,7 @@
     "db:seed:test-manager-one-attendance": "tsx prisma/scripts/seed-test-manager-one-attendance.ts",
     "db:list-manager-candidates": "tsx prisma/scripts/list-manager-role-candidates.ts",
     "db:apply-manager-role": "tsx prisma/scripts/apply-manager-role.ts",
+    "db:force-password-change": "tsx prisma/scripts/force-password-change-existing-users.ts",
     "db:seed:aws-init": "tsx prisma/scripts/seed-aws-init.ts",
     "demo:seed": "tsx prisma/demo-seed.ts",
     "demo:reset": "tsx prisma/demo-reset.ts",
